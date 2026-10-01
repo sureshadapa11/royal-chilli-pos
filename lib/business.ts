@@ -15,14 +15,20 @@ export type BusinessModules = {
   inventory: boolean; rewards: boolean; food_safety: boolean; delivery_platforms: boolean;
 };
 
+export type BusinessType = "restaurant" | "coffee_shop" | "pizza_shop" | "retail";
+
 export type Business = {
   id: number;
   slug: string;
   name: string;
+  business_type: BusinessType;
+  created_at: string;
+  updated_at: string;
   legal_name: string | null;
   company_number: string | null;
   vat_number: string | null;
   domain: string | null;
+  custom_domain: string | null;
   logo_url: string | null;
   brand_colour: string | null;
   address: string | null;

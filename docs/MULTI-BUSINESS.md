@@ -40,6 +40,16 @@ Run in order in the Supabase SQL editor
 (https://supabase.com/dashboard/project/xmsgkshtgtdkdbmkhmep/sql/new), from
 `supabase/migrations/`:
 
+For an existing database that has migrations 076–083 applied, open
+`084_multi_business_foundation_completion.sql`, run its complete contents once
+in the Supabase SQL editor, and deploy the matching application code. For a new
+database, run `supabase/schema.sql` once, then apply the numbered forward
+migrations in ascending order (skip files ending in `_ROLLBACK.sql`). Never
+rerun `schema.sql` against an existing database. The migration preserves
+existing records under The Royal Chilli (business 1) and completes the
+database/type foundation only; it does not change authentication, API scoping,
+domain resolution, or UI.
+
 | Migration | Status |
 |---|---|
 | 076 foundation | run 29 Sep 2026 |
@@ -47,7 +57,8 @@ Run in order in the Supabase SQL editor
 | 078 messages, corrections, timesheets, points | run 29 Sep 2026 — attendance app pushed after it |
 | 079 fully separate staff / suppliers / customers, owner login | run 29 Sep 2026 — Phase 2b code pushed after it; owner login `owner` (staff #26) created |
 | 080 business setup (details, owner-only bank / payment keys, per-business settings) | run 29 Sep 2026 — Business setup page live (960ecc7) |
-| 084 drop the old group-wide unique rules | before a second business opens |
+| 084 remaining tenant-table scopes and business type/domain fields | Phase 1 foundation completion |
+| 085 drop the old group-wide unique rules | before a second business opens |
 
 ## Checklist (all on The Royal Chilli — everything should look exactly as before)
 
