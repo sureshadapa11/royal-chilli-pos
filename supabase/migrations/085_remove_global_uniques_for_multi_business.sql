@@ -206,7 +206,7 @@ BEGIN
           SELECT array_agg(a.attname::text ORDER BY a.attname::text)
           FROM pg_attribute a
           WHERE a.attrelid = t.oid
-            AND a.attnum = ANY (x.indkey::smallint[])
+            AND a.attnum = ANY (string_to_array(x.indkey::text, ' ')::smallint[])
         ) = r.cols
         AND NOT EXISTS (
           SELECT 1 FROM pg_constraint con WHERE con.conindid = x.indexrelid
