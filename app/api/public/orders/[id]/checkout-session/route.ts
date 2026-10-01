@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
 import { stripe, siteUrl } from "@/lib/stripe";
 import { bizDb } from "@/lib/business-db";
 import { getBusiness, websiteBusinessId } from "@/lib/business";
@@ -48,7 +47,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ...(order.customer_email ? { customer_email: order.customer_email } : {}),
     });
 
-    await supabase.from("orders").update({ stripe_session_id: checkout.id }).eq("id", id);
+    await bizDb(businessId).from("orders").update({ stripe_session_id: checkout.id }).eq("id", id);
 
     return NextResponse.json({ url: checkout.url });
   } catch (error) {

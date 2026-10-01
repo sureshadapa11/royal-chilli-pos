@@ -1,4 +1,3 @@
-import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { generateOrderNumber } from "@/lib/orders";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
@@ -18,8 +17,8 @@ export async function getTableByNumber(businessId: number, tableNumber: string) 
   return data;
 }
 
-export async function getOpenOrderForTable(tableId: number) {
-  const { data, error } = await supabase
+export async function getOpenOrderForTable(businessId: number, tableId: number) {
+  const { data, error } = await bizDb(businessId)
     .from("orders")
     .select("*")
     .eq("table_id", tableId)
@@ -32,8 +31,9 @@ export async function getOpenOrderForTable(tableId: number) {
   return data;
 }
 
-export async function getOrderItems(orderId: number) {
-  const { data, error } = await supabase
+export async function getOrderItems(businessId: number, orderId: number) {
+  const db = bizDb(businessId);
+  const { data, error } = await db
     .from("order_items")
     .select("id, item_name, item_price, quantity, status, notes")
     .eq("order_id", orderId)
@@ -42,7 +42,7 @@ export async function getOrderItems(orderId: number) {
 
   const itemIds = (data || []).map((i) => i.id);
   if (itemIds.length === 0) return data || [];
-  const { data: modifiers } = await supabase
+  const { data: modifiers } = await db
     .from("order_item_modifiers")
     .select("order_item_id, option_name, price_delta")
     .in("order_item_id", itemIds);
@@ -78,7 +78,8 @@ export async function addItemsToTable(
     })
   );
 
-  let order = await getOpenOrderForTable(tableId);
+  const db = bizDb(businessId);
+  let order = await getOpenOrderForTable(businessId, tableId);
   if (!order) {
     const orderNumber = await generateOrderNumber(businessId);
     const { data: newOrder, error: orderErr } = await bizDb(businessId)
@@ -97,10 +98,10 @@ export async function addItemsToTable(
       .single();
     if (orderErr) throw orderErr;
     order = newOrder;
-    await supabase.from("restaurant_tables").update({ status: "occupied" }).eq("id", tableId);
+    await db.from("restaurant_tables").update({ status: "occupied" }).eq("id", tableId);
   } else if (order.status === "ready") {
     // A new round arrived after the previous round was marked ready — back to the kitchen queue.
-    await supabase.from("orders").update({ status: "sent_to_kitchen" }).eq("id", order.id);
+    await db.from("orders").update({ status: "sent_to_kitchen" }).eq("id", order.id);
   }
 
   // Optional self-service loyalty capture — a customer may submit their
@@ -111,7 +112,7 @@ export async function addItemsToTable(
   if (customer?.phone?.trim() || customer?.accountId) {
     const customerId = await customerForOrder(businessId, customer.accountId, customer.phone, customer.name || "Guest", customer.email, customer.marketingConsent === true);
     if (customerId) {
-      await supabase
+      await db
         .from("orders")
         .update({ customer_id: customerId, customer_name: customer.name || null, customer_phone: customer.phone?.trim() || null })
         .eq("id", order!.id);
@@ -121,7 +122,7 @@ export async function addItemsToTable(
   const insertedItemIds: number[] = [];
   for (const item of itemRows) {
     const { _modifiers, ...itemRow } = item;
-    const { data: insertedItem, error: itemErr } = await supabase
+    const { data: insertedItem, error: itemErr } = await db
       .from("order_items")
       .insert({ ...itemRow, order_id: order!.id })
       .select("id")
@@ -130,13 +131,13 @@ export async function addItemsToTable(
     insertedItemIds.push(insertedItem.id);
 
     if (_modifiers.length > 0) {
-      const { error: modErr } = await supabase.from("order_item_modifiers").insert(
+      const { error: modErr } = await db.from("order_item_modifiers").insert(
         _modifiers.map((m) => ({ order_item_id: insertedItem.id, modifier_option_id: m.id, option_name: m.name, price_delta: m.price_delta }))
       );
       if (modErr) throw modErr;
     }
   }
 
-  await recalcTotals(String(order!.id));
+  await recalcTotals(String(order!.id), businessId);
   return { orderId: order!.id as number, itemIds: insertedItemIds };
 }

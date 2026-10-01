@@ -25,8 +25,8 @@ with `business_id`. Decided 2026-09-29.
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Foundation: `businesses`, one home business per staff record, `business_id` on tenant-owned rows, relationship guards (migrations 076–079, 084) | Apply 084 |
-| 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | **Done** (both apps live) |
+| 1 | Foundation: `businesses`, one home business per staff record, `business_id` on tenant-owned rows, relationship guards (migrations 076–079, 084) | **Done** (084 applied; production stabilized 1 Oct 2026) |
+| 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | Core code deployed; Phase 2 hardening in progress |
 | 2b | Fully separate staff, suppliers, customers + rewards (079); owner login, "Working in" switcher, All-businesses overview | **Done** |
 | 3 | Per-business settings + branding, `businesses/<slug>/` folders | Not started |
 | 4 | Businesses admin screen (add a business, module switches, payments, printers) | Not started |
@@ -61,7 +61,7 @@ order:
 | 081 loyalty discount line | required before 082–084 |
 | 082 business tagline | required before 083–084 |
 | 083 Royal Chilli settings catch-up | required before 084 |
-| 084 business type/domain fields, tenant child rows, and relationship guards | pending — single final Phase 1 migration; run after 083 |
+| 084 business type/domain fields, tenant child rows, and relationship guards | applied after 083 |
 | 085 remove legacy group-wide unique rules | planned follow-up — required before a second business opens |
 
 Migration 084 adds `business_id` to previously unscoped child tables, backfills
@@ -72,16 +72,24 @@ unassigned business only for the group owner. `staff_businesses` remains a
 legacy migration-076 snapshot, not an assignment or authorization source.
 Business 1 and all existing records are preserved; no data is deleted or reset.
 
+The attendance application is maintained separately and is not part of this
+repository. Before considering attendance SSO complete for Phase 2, verify that
+it requires the signed, 60-second token's `bid`, checks the staff assignment (or
+owner status), and scopes attendance, shifts, timesheets and payroll access to
+that business. The POS SSO consumer validates the same business and assignment
+before creating a session.
+
 The migration adds a constrained `business_type` (default `restaurant`) and an
-optional, uniquely indexed `custom_domain`. The existing `businesses.domain`
-remains the field used by current code; domain resolution is not changed here.
+optional, uniquely indexed `custom_domain`. Domain resolution supports both
+`businesses.domain` and `businesses.custom_domain`.
 The legacy group-wide uniqueness rules are intentionally retained by migration
 084. A planned migration 085 must remove them before opening another business.
 Do not apply PR #1's foundation-only migration separately; this migration
 supersedes both earlier draft PR approaches.
 
-This PR is limited to database foundation and integrity. Phase 2 API scoping,
-domain resolution, and UI work remain out of scope.
+Phase 1 migration 084 is applied. Phase 2 hardening adds route-level tenant
+isolation, validated SSO business context, and custom-domain resolution; it
+does not create or launch another business.
 
 ## Checklist (all on The Royal Chilli — everything should look exactly as before)
 

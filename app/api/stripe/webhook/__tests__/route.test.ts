@@ -32,28 +32,20 @@ jest.mock("@/lib/supabase", () => ({
   __esModule: true,
   default: {
     from: (table: string) => {
-      if (table === "payments") {
-        return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                maybeSingle: () => Promise.resolve({ data: existingPaymentForReference, error: null }),
-              }),
-            }),
-          }),
-          insert: (vals: Row) => {
-            insertedPayments.push(vals);
-            return Promise.resolve({ data: null, error: null });
-          },
-        };
-      }
-      if (table === "orders") {
-        return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: orderRow, error: null }) }) }) };
-      }
-      if (table === "order_items") {
-        return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
-      }
-      throw new Error(`Unexpected table in test: ${table}`);
+      const builder: Record<string, unknown> = {};
+      builder.select = () => builder;
+      builder.eq = () => builder;
+      builder.neq = () => builder;
+      builder.limit = () => builder;
+      builder.single = () => Promise.resolve({ data: orderRow, error: null });
+      builder.maybeSingle = () => Promise.resolve({ data: existingPaymentForReference, error: null });
+      builder.insert = (vals: Row) => {
+        if (table === "payments") insertedPayments.push(vals);
+        return Promise.resolve({ data: null, error: null });
+      };
+      builder.then = (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
+        Promise.resolve({ data: [], error: null }).then(resolve, reject);
+      return builder;
     },
   },
 }));
@@ -72,7 +64,7 @@ beforeEach(() => {
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
   insertedPayments = [];
   existingPaymentForReference = null;
-  orderRow = { amount_paid: 0, total: 25 };
+  orderRow = { business_id: 1, amount_paid: 0, total: 25 };
 });
 
 describe("POST /api/stripe/webhook — idempotency", () => {
@@ -91,7 +83,7 @@ describe("POST /api/stripe/webhook — idempotency", () => {
   });
 
   it("does not insert once the order is already fully paid, even without a reference match", async () => {
-    orderRow = { amount_paid: 25, total: 25 };
+    orderRow = { business_id: 1, amount_paid: 25, total: 25 };
     const res = await POST(webhookRequest());
     expect(res.status).toBe(200);
     expect(insertedPayments).toHaveLength(0);

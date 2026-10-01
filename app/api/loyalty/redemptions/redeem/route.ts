@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
@@ -23,7 +22,8 @@ export async function POST(req: NextRequest) {
     const { code, order_id } = await req.json();
     if (!code || !order_id) return NextResponse.json({ error: "code and order_id are required" }, { status: 400 });
 
-    const { data: redemption, error: fetchErr } = await bizDb(session.businessId)
+    const db = bizDb(session.businessId);
+    const { data: redemption, error: fetchErr } = await db
       .from("loyalty_redemptions")
       .select("*, reward:loyalty_rewards(name, discount_amount, discount_pct, max_discount, order_types, min_spend)")
       .eq("code", String(code).trim().toUpperCase())
@@ -42,12 +42,12 @@ export async function POST(req: NextRequest) {
     const notYet = notYetValidMessage(redemption.valid_from);
     if (notYet) return NextResponse.json({ error: "NOT_YET_VALID", message: notYet }, { status: 400 });
     if (redemption.status === "expired" || new Date(redemption.expires_at) < new Date()) {
-      if (redemption.status !== "expired") await supabase.from("loyalty_redemptions").update({ status: "expired" }).eq("id", redemption.id);
+      if (redemption.status !== "expired") await db.from("loyalty_redemptions").update({ status: "expired" }).eq("id", redemption.id);
       return NextResponse.json({ error: "REWARD_EXPIRED", message: "This code has expired" }, { status: 400 });
     }
 
     // The till's own business's order only.
-    const { data: order, error: orderErr } = await bizDb(session.businessId)
+    const { data: order, error: orderErr } = await db
       .from("orders")
       .select("id, status, is_paid, order_type, subtotal, total, loyalty_discount, loyalty_reason")
       .eq("id", order_id)
@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
 
     // A % reward is fixed to £ here (capped), from the bill as it stands now
     // — recalculated first so every item on it counts.
-    const current = await recalcTotals(String(order_id));
+    const current = await recalcTotals(String(order_id), session.businessId);
     const discount = rewardDiscount(reward, current.subtotal);
     let updatedBill = null;
     if (discount > 0) {
@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       if (Number(order.loyalty_discount) > 0) {
         return NextResponse.json({ error: `This bill already has a loyalty reward (${order.loyalty_reason ?? "loyalty"})` }, { status: 409 });
       }
-      await supabase
+      await db
         .from("orders")
         .update({
           loyalty_discount: discount,
@@ -92,10 +92,10 @@ export async function POST(req: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq("id", order_id);
-      updatedBill = await recalcTotals(String(order_id));
+      updatedBill = await recalcTotals(String(order_id), session.businessId);
     }
 
-    const { error: updateErr } = await supabase
+    const { error: updateErr } = await db
       .from("loyalty_redemptions")
       .update({
         status: "redeemed",

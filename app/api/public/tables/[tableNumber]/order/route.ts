@@ -41,8 +41,8 @@ export async function POST(
     // A later round joins the table's existing order — the ticket lists only
     // this round's items.
     await queueKitchenTicketSafely(orderId, "qr", { itemIds });
-    const order = await getOpenOrderForTable(table.id);
-    const orderItems = await getOrderItems(orderId);
+    const order = await getOpenOrderForTable(businessId, table.id);
+    const orderItems = await getOrderItems(businessId, orderId);
 
     return NextResponse.json({
       success: true,

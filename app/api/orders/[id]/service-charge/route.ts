@@ -27,7 +27,7 @@ export async function POST(
     const { error } = await db.from("orders").update({ service_charge_pct: Number(pct) }).eq("id", id);
     if (error) throw error;
 
-    await recalcTotals(id);
+    await recalcTotals(id, session.businessId);
 
     const { data: updatedOrder } = await db.from("orders").select("*").eq("id", id).single();
     return NextResponse.json({ success: true, order: updatedOrder });

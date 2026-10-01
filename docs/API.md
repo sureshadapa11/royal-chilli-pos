@@ -119,7 +119,7 @@ Enforces a fixed state machine (`assigned→out_for_delivery→delivered`); any 
 **Auth:** session required (any role)
 **Body:** `{ items: [{menu_item_id?, item_name, item_price, quantity, notes?}] }`
 **Response:** `{ success: true, insertedIds }`
-Adds items to an existing order and calls `recalcTotals(id)` afterward (`lib/order-totals.ts`).
+Adds items to an existing order and calls `recalcTotals(id, businessId)` afterward (`lib/order-totals.ts`).
 
 ### `PUT /api/orders/:id/items`
 **Auth:** session required (any role)
@@ -137,7 +137,7 @@ Rejects payment if the order is already `paid`, and rejects `amount` that exceed
 **Auth:** session required (any role)
 **Body:** `{ pct: number }` (0–100)
 **Response:** `{ success: true, order }` or `409` if the order is already fully paid.
-Sets `service_charge_pct` then calls `recalcTotals(id)`.
+Sets `service_charge_pct` then calls `recalcTotals(id, businessId)`.
 
 ### `GET /api/kitchen`
 **Auth:** **no session check present in the code** (flagged — see summary)

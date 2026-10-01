@@ -13,8 +13,8 @@ export async function GET(
     return NextResponse.json({ error: "Table not found" }, { status: 404 });
   }
 
-  const order = await getOpenOrderForTable(table.id);
-  const items = order ? await getOrderItems(order.id) : [];
+  const order = await getOpenOrderForTable(businessId, table.id);
+  const items = order ? await getOrderItems(businessId, order.id) : [];
 
   return NextResponse.json({
     table,

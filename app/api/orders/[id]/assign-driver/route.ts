@@ -21,7 +21,7 @@ export async function POST(
     const db = bizDb(session.businessId);
     if (!(await allOwned(db, "orders", [id]))) return NextResponse.json({ error: "Order not found" }, { status: 404 });
 
-    const { data: driver } = await supabase.from("staff").select("id, role").eq("id", driver_id).single();
+    const { data: driver } = await supabase.from("staff").select("id, role").eq("id", driver_id).eq("business_id", session.businessId).single();
     if (!driver || driver.role !== "driver" || !(await staffIdsAt(session.businessId)).includes(driver.id)) {
       return NextResponse.json({ error: "That staff member is not a driver here" }, { status: 400 });
     }

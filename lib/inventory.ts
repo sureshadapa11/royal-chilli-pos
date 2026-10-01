@@ -30,11 +30,12 @@ export type ReconciliationReport = {
 // recipe entered yet are silently skipped — this is additive/best-effort
 // bookkeeping, never a condition for the sale itself, so callers should
 // never let a failure here affect the payment response.
-export async function depleteStockForOrder(orderId: number, staffId: number | null): Promise<void> {
+export async function depleteStockForOrder(orderId: number, staffId: number | null, businessId: number): Promise<void> {
+  const db = bizDb(businessId);
   // Both Pay Later and an eventual full payment call this for the same
   // order — without this guard, a Pay Later order that later gets paid off
   // has its stock deducted twice for the same food.
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("stock_movements")
     .select("id")
     .eq("reference_type", "order")
@@ -43,18 +44,15 @@ export async function depleteStockForOrder(orderId: number, staffId: number | nu
     .limit(1);
   if (existing && existing.length > 0) return;
 
-  const { data: items } = await supabase
+  const { data: items } = await db
     .from("order_items")
     .select("menu_item_id, quantity")
     .eq("order_id", orderId)
     .neq("status", "cancelled");
 
   if (!items || items.length === 0) return;
-  const { data: order } = await supabase.from("orders").select("business_id").eq("id", orderId).maybeSingle();
-  if (!order) return;
-
   const menuItemIds = [...new Set(items.map((i) => i.menu_item_id).filter((id): id is number => id != null))];
-  const book = await loadRecipeBook(order.business_id, menuItemIds);
+  const book = await loadRecipeBook(businessId, menuItemIds);
   // One movement row per ingredient, even if a dish appears twice in the order.
   const { usage: deltaByIngredient } = recipeUsage(book, items);
 
@@ -69,7 +67,7 @@ export async function depleteStockForOrder(orderId: number, staffId: number | nu
     staff_id: staffId,
   }));
 
-  await supabase.from("stock_movements").insert(movements);
+  await db.from("stock_movements").insert(movements);
 }
 
 // Pure rollup: theoretical usage (what the recipes say should have been used,

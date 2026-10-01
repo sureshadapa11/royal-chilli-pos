@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { depleteStockForOrder } from "@/lib/inventory";
@@ -50,13 +49,13 @@ export async function POST(
     // genuinely consumed — so stock depletes now, same as a real payment,
     // rather than waiting for money to eventually arrive.
     for (const orderId of ids) {
-      depleteStockForOrder(orderId, session.id).catch((e) => console.error("Stock depletion failed for order", orderId, e));
+      depleteStockForOrder(orderId, session.id, session.businessId).catch((e) => console.error("Stock depletion failed for order", orderId, e));
     }
 
     // Free the table immediately — a blocked card can't hold it hostage;
     // the debt travels with the order, not the table.
     if (order.table_id) {
-      await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
+      await db.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
     }
 
     return NextResponse.json({ success: true });
