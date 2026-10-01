@@ -143,6 +143,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
+      location_id,
       order_type,
       table_id,
       customer_name,
@@ -163,7 +164,32 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!location_id) {
+      return NextResponse.json(
+        { error: "location_id is required" },
+        { status: 400 }
+      );
+    }
+
     const db = bizDb(session.businessId);
+
+    // Verify location exists and belongs to this business
+    const { data: location, error: locError } = await db
+      .from("locations")
+      .select("id")
+      .eq("id", location_id)
+      .maybeSingle();
+    if (locError) throw locError;
+    if (!location) {
+      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+    }
+
+    // Verify staff can access this location (if they have restrictions)
+    const locationFilter = await staffLocationFilter(session.id);
+    if (locationFilter && !locationFilter.in.includes(location_id)) {
+      return NextResponse.json({ error: "You cannot create orders at this location" }, { status: 403 });
+    }
+
     // Dishes and tables must be this business's own.
     const menuItemIds = (items as { menu_item_id?: number }[]).map((i) => i.menu_item_id).filter((id): id is number => !!id);
     if (!(await allOwned(db, "menu_items", menuItemIds))) {
@@ -223,6 +249,7 @@ export async function POST(req: NextRequest) {
         .insert({
           order_number: orderNumber,
           order_type,
+          location_id,
           table_id: table_id || null,
           customer_id: customerId,
           customer_name: customer_name || null,
