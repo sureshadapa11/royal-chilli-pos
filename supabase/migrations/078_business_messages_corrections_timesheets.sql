@@ -54,7 +54,7 @@ BEGIN
   RETURN NEW;
 END $$;
 DROP TRIGGER IF EXISTS trg_inherit_business ON loyalty_transactions;
-CREATE TRIGGER trg_inherit_business BEFORE INSERT ON loyalty_transactions
+CREATE TRIGGER trg_inherit_business BEFORE INSERT OR UPDATE ON loyalty_transactions
   FOR EACH ROW EXECUTE FUNCTION loyalty_business_from_order();
 
 COMMIT;
