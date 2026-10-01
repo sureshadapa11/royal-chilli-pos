@@ -49,7 +49,8 @@ order:
 `078_business_messages_corrections_timesheets.sql` →
 `079_independent_businesses.sql` → `080_business_setup.sql` →
 `081_loyalty_line.sql` → `082_business_tagline.sql` →
-`083_business_settings_catch_up.sql` → `084_multi_business_integrity.sql`.
+`083_business_settings_catch_up.sql` → `084_multi_business_integrity.sql` →
+`085_remove_global_uniques_for_multi_business.sql`.
 
 | Migration | Status |
 |---|---|
@@ -62,7 +63,7 @@ order:
 | 082 business tagline | required before 083–084 |
 | 083 Royal Chilli settings catch-up | required before 084 |
 | 084 business type/domain fields, tenant child rows, and relationship guards | pending — single final Phase 1 migration; run after 083 |
-| 085 remove legacy group-wide unique rules | planned follow-up — required before a second business opens |
+| 085 remove legacy group-wide unique rules | **implemented** (`085_remove_global_uniques_for_multi_business.sql`) — review & apply in Supabase SQL Editor before opening Business 2; run after 084 |
 
 Migration 084 adds `business_id` to previously unscoped child tables, backfills
 it from the owning row, and rejects existing cross-business child links rather
@@ -76,9 +77,72 @@ The migration adds a constrained `business_type` (default `restaurant`) and an
 optional, uniquely indexed `custom_domain`. The existing `businesses.domain`
 remains the field used by current code; domain resolution is not changed here.
 The legacy group-wide uniqueness rules are intentionally retained by migration
-084. A planned migration 085 must remove them before opening another business.
-Do not apply PR #1's foundation-only migration separately; this migration
+084. Migration 085 removes them before opening another business.
+Do not apply PR #1's foundation-only migration separately; migration 084
 supersedes both earlier draft PR approaches.
+
+### Migration 085 — Remove legacy global unique rules (`085_remove_global_uniques_for_multi_business.sql`)
+
+Migration 085 is the required follow-up to migration 084 before opening a second
+business (e.g. Melt House). It removes obsolete global unique constraints and
+indexes that prevent separate businesses from having independent records with the
+same phone numbers, subscriber emails, customer account emails, tier names, or
+timesheet periods.
+
+**Exact obsolete global uniqueness rules removed:**
+1. `customers.phone` — drops legacy global constraint `customers_phone_key` (and any
+   catalog-discovered global unique constraint on `customers(phone)`). Replaced by
+   business-scoped `customers_business_phone_unique` on `(business_id, phone)`.
+2. Customer account email — drops legacy global partial unique index
+   `customers_email_account_unique` on `lower(email) WHERE password_hash IS NOT NULL`.
+   Replaced by business-scoped partial unique index `customers_business_email_account_unique`
+   on `(business_id, lower(email)) WHERE password_hash IS NOT NULL`.
+3. `newsletter_subscribers.email` — drops legacy global constraint
+   `newsletter_subscribers_email_key` (and any catalog-discovered global unique constraint
+   on `newsletter_subscribers(email)`). Replaced by business-scoped
+   `newsletter_business_email_unique` on `(business_id, email)`.
+4. `loyalty_tiers.name` — drops legacy global constraint `loyalty_tiers_name_key`
+   (and any catalog-discovered global unique constraint on `loyalty_tiers(name)`).
+   Replaced by business-scoped `loyalty_tiers_business_name_unique` on
+   `(business_id, name)`.
+5. `timesheets (staff_id, period_start, period_end)` — drops legacy global constraint
+   `timesheets_staff_id_period_start_period_end_key` (and any catalog-discovered global
+   unique constraint on `timesheets(staff_id, period_start, period_end)`). Retains the
+   business-scoped `timesheets_business_unique` on
+   `(business_id, staff_id, period_start, period_end)`.
+
+**Intentional global rules strictly preserved (never dropped or weakened):**
+- `staff.username` (`staff_username_key`) — logins remain unique across the entire
+  group because all staff sign in via a shared login interface.
+- `staff.employee_number` (`staff_employee_number_key`) — employee numbers remain unique
+  group-wide.
+- `customers.referral_code` (`customers_referral_code_key`) — referral codes remain unique
+  across the group.
+- `loyalty_redemptions.code` (`loyalty_redemptions_code_key`) — voucher and coupon redemption
+  codes remain unique across the group.
+- Business-scoped unique rules for tenant records: `orders` (`orders_business_unique`),
+  `purchase_orders` (`purchase_orders_business_unique`), `payroll_periods`
+  (`payroll_periods_business_unique`), and `fs_signoff` (`fs_signoff_business_unique`).
+
+**Safety and operational invariants:**
+- Fully transactional (`BEGIN; ... COMMIT;`).
+- Safely repeatable (idempotent): checks table existence, column existence, constraint
+  existence, and index existence via PostgreSQL catalog queries before mutating.
+- Fails clearly and safely if duplicate rows already exist within a single business
+  that violate the business-scoped unique rules. It does not silently mutate, delete,
+  or rewrite data.
+- Includes embedded verification queries for post-application inspection in the
+  Supabase SQL Editor.
+
+**Go-live sequence for multi-business:**
+1. Confirm Phase 2 application code is deployed and verified stable on production.
+2. Ensure migration 084 has been reviewed and applied in Supabase.
+3. Apply `supabase/migrations/085_remove_global_uniques_for_multi_business.sql` in the
+   Supabase SQL Editor.
+4. Execute the verification queries at the bottom of migration 085 to confirm that
+   the 5 obsolete global rules return 0 rows, the 5 business-scoped rules return their
+   expected rows, and the 4 preserved global constraints remain active.
+5. Proceed to creating Business 2 (Melt House) in the Business setup page / admin.
 
 This PR is limited to database foundation and integrity. Phase 2 API scoping,
 domain resolution, and UI work remain out of scope.
@@ -151,8 +215,8 @@ business's own admin — contact details, logo, receipt text, hours, busy mode.
    branding (already written locally, not pushed — reads the setup), VAT
    number on receipts, order prefixes, per-business settings, payments per
    company, accountant export header, website legal pages.
-5. Planned migration 085: drop the legacy group-wide unique rules kept by
-   078/079 before a second business opens.
+5. Migration 085: drop the legacy group-wide unique rules kept by
+   078/079 before a second business opens (implemented in `supabase/migrations/085_remove_global_uniques_for_multi_business.sql`).
 
 ## Phase 3 — details already noted (folded into the setup page above)
 
@@ -195,10 +259,11 @@ business's own admin — contact details, logo, receipt text, hours, busy mode.
   order / booking can't link another business's customer.
 - Go-live order: you run 078 → attendance app pushed → 079 + new code together.
 - Attendance app follows the same rules.
-- Before a second business opens, apply the planned migration 085 to remove
+- Before a second business opens, apply migration 085 to remove
   the old group-wide rules kept by 078/079 — `timesheets (staff_id, period_start, period_end)`,
   `customers.phone`, `customers_email_account_unique`,
-  `newsletter_subscribers.email`, and `loyalty_tiers.name`.
+  `newsletter_subscribers.email`, and `loyalty_tiers.name`
+  (implemented in `supabase/migrations/085_remove_global_uniques_for_multi_business.sql`).
 
 ## Phase 3 (also) — business folders
 
