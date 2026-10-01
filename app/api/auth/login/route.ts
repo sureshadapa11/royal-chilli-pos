@@ -5,7 +5,8 @@ import { createSession, getSessionCookieOptions } from "@/lib/auth";
 import { isManagerRole } from "@/lib/staff-pin";
 import { createTillToken, tillCookieOptions, TILL_COOKIE } from "@/lib/till-device";
 import type { Staff } from "@/lib/types";
-import { loginBusinessId, staffHome } from "@/lib/business";
+import { businessForHost, loginBusinessId, staffHome } from "@/lib/business";
+import { bizDb } from "@/lib/business-db";
 
 export async function POST(req: NextRequest) {
   try {
@@ -38,7 +39,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
     }
 
-    const businessId = await loginBusinessId(staff.id, req.headers.get("host"));
+    const host = req.headers.get("host");
+    const businessId = await loginBusinessId(staff.id, host);
     if (businessId == null) {
       return NextResponse.json({ error: "Your account isn't set up at any business yet — ask a manager." }, { status: 403 });
     }
@@ -51,6 +53,18 @@ export async function POST(req: NextRequest) {
       businessId,
       ...(owner ? { owner: true } : {}),
     });
+
+    // Staff always work for their own business, whatever domain they signed
+    // in on — record the domain (and whose it is) for diagnostics.
+    try {
+      const { error: auditError } = await bizDb(businessId).from("audit_logs").insert({
+        staff_id: staff.id, action: "staff_login", entity_type: "staff", entity_id: staff.id,
+        changes: { host: host?.slice(0, 255) ?? null, domain_business_id: (await businessForHost(host))?.id ?? null, business_id: businessId },
+      });
+      if (auditError) console.error("Login audit failed:", auditError);
+    } catch (auditError) {
+      console.error("Login audit failed:", auditError);
+    }
 
     const { name: cookieName, options } = getSessionCookieOptions();
 

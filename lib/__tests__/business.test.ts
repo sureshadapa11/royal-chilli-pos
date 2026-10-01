@@ -19,7 +19,7 @@ jest.mock("../supabase", () => ({
   },
 }));
 
-import { orderNumberPrefix, websiteBusinessId } from "@/lib/business";
+import { businessForHost, businessForHostOrNull, orderNumberPrefix, websiteBusinessId } from "@/lib/business";
 
 describe("orderNumberPrefix", () => {
   it("gives each business its own order-number prefix", async () => {
@@ -46,5 +46,26 @@ describe("websiteBusinessId", () => {
     expect(await websiteBusinessId("royal-chilli-pos.vercel.app", "melt-house")).toBe(2);
     expect(await websiteBusinessId("royal-chilli-pos.vercel.app", "abcd")).toBe(1); // not live yet
     expect(await websiteBusinessId("www.theroyalchilli.com", "nonsense")).toBe(1);
+  });
+});
+
+describe("businessForHost / businessForHostOrNull", () => {
+  it("unknown domains are no business at all — never The Royal Chilli", async () => {
+    expect(await businessForHost("royal-chilli-pos.vercel.app")).toBeNull();
+    expect(await businessForHost("theroyalchili.com")).toBeNull(); // mistyped
+    expect(await businessForHost(null)).toBeNull();
+    expect(await businessForHostOrNull("royal-chilli-pos.vercel.app")).toBeNull();
+    expect(await businessForHostOrNull("localhost:3000", "nonsense")).toBeNull();
+    expect(await businessForHostOrNull("localhost:3000", "abcd")).toBeNull(); // not live yet
+  });
+
+  it("finds each business by its own domain", async () => {
+    expect((await businessForHostOrNull("www.theroyalchilli.com"))?.id).toBe(1);
+    expect((await businessForHostOrNull("melthouse.co.uk"))?.id).toBe(2);
+  });
+
+  it("?b=<slug> picks a live business without a domain of its own", async () => {
+    expect((await businessForHostOrNull("royal-chilli-pos.vercel.app", "melt-house"))?.id).toBe(2);
+    expect((await businessForHostOrNull("www.theroyalchilli.com", " Melt-House "))?.id).toBe(2);
   });
 });
