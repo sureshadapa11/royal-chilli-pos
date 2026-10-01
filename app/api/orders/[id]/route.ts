@@ -6,6 +6,7 @@ import { cancelOrderAndFreeTable } from "@/lib/orders";
 import { recalcTotals } from "@/lib/order-totals";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { queueKitchenTicketSafely } from "@/lib/print-queue";
+import { staffLocationFilter } from "@/lib/location-filter";
 
 export async function GET(
   req: NextRequest,
@@ -31,6 +32,12 @@ export async function GET(
       .single();
 
     if (orderError || !order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    // Check location filter: if staff has assigned locations, verify this order belongs to one
+    const locationFilter = await staffLocationFilter(session.id);
+    if (locationFilter && !locationFilter.in.includes(order.location_id)) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -77,11 +84,17 @@ export async function PUT(
 
     const { data: order, error: fetchError } = await db
       .from("orders")
-      .select("id, table_id, status, is_paid")
+      .select("id, table_id, status, is_paid, location_id")
       .eq("id", id)
       .single();
 
     if (fetchError || !order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    // Check location filter
+    const locationFilter = await staffLocationFilter(session.id);
+    if (locationFilter && !locationFilter.in.includes(order.location_id)) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -235,11 +248,17 @@ export async function DELETE(
 
     const { data: order, error: fetchError } = await db
       .from("orders")
-      .select("id, table_id")
+      .select("id, table_id, location_id")
       .eq("id", id)
       .single();
 
     if (fetchError || !order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
+    // Check location filter
+    const locationFilter = await staffLocationFilter(session.id);
+    if (locationFilter && !locationFilter.in.includes(order.location_id)) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 

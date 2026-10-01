@@ -6,6 +6,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { computeBill } from "@/lib/order-totals";
+import { staffLocationFilter } from "@/lib/location-filter";
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,6 +34,12 @@ export async function GET(req: NextRequest) {
         staff:staff!orders_staff_id_fkey(name)
       `)
       .order("created_at", { ascending: false });
+
+    // Apply location filter: if staff has assigned locations, only show those
+    const locationFilter = await staffLocationFilter(session.id);
+    if (locationFilter) {
+      query = query.in("location_id", locationFilter.in);
+    }
 
     if (status === "open") {
       // "open" means any unpaid, active order
