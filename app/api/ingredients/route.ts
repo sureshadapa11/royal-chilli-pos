@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   }
   const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
-  const location = await resolveInventoryLocation(session.businessId, session.id, searchParams.get("location_id"));
+  const location = await resolveInventoryLocation(session.businessId, session.id, searchParams.get("location_id"), session.owner);
   if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
   const lowStockOnly = searchParams.get("low_stock") === "1";
   const search = searchParams.get("search");
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
     }
     const db = bizDb(session.businessId);
     const { name, unit, reorder_level, reorder_quantity, cost_per_unit, supplier_id, opening_stock } = await req.json();
-    const location = await resolveInventoryLocation(session.businessId, session.id, null);
+    const location = await resolveInventoryLocation(session.businessId, session.id, null, session.owner);
     if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
     if (supplier_id && !(await allOwned(db, "suppliers", [supplier_id]))) return NextResponse.json({ error: "That supplier isn't this business's" }, { status: 400 });
     if (!name || !String(name).trim() || !unit) return NextResponse.json({ error: "Name and unit are required" }, { status: 400 });

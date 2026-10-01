@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   }
   const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
-  const location = await resolveInventoryLocation(session.businessId, session.id, searchParams.get("location_id"));
+  const location = await resolveInventoryLocation(session.businessId, session.id, searchParams.get("location_id"), session.owner);
   if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
   const { data, error } = await db
     .from("stock_takes")
@@ -43,6 +43,7 @@ export async function POST(req: NextRequest) {
       session.businessId,
       session.id,
       requestedLocationId == null ? null : String(requestedLocationId),
+      session.owner,
     );
     if ("error" in resolvedLocation) {
       return NextResponse.json({ error: resolvedLocation.error }, { status: resolvedLocation.status });

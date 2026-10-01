@@ -17,7 +17,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
-    const location = await resolveInventoryLocation(session.businessId, session.id, null);
+    const location = await resolveInventoryLocation(session.businessId, session.id, null, session.owner);
     if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
     const { id } = await params;
     const { items } = await req.json(); // [{ item_id, received_quantity, expiry_date }]

@@ -327,7 +327,7 @@ Simple staff creation (PIN hashed with bcrypt). Distinct from the richer `/api/e
 ### `GET /api/employees`
 **Auth:** `canManageStaff(session.role)`
 **Query:** `search` (matches name/employee_number/email), `role`, `active` (default `"1"`; pass `"all"` to include inactive)
-**Response:** `{ employees }` — full HR profile field set
+**Response:** `{ employees }` — full HR profile field set, each with `location_ids: number[]` (assigned locations; `[]` = unassigned, no location access)
 
 ### `POST /api/employees`
 **Auth:** `canManageStaff(session.role)`
@@ -337,13 +337,23 @@ Enforces an optional `max_employees` cap read from `app_settings` (only if that 
 
 ### `GET /api/employees/:id`
 **Auth:** `canManageStaff(session.role)`
-**Response:** `{ employee }` or `404`
+**Response:** `{ employee }` (including `location_ids: number[]`) or `404`
 
 ### `PATCH /api/employees/:id`
 **Auth:** `canManageStaff(session.role)`
 **Body:** any subset of the editable HR fields, plus optional `pin` (rehashed if present)
 **Response:** `{ success: true, employee }`
 Writes an `audit_logs` entry with the diff.
+
+### `PATCH /api/staff/:id/locations`
+**Auth:** `canManageStaff(session.role)`; the staff member must belong to the session's business (`404` otherwise)
+**Body:** `{ location_ids: number[] }` — replaces the staff member's assignments. `[]` unassigns them: they have **no** location access (location analytics shows them no locations and inventory endpoints reject them) until they're reassigned. They can still sign in — sign-in never checks locations.
+**Response:** `200 { success: true, staff: { id, name, location_ids } }`
+- `400` if `location_ids` isn't an array of positive integers, or any id isn't a location of this business (cross-business ids are rejected and nothing changes).
+- `400` if a manager tries to remove their own last location (keep at least one).
+- `403` if the caller tries to add or remove a location they aren't assigned to themselves. Only the group owner isn't limited, so an unassigned manager can't assign anyone until the owner assigns them.
+- Writes an `audit_logs` row: `action: "staff_location_assignment"`, `entity_type: "staff"`, `entity_id`, `changes: { from: [...], to: [...] }`.
+The Staff Hub page `/staff/:id/assignments` (linked from HR → employee → **Locations**) edits this with one checkbox per active location. `GET`/`POST /api/staff/:id/locations` and `DELETE /api/staff/:id/locations/:locationId` read / add / remove a single assignment.
 
 ### `GET /api/attendance`
 **Auth:** `canManageStaff(session.role)`
@@ -481,7 +491,7 @@ Computes real hours worked per active employee from attendance data (`computeHou
 
 ### `GET /api/ingredients`
 **Auth:** `canManageInventory(session.role)`
-**Query:** `location_id` (defaults to the caller's primary location, or `1`), `low_stock` (`"1"` filters to `current_stock <= reorder_level`), `search` (name, case-insensitive)
+**Query:** `location_id` (defaults to the caller's first assigned location; the group owner defaults to the business's first active location). Staff with no location assignments get `400` (`403` if they pass a `location_id`) — this applies to every inventory endpoint that resolves a location (`/api/ingredients`, `/api/stock-movements`, `/api/stock-takes`, `/api/purchase-orders/:id/receive`)., `low_stock` (`"1"` filters to `current_stock <= reorder_level`), `search` (name, case-insensitive)
 **Response:** `{ ingredients }` — supplier name flattened in
 Ingredients assigned to no location are shared and appear at every location.
 
@@ -489,7 +499,7 @@ Ingredients assigned to no location are shared and appear at every location.
 **Auth:** `canManageInventory(session.role)`
 **Body:** `{ name, unit, reorder_level?, reorder_quantity?, cost_per_unit?, supplier_id?, opening_stock? }` — name + unit required
 **Response:** `201 { success: true, ingredient }`
-The new ingredient is assigned to the caller's primary location (or location `1` when unassigned).
+The new ingredient is assigned to the caller's first assigned location (`400` if they have none; the group owner uses the business's first active location).
 If `opening_stock > 0`, immediately records a `stock_movements` row of type `adjustment` — **every stock change, even the very first one, goes through the movements ledger.**
 
 ### `PATCH /api/ingredients/:id`
@@ -561,7 +571,7 @@ If `ingredients` is present, full-replaces the ingredient list (delete-then-inse
 
 ### `GET /api/stock-movements`
 **Auth:** `canManageInventory(session.role)`
-**Query:** `location_id` (defaults to the caller's primary location, or `1`), `ingredient_id`, `movement_type`, `from`, `to` (capped at 500 rows, newest first)
+**Query:** `location_id` (defaults to the caller's first assigned location; the group owner defaults to the business's first active location). Staff with no location assignments get `400` (`403` if they pass a `location_id`) — this applies to every inventory endpoint that resolves a location (`/api/ingredients`, `/api/stock-movements`, `/api/stock-takes`, `/api/purchase-orders/:id/receive`)., `ingredient_id`, `movement_type`, `from`, `to` (capped at 500 rows, newest first)
 **Response:** `{ movements }` — ingredient name/unit and staff name flattened in
 
 ### `POST /api/stock-movements`
@@ -578,7 +588,7 @@ Movements are recorded at the caller's primary location.
 
 ### `GET /api/stock-takes`
 **Auth:** `canManageInventory(session.role)`
-**Query:** `location_id` (defaults to the caller's primary location, or `1`)
+**Query:** `location_id` (defaults to the caller's first assigned location; the group owner defaults to the business's first active location). Staff with no location assignments get `400` (`403` if they pass a `location_id`) — this applies to every inventory endpoint that resolves a location (`/api/ingredients`, `/api/stock-movements`, `/api/stock-takes`, `/api/purchase-orders/:id/receive`).
 **Response:** `{ stockTakes }` — counted-by staff name flattened in, newest first
 
 ### `POST /api/stock-takes`
@@ -729,6 +739,42 @@ Hourly bucketing uses `getUTCHours()`.
 **Query:** `from`, `to` (both required)
 **Response:** `{ staff_performance, labour_cost }`
 `staff_performance` = active staff with ≥1 order in range, ranked by sales revenue (orders taken as `staff_id` on the order — this measures who rang up the sale, not who cooked/served it).
+
+### `GET /api/analytics/locations`
+**Auth:** `canManageStaff(session.role)`. Scoped to the caller's locations: a staff member sees only the locations in their `staff_locations` rows — staff with no assignments see **none** (`{ "locations": [], "summary": { "total_sales": 0, "total_orders": 0 } }`); the group owner sees every active location of the business.
+**Query:** `start_date`, `end_date` (`YYYY-MM-DD`, inclusive trading days — 5am–5am UK time; both default to today, `end_date` defaults to `start_date`), `location_id` (optional — one location; `403` if not assigned to the caller, `404` if not an active location of this business)
+**Response:**
+```json
+{
+  "locations": [
+    {
+      "id": 1,
+      "name": "Kitchen",
+      "sales": { "count": 42, "total": 1250.50, "by_channel": { "pos": 800, "online": 450.50 } },
+      "inventory": { "ingredients_count": 156, "low_stock_count": 3, "out_of_stock_count": 0 },
+      "staff": { "active_count": 5, "shifts_today": 4 },
+      "orders_today": 12,
+      "top_items": [{ "name": "Chicken Tikka", "qty": 18, "revenue": 234.50 }]
+    }
+  ],
+  "summary": { "total_sales": 1250.50, "total_orders": 42 }
+}
+```
+- `sales`: paid orders at the location created in the date range, net of refunds. Channel: `online` = website orders (no `staff_id`), `pos` = rung up by staff.
+- `inventory`: active ingredients held at the location; low stock = `0 < current_stock <= reorder_level`, out of stock = `current_stock <= 0`.
+- `staff`: active staff explicitly assigned to the location, and how many of their shifts have clocked in today.
+- `orders_today`: non-cancelled orders (paid or not) at the location today.
+- `top_items`: top 5 items by quantity sold in the range (cancelled lines excluded); `revenue` = quantity × item price.
+`400` on a malformed date or `start_date` after `end_date`.
+
+### `GET /api/analytics/locations/:id/inventory`
+**Auth:** `canManageStaff(session.role)` and access to the location (`403` / `404` as above)
+**Response:** `{ ingredients: [{ id, name, current_qty, reorder_level, last_movement_at, supplier_name }] }` — active ingredients at that location, sorted by name; `last_movement_at` is the latest stock movement at that location (or `null`).
+
+### `GET /api/analytics/locations/:id/staff`
+**Auth:** `canManageStaff(session.role)` and access to the location (`403` / `404` as above)
+**Query:** `start_date`, `end_date` (as above; default today)
+**Response:** `{ staff: [{ id, name, shifts_today, hours_logged, assignments: [1, 2] }] }` — active staff assigned to the location, sorted by name. `hours_logged` = net worked hours of completed shifts in the range; `assignments` = all of their location ids.
 
 ### `GET /api/reports`
 **Auth:** session required (any role) — notably **not** gated by any specific permission function, just requires being logged in
