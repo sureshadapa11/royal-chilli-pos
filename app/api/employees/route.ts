@@ -5,6 +5,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { staffIdsAt } from "@/lib/business";
 import { canManageStaff } from "@/lib/permissions";
 import { getBusinessSetting } from "@/lib/business-settings";
+import { locationIdsByStaff } from "@/lib/locations";
 
 const PROFILE_FIELDS =
   "id, name, username, role, active, employee_number, email, phone, address, date_of_birth, hire_date, employment_type, pay_rate, pay_frequency, emergency_contact_name, emergency_contact_phone, notes, vehicle_type, vehicle_registration, driver_status, created_at";
@@ -36,7 +37,12 @@ export async function GET(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: "Failed to fetch employees" }, { status: 500 });
   }
-  return NextResponse.json({ employees: data });
+  try {
+    const locations = await locationIdsByStaff((data ?? []).map((e) => e.id));
+    return NextResponse.json({ employees: (data ?? []).map((e) => ({ ...e, location_ids: locations.get(e.id) ?? [] })) });
+  } catch {
+    return NextResponse.json({ error: "Failed to fetch employees" }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {

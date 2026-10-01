@@ -82,6 +82,36 @@ export async function staffLocationIds(staffId: number): Promise<number[]> {
   return (data ?? []).map((r) => r.location_id).filter((id): id is number => id !== null);
 }
 
+/** Each staff member's assigned location ids (empty = every location). */
+export async function locationIdsByStaff(staffIds: number[]): Promise<Map<number, number[]>> {
+  const map = new Map<number, number[]>(staffIds.map((id) => [id, []]));
+  if (staffIds.length === 0) return map;
+  const { data, error } = await supabase
+    .from("staff_locations")
+    .select("staff_id, location_id")
+    .in("staff_id", staffIds);
+  if (error) throw error;
+  for (const row of data ?? []) {
+    if (row.location_id == null) continue;
+    map.get(row.staff_id)?.push(row.location_id);
+  }
+  for (const ids of map.values()) ids.sort((a, b) => a - b);
+  return map;
+}
+
+/** The business's primary location: its first active one (unassigned staff work here by default). */
+export async function primaryLocationId(businessId: number): Promise<number> {
+  const { data, error } = await bizDb(businessId)
+    .from("locations")
+    .select("id")
+    .eq("active", 1)
+    .order("id", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as { id: number } | null)?.id ?? 1;
+}
+
 export async function resolveInventoryLocation(
   businessId: number,
   staffId: number,
@@ -96,7 +126,7 @@ export async function resolveInventoryLocation(
   if (assignmentError) throw assignmentError;
   const assigned = (assignments ?? []).map((row) => row.location_id).filter((id): id is number => id !== null);
   const locationId = requestedLocationId == null || requestedLocationId === ""
-    ? assigned[0] ?? 1
+    ? assigned[0] ?? await primaryLocationId(businessId)
     : Number(requestedLocationId);
 
   if (!Number.isInteger(locationId) || locationId < 1) {

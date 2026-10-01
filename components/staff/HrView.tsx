@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import type { Staff } from "@/lib/types";
 import { DEPARTMENTS, JOB_TITLES_BY_DEPARTMENT } from "@/lib/org-chart";
@@ -629,10 +630,15 @@ function ChecklistTab({ staffId }: { staffId: number }) {
 }
 
 // ── Employee picker + main ──────────────────────────────────────────────────
+function locationLabel(ids: number[] | undefined, locationNames: Map<number, string>): string | null {
+  const names = (ids ?? []).map((id) => locationNames.get(id)).filter((n): n is string => !!n);
+  return names.length > 0 ? `(Locations: ${names.join(", ")})` : null;
+}
+
 function EmployeePicker({
-  employees, selected, onSelect, onAddNew, search, setSearch, roleFilter, setRoleFilter, activeFilter, setActiveFilter,
+  employees, locationNames, selected, onSelect, onAddNew, search, setSearch, roleFilter, setRoleFilter, activeFilter, setActiveFilter,
 }: {
-  employees: Staff[]; selected: Staff | null; onSelect: (s: Staff) => void; onAddNew: () => void;
+  employees: Staff[]; locationNames: Map<number, string>; selected: Staff | null; onSelect: (s: Staff) => void; onAddNew: () => void;
   search: string; setSearch: (v: string) => void;
   roleFilter: string; setRoleFilter: (v: string) => void;
   activeFilter: string; setActiveFilter: (v: string) => void;
@@ -668,6 +674,9 @@ function EmployeePicker({
               {!e.active && <span className="flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground">Inactive</span>}
             </div>
             <p className="text-muted-foreground text-xs capitalize">{e.employee_number} · {e.role.replace("_", " ")}</p>
+            {locationLabel(e.location_ids, locationNames) && (
+              <p className="text-muted-foreground text-xs truncate">{locationLabel(e.location_ids, locationNames)}</p>
+            )}
           </button>
         ))}
         {employees.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No employees found.</p>}
@@ -968,6 +977,15 @@ function EmployeeSection() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [activeFilter, setActiveFilter] = useState("1");
+  const [locationNames, setLocationNames] = useState<Map<number, string>>(new Map());
+
+  useEffect(() => {
+    fetch("/api/locations")
+      .then((res) => (res.ok ? res.json() : { locations: [] }))
+      .then((data: { locations?: { id: number; name: string }[] }) =>
+        setLocationNames(new Map((data.locations ?? []).map((l) => [l.id, l.name]))))
+      .catch(() => {});
+  }, []);
 
   const loadEmployees = useCallback(async () => {
     const params = new URLSearchParams({ active: activeFilter });
@@ -983,7 +1001,7 @@ function EmployeeSection() {
     <>
       <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-5">
         <EmployeePicker
-          employees={employees} selected={selected} onSelect={(s) => { setSelected(s); setTab("info"); }} onAddNew={() => setShowNewEmployee(true)}
+          employees={employees} locationNames={locationNames} selected={selected} onSelect={(s) => { setSelected(s); setTab("info"); }} onAddNew={() => setShowNewEmployee(true)}
           search={search} setSearch={setSearch} roleFilter={roleFilter} setRoleFilter={setRoleFilter} activeFilter={activeFilter} setActiveFilter={setActiveFilter}
         />
 
@@ -1001,7 +1019,14 @@ function EmployeeSection() {
                     {selected.employee_number} · {selected.role.replace("_", " ")}
                     {!selected.active && <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground normal-case">Inactive</span>}
                   </p>
+                  {locationLabel(selected.location_ids, locationNames) && (
+                    <p className="text-muted-foreground text-xs">{locationLabel(selected.location_ids, locationNames)}</p>
+                  )}
                 </div>
+                <Link href={`/staff/${selected.id}/assignments`}
+                  className="px-3 py-1.5 rounded-lg border border-border text-sm font-semibold text-foreground hover:bg-surface-hover">
+                  Locations
+                </Link>
               </div>
               <div className="flex flex-wrap gap-1 bg-surface-hover p-1 rounded-xl mb-5 w-fit">
                 {TABS.map((t) => (
@@ -1014,7 +1039,7 @@ function EmployeeSection() {
               {tab === "info" && (
                 <EmployeeInfoTab
                   staff={selected}
-                  onUpdated={(s) => { setSelected(s); loadEmployees(); }}
+                  onUpdated={(s) => { setSelected({ ...s, location_ids: s.location_ids ?? selected.location_ids }); loadEmployees(); }}
                 />
               )}
               {tab === "onboarding" && <OnboardingTab staffId={selected.id} />}

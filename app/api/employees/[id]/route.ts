@@ -4,6 +4,7 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { bizDb, staffWorksAt } from "@/lib/business-db";
 import { canManageStaff } from "@/lib/permissions";
+import { staffLocationIds } from "@/lib/locations";
 
 const PROFILE_FIELDS =
   "id, name, username, role, active, employee_number, email, phone, address, date_of_birth, hire_date, employment_type, pay_rate, pay_frequency, emergency_contact_name, emergency_contact_phone, notes, vehicle_type, vehicle_registration, driver_status, created_at";
@@ -28,7 +29,12 @@ export async function GET(
   if (error || !data) {
     return NextResponse.json({ error: "Employee not found" }, { status: 404 });
   }
-  return NextResponse.json({ employee: data });
+  try {
+    const location_ids = (await staffLocationIds(data.id)).sort((a, b) => a - b);
+    return NextResponse.json({ employee: { ...data, location_ids } });
+  } catch {
+    return NextResponse.json({ error: "Failed to load employee locations" }, { status: 500 });
+  }
 }
 
 export async function PATCH(
