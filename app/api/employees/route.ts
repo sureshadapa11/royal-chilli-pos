@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
     if (updateErr) throw updateErr;
 
     await supabase.from("audit_logs").insert({
+      business_id: session.businessId,
       staff_id: session.id,
       action: "create",
       entity_type: "employee",

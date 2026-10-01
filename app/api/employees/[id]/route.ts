@@ -88,6 +88,7 @@ export async function PATCH(
     // Never write the password hash itself into the audit trail.
     const { password_hash: _omit, ...auditableChanges } = updates;
     await supabase.from("audit_logs").insert({
+      business_id: session.businessId,
       staff_id: session.id,
       action: "update",
       entity_type: "employee",

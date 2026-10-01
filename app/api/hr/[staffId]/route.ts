@@ -68,6 +68,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ staf
   }
 
   await supabase.from("audit_logs").insert({
+    business_id: session.businessId,
     staff_id: session.id,
     action: "update",
     entity_type: "staff_hr_details",

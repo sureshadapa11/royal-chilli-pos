@@ -28,6 +28,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sta
   if (error) return NextResponse.json({ error: "Failed to fetch" }, { status: 500 });
 
   await supabase.from("audit_logs").insert({
+    business_id: session.businessId,
     staff_id: session.id,
     action: "reveal_sensitive_field",
     entity_type: "staff_hr_details",

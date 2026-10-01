@@ -72,6 +72,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ sta
   }
 
   await supabase.from("audit_logs").insert({
+    business_id: session.businessId,
     staff_id: session.id,
     action: "create",
     entity_type: "staff_rtw_verification",
