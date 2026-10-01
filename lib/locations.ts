@@ -82,6 +82,40 @@ export async function staffLocationIds(staffId: number): Promise<number[]> {
   return (data ?? []).map((r) => r.location_id).filter((id): id is number => id !== null);
 }
 
+export async function resolveInventoryLocation(
+  businessId: number,
+  staffId: number,
+  requestedLocationId: string | null,
+): Promise<{ locationId: number } | { error: string; status: number }> {
+  const { data: assignments, error: assignmentError } = await supabase
+    .from("staff_locations")
+    .select("location_id")
+    .eq("staff_id", staffId)
+    .order("assigned_at", { ascending: true })
+    .order("location_id", { ascending: true });
+  if (assignmentError) throw assignmentError;
+  const assigned = (assignments ?? []).map((row) => row.location_id).filter((id): id is number => id !== null);
+  const locationId = requestedLocationId == null || requestedLocationId === ""
+    ? assigned[0] ?? 1
+    : Number(requestedLocationId);
+
+  if (!Number.isInteger(locationId) || locationId < 1) {
+    return { error: "Invalid location_id", status: 400 };
+  }
+  if (requestedLocationId != null && assigned.length > 0 && !assigned.includes(locationId)) {
+    return { error: "You cannot access this location", status: 403 };
+  }
+
+  const { data, error } = await bizDb(businessId)
+    .from("locations")
+    .select("id")
+    .eq("id", locationId)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return { error: "Location not found", status: 404 };
+  return { locationId };
+}
+
 export async function canAccessLocation(staffId: number, locationId: number): Promise<boolean> {
   const assigned = await staffLocationIds(staffId);
   return assigned.length === 0 || assigned.includes(locationId);

@@ -3,6 +3,7 @@ import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 import { londonDateStr } from "@/lib/london-date";
+import { resolveInventoryLocation } from "@/lib/locations";
 
 // Marks a PO received, moves stock via stock_movements (so it's audit-tracked like everything
 // else), updates each ingredient's last-known cost, and records batch expiry dates.
@@ -16,6 +17,8 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
+    const location = await resolveInventoryLocation(session.businessId, session.id, null);
+    if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
     const { id } = await params;
     const { items } = await req.json(); // [{ item_id, received_quantity, expiry_date }]
 
@@ -50,6 +53,7 @@ export async function POST(
         reference_id: po.id,
         reason: `Received on PO ${po.order_number}`,
         staff_id: session.id,
+        location_id: location.locationId,
       });
 
       // Last-known cost, used for recipe costing.

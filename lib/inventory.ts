@@ -31,10 +31,15 @@ export type ReconciliationReport = {
 // bookkeeping, never a condition for the sale itself, so callers should
 // never let a failure here affect the payment response.
 export async function depleteStockForOrder(orderId: number, staffId: number | null): Promise<void> {
+  const { data: order } = await supabase.from("orders").select("business_id, location_id").eq("id", orderId).maybeSingle();
+  if (!order) return;
+  const db = bizDb(order.business_id);
+  const locationId = order.location_id ?? 1;
+
   // Both Pay Later and an eventual full payment call this for the same
   // order — without this guard, a Pay Later order that later gets paid off
   // has its stock deducted twice for the same food.
-  const { data: existing } = await supabase
+  const { data: existing } = await db
     .from("stock_movements")
     .select("id")
     .eq("reference_type", "order")
@@ -43,15 +48,13 @@ export async function depleteStockForOrder(orderId: number, staffId: number | nu
     .limit(1);
   if (existing && existing.length > 0) return;
 
-  const { data: items } = await supabase
+  const { data: items } = await db
     .from("order_items")
     .select("menu_item_id, quantity")
     .eq("order_id", orderId)
     .neq("status", "cancelled");
 
   if (!items || items.length === 0) return;
-  const { data: order } = await supabase.from("orders").select("business_id").eq("id", orderId).maybeSingle();
-  if (!order) return;
 
   const menuItemIds = [...new Set(items.map((i) => i.menu_item_id).filter((id): id is number => id != null))];
   const book = await loadRecipeBook(order.business_id, menuItemIds);
@@ -60,16 +63,44 @@ export async function depleteStockForOrder(orderId: number, staffId: number | nu
 
   if (deltaByIngredient.size === 0) return;
 
-  const movements = [...deltaByIngredient.entries()].map(([ingredient_id, used]) => ({
+  const { data: recipeIngredients } = await db
+    .from("ingredients")
+    .select("id, name, unit, location_id")
+    .in("id", [...deltaByIngredient.keys()]);
+  const { data: locationIngredients } = await db
+    .from("ingredients")
+    .select("id, name, unit, location_id")
+    .eq("location_id", locationId);
+  const byId = new Map((recipeIngredients ?? []).map((ingredient) => [ingredient.id, ingredient]));
+  const byNameAndUnit = new Map(
+    (locationIngredients ?? []).map((ingredient) => [
+      `${ingredient.name.trim().toLowerCase()}\0${ingredient.unit.trim().toLowerCase()}`,
+      ingredient.id,
+    ]),
+  );
+  const locationUsage = new Map<number, number>();
+  for (const [ingredientId, used] of deltaByIngredient) {
+    const ingredient = byId.get(ingredientId);
+    if (!ingredient) continue;
+    const targetIngredientId = ingredient.location_id == null || ingredient.location_id === locationId
+      ? ingredient.id
+      : byNameAndUnit.get(`${ingredient.name.trim().toLowerCase()}\0${ingredient.unit.trim().toLowerCase()}`);
+    if (targetIngredientId == null) continue;
+    locationUsage.set(targetIngredientId, (locationUsage.get(targetIngredientId) ?? 0) + used);
+  }
+  if (locationUsage.size === 0) return;
+
+  const movements = [...locationUsage.entries()].map(([ingredient_id, used]) => ({
     ingredient_id,
     movement_type: "usage" as const,
     quantity_delta: -Math.round(used * 1000) / 1000,
+    location_id: locationId,
     reference_type: "order",
     reference_id: orderId,
     staff_id: staffId,
   }));
 
-  await supabase.from("stock_movements").insert(movements);
+  await db.from("stock_movements").insert(movements);
 }
 
 // Pure rollup: theoretical usage (what the recipes say should have been used,

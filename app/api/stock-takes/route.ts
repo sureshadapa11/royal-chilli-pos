@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
+import { resolveInventoryLocation } from "@/lib/locations";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -9,9 +10,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);
+  const { searchParams } = new URL(req.url);
+  const location = await resolveInventoryLocation(session.businessId, session.id, searchParams.get("location_id"));
+  if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
   const { data, error } = await db
     .from("stock_takes")
     .select("*, counted_staff:staff!stock_takes_counted_by_fkey(name)")
+    .eq("location_id", location.locationId)
     .order("opened_at", { ascending: false });
   if (error) return NextResponse.json({ error: "Failed to fetch stock takes" }, { status: 500 });
 
@@ -32,16 +37,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
-    const { location } = await req.json().catch(() => ({ location: "all" }));
+    const body = await req.json().catch(() => ({}));
+    const requestedLocationId = body && typeof body === "object" ? body.location_id : null;
+    const resolvedLocation = await resolveInventoryLocation(
+      session.businessId,
+      session.id,
+      requestedLocationId == null ? null : String(requestedLocationId),
+    );
+    if ("error" in resolvedLocation) {
+      return NextResponse.json({ error: resolvedLocation.error }, { status: resolvedLocation.status });
+    }
 
     const { data: stockTake, error: stErr } = await db
       .from("stock_takes")
-      .insert({ location: location || "all", counted_by: session.id })
+      .insert({ location_id: resolvedLocation.locationId, counted_by: session.id })
       .select()
       .single();
     if (stErr) throw stErr;
 
-    const { data: ingredients, error: ingErr } = await db.from("ingredients").select("id, current_stock").eq("active", 1);
+    const { data: ingredients, error: ingErr } = await db
+      .from("ingredients")
+      .select("id, current_stock")
+      .eq("active", 1)
+      .or(`location_id.eq.${resolvedLocation.locationId},location_id.is.null`);
     if (ingErr) throw ingErr;
 
     if ((ingredients || []).length > 0) {

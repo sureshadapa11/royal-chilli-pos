@@ -9,10 +9,11 @@ import { bizDb } from "@/lib/business-db";
  * Case- and space-insensitive name match against active rows of `table`,
  * within one business (each business has its own suppliers and ingredients).
  */
-export async function findActiveByName(table: "suppliers" | "ingredients", name: string, excludeId?: number, businessId?: number): Promise<{ id: number; name: string } | null> {
+export async function findActiveByName(table: "suppliers" | "ingredients", name: string, excludeId?: number, businessId?: number, locationId?: number): Promise<{ id: number; name: string } | null> {
   const clean = name.trim().replace(/\s+/g, " ");
   const pattern = clean.replace(/[\%_]/g, (c) => `\${c}`);
   let q = (businessId != null ? bizDb(businessId) : { from: supabase.from.bind(supabase) }).from(table).select("id, name").eq("active", 1).ilike("name", pattern);
+  if (table === "ingredients" && locationId != null) q = q.or(`location_id.eq.${locationId},location_id.is.null`);
   if (excludeId != null) q = q.neq("id", excludeId);
   const { data, error } = await q.limit(1);
   if (error) throw error;

@@ -3,6 +3,7 @@ import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
 import { tradingRangeUtc } from "@/lib/london-date";
+import { resolveInventoryLocation } from "@/lib/locations";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -11,6 +12,8 @@ export async function GET(req: NextRequest) {
   }
   const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
+  const location = await resolveInventoryLocation(session.businessId, session.id, searchParams.get("location_id"));
+  if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
   const ingredientId = searchParams.get("ingredient_id");
   const movementType = searchParams.get("movement_type");
   const from = searchParams.get("from");
@@ -21,6 +24,7 @@ export async function GET(req: NextRequest) {
     .select("*, ingredient:ingredients(name, unit), staff:staff!stock_movements_staff_id_fkey(name)")
     .order("created_at", { ascending: false })
     .limit(500);
+  query = query.eq("location_id", location.locationId);
   if (ingredientId) query = query.eq("ingredient_id", ingredientId);
   if (movementType) query = query.eq("movement_type", movementType);
   if (from) query = query.gte("created_at", tradingRangeUtc(from).start);
@@ -48,6 +52,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
+    const location = await resolveInventoryLocation(session.businessId, session.id, null);
+    if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
     const { ingredient_id, movement_type, quantity, reason } = await req.json();
     if (!ingredient_id || !movement_type || !quantity) {
       return NextResponse.json({ error: "ingredient_id, movement_type and quantity are required" }, { status: 400 });
@@ -68,7 +74,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await db
       .from("stock_movements")
-      .insert({ ingredient_id, movement_type, quantity_delta: delta, reason: reason || null, staff_id: session.id })
+      .insert({ ingredient_id, movement_type, quantity_delta: delta, reason: reason || null, staff_id: session.id, location_id: location.locationId })
       .select()
       .single();
     if (error) throw error;
