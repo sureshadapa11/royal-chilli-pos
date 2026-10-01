@@ -141,7 +141,7 @@ export async function setBusinessOpen(id: number, active: boolean): Promise<Resu
     const line1 = String(addr.line1 ?? "").trim();
     const postcode = String(addr.postcode ?? "").trim();
     if (!line1 || !postcode || checks.postcode(postcode)) {
-      missing.push("trading address with valid postcode");
+      missing.push("trading address with valid UK postcode");
     }
 
     if (missing.length > 0) {

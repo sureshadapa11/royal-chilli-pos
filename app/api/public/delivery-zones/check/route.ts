@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     deliverable: true,
-    distance_miles: distanceMiles ? Math.round(distanceMiles * 10) / 10 : undefined,
+    distance_miles: typeof distanceMiles === "number" ? Math.round(distanceMiles * 10) / 10 : undefined,
     fee: config.deliveryFee,
     free_over: config.freeDeliveryThreshold,
     min_order: config.minDeliveryOrder,
