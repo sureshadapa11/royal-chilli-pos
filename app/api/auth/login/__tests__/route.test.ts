@@ -2,11 +2,13 @@ import bcrypt from "bcryptjs";
 import { NextRequest } from "next/server";
 
 let staffRow: Record<string, unknown> | null;
+const auditRows: Record<string, unknown>[] = [];
 
 jest.mock("@/lib/supabase", () => ({
   __esModule: true,
   default: {
     from: () => ({
+      insert: (row: Record<string, unknown>) => { auditRows.push(row); return Promise.resolve({ error: null }); },
       select: () => ({
         eq: () => ({
           eq: () => ({
@@ -19,20 +21,26 @@ jest.mock("@/lib/supabase", () => ({
 }));
 
 let businessId: number | null = 1;
-jest.mock("@/lib/business", () => ({ __esModule: true, loginBusinessId: () => Promise.resolve(businessId), staffHome: () => Promise.resolve({ businessId, isOwner: false }) }));
+jest.mock("@/lib/business", () => ({
+  __esModule: true,
+  loginBusinessId: () => Promise.resolve(businessId),
+  staffHome: () => Promise.resolve({ businessId, isOwner: false }),
+  businessForHost: (host: string | null) => Promise.resolve(host === "melthouse.co.uk" ? { id: 2 } : null),
+}));
 
 import { POST } from "@/app/api/auth/login/route";
 
-function jsonRequest(body: unknown) {
-  return new NextRequest("http://localhost/api/auth/login", {
+function jsonRequest(body: unknown, url = "http://localhost/api/auth/login") {
+  return new NextRequest(url, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", host: new URL(url).host },
     body: JSON.stringify(body),
   });
 }
 
 beforeEach(async () => {
   businessId = 1;
+  auditRows.length = 0;
   staffRow = {
     id: 1, name: "Test Manager", role: "manager", active: 1,
     password_hash: await bcrypt.hash("correct-horse", 10),
@@ -76,5 +84,17 @@ describe("POST /api/auth/login", () => {
     const res = await POST(jsonRequest({ username: "manager1", password: "correct-horse" }));
     expect(res.status).toBe(403);
     expect(res.cookies.get("pos_session")).toBeFalsy();
+  });
+
+  it("signs staff into their own business on another business's domain, and records the domain", async () => {
+    const res = await POST(jsonRequest({ username: "manager1", password: "correct-horse" }, "http://melthouse.co.uk/api/auth/login"));
+    expect(res.status).toBe(200);
+    expect((await res.json()).user.businessId).toBe(1);
+    expect(auditRows).toEqual([
+      expect.objectContaining({
+        action: "staff_login", staff_id: 1, business_id: 1,
+        changes: { host: "melthouse.co.uk", domain_business_id: 2, business_id: 1 },
+      }),
+    ]);
   });
 });

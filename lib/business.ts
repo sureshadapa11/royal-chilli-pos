@@ -122,13 +122,22 @@ export async function loginBusinessId(staffId: number, host: string | null | und
  * (the vercel.app address, localhost) are The Royal Chilli.
  */
 export async function websiteBusinessId(host: string | null | undefined, pick?: string | null): Promise<number> {
-  // ?b=<slug> — for a business whose QR codes / links use a shared address
-  // (no domain of its own yet). Only an active business can be picked.
+  return (await businessForHostOrNull(host, pick))?.id ?? DEFAULT_BUSINESS_ID;
+}
+
+/**
+ * The business a request is for, or null when nothing matches — never falls
+ * back to The Royal Chilli (the login screen shows "Business not found"
+ * instead). ?b=<slug> — for a business whose QR codes / links use a shared
+ * address (no domain of its own yet) — wins over the domain; only an active
+ * business can be picked.
+ */
+export async function businessForHostOrNull(host: string | null | undefined, pick?: string | null): Promise<Business | null> {
   if (pick) {
     const b = (await listBusinesses()).find((x) => x.active && x.slug === pick.trim().toLowerCase());
-    if (b) return b.id;
+    if (b) return b;
   }
-  return (await businessForHost(host))?.id ?? DEFAULT_BUSINESS_ID;
+  return businessForHost(host);
 }
 
 /** websiteBusinessId for a server-rendered page. */

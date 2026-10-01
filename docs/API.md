@@ -15,9 +15,16 @@ Reference documentation for every route handler under `app/api/**/route.ts` (85 
 
 ### `POST /api/auth/login`
 **Auth:** none (this is how a session is obtained)
-**Body:** `{ name: string, pin: string }`
-**Response:** `{ success: true, user: { id, name, role } }`, sets `pos_session` cookie
-Looks up `staff` by `name` + `active=1`, compares `pin` against `pin_hash` with bcrypt. `401` on unknown name or bad PIN — same error path is not fully unified (name→"Staff member not found", PIN→"Invalid PIN"), so the response does leak whether a name exists.
+**Body:** `{ username: string, password: string, pair_till?: boolean }`
+**Response:** `{ success: true, user: { id, name, role, businessId } }`, sets `pos_session` cookie (and the till cookie when a manager sends `pair_till: true`)
+Looks up active `staff` by `username`, compares `password` against `password_hash` with bcrypt. `401` with the same message for an unknown username or a wrong password. The session's business is the staff member's **own** business (`staff.business_id`) whatever domain they sign in on; only the group owner starts in the business whose domain they're on (`loginBusinessId`, else The Royal Chilli). `403` if the account isn't set up at any business. Every successful sign-in writes an `audit_logs` row (`action: "staff_login"`, `changes: { host, domain_business_id, business_id }`) so a sign-in from another business's domain — or an unknown one (`domain_business_id: null`) — can be diagnosed.
+
+#### Which business a domain belongs to
+- `businessForHost(host)` matches `businesses.domain` (case-insensitive, `www.` and port ignored) and returns `null` for an unknown domain (a mistyped URL, the `*.vercel.app` address, `localhost`).
+- `businessForHostOrNull(host, pick?)` does the same but first honours `?b=<slug>` for an **active** business, and never falls back to The Royal Chilli.
+- The staff login screen (`/login`) uses `businessForHostOrNull`: a known domain (or `?b=<slug>`) shows that business's name, logo (initials if none) and brand colour; an **unknown domain shows "Business not found — check the web address"** with no business's branding. The form still works there — staff land in their own business.
+- **`?b=<slug>` workaround** for a business in transition (no domain of its own yet, e.g. Melt House while its old site is still live): links and table QR codes can add `?b=melt-house` to any address — `/login?b=melt-house` (staff sign-in) and `/table/5?b=melt-house` (QR table ordering, `/api/public/tables/*`). Once `businesses.domain` is set, the domain works on its own and the existing `?b=` links keep working.
+- The public website / customer APIs (`websiteBusinessId`) still treat an unknown domain as The Royal Chilli for now, so the current site keeps working until every business's domain is set.
 
 ### `POST /api/auth/logout`
 **Auth:** none required
