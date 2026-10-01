@@ -17,6 +17,10 @@ export const BUSINESS_TABLES = new Set([
   "audit_logs", "loyalty_transactions", "platform_sales", "staff_messages", "attendance_corrections",
   // 079: every business independent
   "suppliers", "customers", "loyalty_tiers", "loyalty_rewards", "loyalty_redemptions", "newsletter_subscribers",
+  // 084: directly scopeable children; their database triggers enforce parent business matches.
+  "cash_paid_outs", "customer_addresses", "loyalty_tier_changes",
+  "menu_item_modifier_groups", "modifier_options", "order_items", "order_item_modifiers",
+  "payroll_entries", "payroll_payments", "purchase_order_items", "recipe_ingredients", "stock_take_lines",
 ]);
 
 type Builder = ReturnType<typeof supabase.from>;

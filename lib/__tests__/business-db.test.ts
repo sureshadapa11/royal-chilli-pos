@@ -61,6 +61,18 @@ describe("bizDb", () => {
     expect(calls[2].eq).toEqual([["business_id", 2]]);
   });
 
+  it("scopes tenant-owned child tables added in 084", () => {
+    for (const table of [
+      "cash_paid_outs", "customer_addresses", "loyalty_tier_changes",
+      "menu_item_modifier_groups", "modifier_options", "order_items", "order_item_modifiers",
+      "payroll_entries", "payroll_payments", "purchase_order_items", "recipe_ingredients", "stock_take_lines",
+    ]) {
+      db.from(table).select("id");
+    }
+    expect(calls).toHaveLength(12);
+    expect(calls.every((call) => call.eq[0]?.[0] === "business_id" && call.eq[0]?.[1] === 2)).toBe(true);
+  });
+
   it("refuses a missing or bad business id", () => {
     expect(() => bizDb(0)).toThrow();
     expect(() => bizDb(Number.NaN)).toThrow();

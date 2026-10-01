@@ -28,17 +28,29 @@ export type Business = {
   address: string | null;
   phone: string | null;
   email: string | null;
+  website?: string | null;
   modules: BusinessModules;
   active: boolean;
   display_order: number;
   // Business setup (migrations 080, 082)
   tagline?: string | null;
+  registered_address?: unknown;
   trading_address?: unknown;
   vat_registered?: boolean;
+  vat_rate?: number;
+  vat_scheme?: string | null;
+  utr?: string | null;
+  paye_reference?: string | null;
+  year_end?: string | null;
+  accounts_email?: string | null;
   receipt_header?: string | null;
   receipt_footer?: string | null;
   order_prefix?: string | null;
   po_prefix?: string | null;
+  privacy_policy?: string | null;
+  terms?: string | null;
+  refund_policy?: string | null;
+  updated_at?: string;
 };
 
 // The list changes rarely; keep it for a minute per server instance.

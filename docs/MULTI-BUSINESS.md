@@ -25,7 +25,7 @@ with `business_id`. Decided 2026-09-29.
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Foundation: `businesses`, `staff_businesses`, `business_id` on 36 tables, triggers (migrations 076, 077) | **Done** |
+| 1 | Foundation: `businesses`, one home business per staff record, `business_id` on tenant-owned rows, relationship guards (migrations 076–079, 084) | **Done** |
 | 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | **Done** (both apps live) |
 | 2b | Fully separate staff, suppliers, customers + rewards (079); owner login, "Working in" switcher, All-businesses overview | **Done** |
 | 3 | Per-business settings + branding, `businesses/<slug>/` folders | Not started |
@@ -36,9 +36,18 @@ with `business_id`. Decided 2026-09-29.
 
 ## Migrations
 
-Run in order in the Supabase SQL editor
-(https://supabase.com/dashboard/project/xmsgkshtgtdkdbmkhmep/sql/new), from
-`supabase/migrations/`:
+For an existing database where migrations 076–083 have already been applied,
+run `084_multi_business_integrity.sql` once in the Supabase SQL editor. It is
+transactional, retains existing rows, and backfills child business IDs from
+their parent records. Do not run `schema.sql` on an existing database; it drops
+tables. For a fresh database, apply the migration files in this exact order
+after the base schema has been created:
+
+`076_multi_business_foundation.sql` → `077_business_rows_stay_put.sql` →
+`078_business_messages_corrections_timesheets.sql` →
+`079_independent_businesses.sql` → `080_business_setup.sql` →
+`081_loyalty_line.sql` → `082_business_tagline.sql` →
+`083_business_settings_catch_up.sql` → `084_multi_business_integrity.sql`.
 
 | Migration | Status |
 |---|---|
@@ -47,7 +56,19 @@ Run in order in the Supabase SQL editor
 | 078 messages, corrections, timesheets, points | run 29 Sep 2026 — attendance app pushed after it |
 | 079 fully separate staff / suppliers / customers, owner login | run 29 Sep 2026 — Phase 2b code pushed after it; owner login `owner` (staff #26) created |
 | 080 business setup (details, owner-only bank / payment keys, per-business settings) | run 29 Sep 2026 — Business setup page live (960ecc7) |
-| 084 drop the old group-wide unique rules | before a second business opens |
+| 081 loyalty discount line | run before 082–084 |
+| 082 business tagline | run before 083–084 |
+| 083 Royal Chilli settings catch-up | run before 084 |
+| 084 tenant child rows, relationship guards, single-business staff constraint, and per-business unique rules | pending — run after 083 |
+
+Migration 084 adds `business_id` to previously unscoped child tables, backfills
+it from the owning row, and rejects existing cross-business child links rather
+than silently reassigning them. It also guards the staff references added in
+later migrations and drops only the old group-wide unique constraints/index
+that conflict with the per-business replacements from 078/079. The existing
+`businesses.domain` column is the canonical domain field; there is no
+`custom_domain` column or separate business `type` column (capabilities are
+represented by `businesses.modules` and `BusinessModules`).
 
 ## Checklist (all on The Royal Chilli — everything should look exactly as before)
 
@@ -117,8 +138,9 @@ business's own admin — contact details, logo, receipt text, hours, busy mode.
    branding (already written locally, not pushed — reads the setup), VAT
    number on receipts, order prefixes, per-business settings, payments per
    company, accountant export header, website legal pages.
-5. Migration 084 (before a second business opens): drop the old group-wide
-   unique rules kept by 078 / 079.
+5. Migration 084 (after 083, before a second business opens): complete child
+   table scoping and relationship checks, then drop the old group-wide unique
+   rules kept by 078/079.
 
 ## Phase 3 — details already noted (folded into the setup page above)
 
@@ -136,11 +158,17 @@ business's own admin — contact details, logo, receipt text, hours, busy mode.
 
 ## Phase 2b — fully separate businesses + group admin (next)
 
-- Migration 079: `business_id` on staff, suppliers, customers (+ addresses),
+- Migration 079: `business_id` on staff, suppliers, customers,
   loyalty tiers, rewards, redemptions, newsletter subscribers; existing rows →
   Royal Chilli. Customer phone / email unique **per business**; usernames stay
   unique across the group; voucher and referral codes stay unique across the group.
+- `staff.business_id` is the sole staff assignment source. `staff_businesses`
+  is retained as a legacy migration-076 snapshot for existing rows, not used
+  for authorization or new assignments. Managers/staff must have one business;
+  only `staff.is_owner` may be unassigned.
 - HR records, documents, PINs, rota and pay follow their staff member's business.
+  Staff-specific child tables remain keyed by their staff foreign key; the
+  `staff.business_id` assignment is authoritative.
 - Code: staff, HR, PIN, supplier, customer, account (website login) and rewards
   routes go through `bizDb`; the `staff_businesses` links and "works here"
   checks are replaced by the staff row's own business.
