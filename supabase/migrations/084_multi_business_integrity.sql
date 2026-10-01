@@ -6,6 +6,17 @@
 
 BEGIN;
 
+DO $$
+BEGIN
+  IF to_regclass('businesses') IS NULL
+     OR to_regprocedure('inherit_business_id()') IS NULL
+     OR to_regprocedure('check_business_match()') IS NULL
+     OR to_regprocedure('keep_business_id()') IS NULL
+     OR to_regprocedure('loyalty_business_from_order()') IS NULL THEN
+    RAISE EXCEPTION 'Migration 084 requires migrations 076–083 to be applied first';
+  END IF;
+END $$;
+
 -- These child tables are queried through bizDb or belong to a tenant-owned
 -- order/customer. Keep them directly scopeable as well as connected by FK.
 DO $$
@@ -58,6 +69,93 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Fail early if a trigger below names a missing relation or FK column. This
+-- protects against the stale print_jobs.work_period_id reference in already
+-- applied copies of 076.
+DO $$
+DECLARE
+  r record;
+  i integer;
+  child_rel regclass;
+  parent_rel regclass;
+BEGIN
+  FOR r IN SELECT * FROM (VALUES
+    ('cash_paid_outs', ARRAY['work_periods', 'work_period_id', 'staff', 'staff_id']),
+    ('customer_addresses', ARRAY['customers', 'customer_id']),
+    ('loyalty_tier_changes', ARRAY['customers', 'customer_id', 'loyalty_tiers', 'from_tier_id', 'loyalty_tiers', 'to_tier_id']),
+    ('menu_item_modifier_groups', ARRAY['menu_items', 'menu_item_id', 'modifier_groups', 'group_id']),
+    ('modifier_options', ARRAY['modifier_groups', 'group_id']),
+    ('order_items', ARRAY['orders', 'order_id', 'menu_items', 'menu_item_id']),
+    ('order_item_modifiers', ARRAY['order_items', 'order_item_id', 'modifier_options', 'modifier_option_id']),
+    ('payroll_entries', ARRAY['payroll_periods', 'payroll_period_id', 'staff', 'staff_id']),
+    ('payroll_payments', ARRAY['payroll_entries', 'payroll_entry_id', 'staff', 'recorded_by']),
+    ('purchase_order_items', ARRAY['purchase_orders', 'purchase_order_id', 'ingredients', 'ingredient_id']),
+    ('recipe_ingredients', ARRAY['recipes', 'recipe_id', 'ingredients', 'ingredient_id']),
+    ('stock_take_lines', ARRAY['stock_takes', 'stock_take_id', 'ingredients', 'ingredient_id']),
+    ('print_jobs', ARRAY['orders', 'order_id']),
+    ('work_periods', ARRAY['staff', 'opened_by', 'staff', 'closed_by']),
+    ('orders', ARRAY[
+      'restaurant_tables', 'table_id', 'work_periods', 'work_period_id', 'customers', 'customer_id',
+      'delivery_zones', 'delivery_zone_id', 'staff', 'staff_id', 'staff', 'driver_id',
+      'staff', 'discount_given_by_staff_id', 'staff', 'loyalty_given_by_staff_id'
+    ]),
+    ('payments', ARRAY['staff', 'staff_id']),
+    ('expenses', ARRAY['staff', 'recorded_by']),
+    ('purchase_orders', ARRAY['suppliers', 'supplier_id', 'staff', 'created_by']),
+    ('supplier_payments', ARRAY['suppliers', 'supplier_id', 'purchase_orders', 'purchase_order_id', 'staff', 'recorded_by']),
+    ('reservations', ARRAY['restaurant_tables', 'table_id', 'customers', 'customer_id']),
+    ('attendance_corrections', ARRAY['attendance', 'attendance_id', 'staff', 'staff_id', 'staff', 'reviewed_by']),
+    ('loyalty_transactions', ARRAY['customers', 'customer_id', 'staff', 'staff_id']),
+    ('loyalty_redemptions', ARRAY[
+      'customers', 'customer_id', 'loyalty_rewards', 'reward_id', 'orders', 'redeemed_order_id',
+      'staff', 'issued_by_staff_id', 'staff', 'redeemed_by_staff_id'
+    ]),
+    ('shifts', ARRAY['staff', 'staff_id', 'staff', 'created_by']),
+    ('attendance', ARRAY['staff', 'staff_id', 'shifts', 'shift_id', 'staff', 'approved_by', 'staff', 'entered_by']),
+    ('timesheets', ARRAY['staff', 'staff_id', 'staff', 'approved_by']),
+    ('leave_requests', ARRAY['staff', 'staff_id', 'staff', 'decided_by']),
+    ('employee_payslips', ARRAY['staff', 'staff_id', 'staff', 'created_by']),
+    ('stock_movements', ARRAY['ingredients', 'ingredient_id', 'staff', 'staff_id']),
+    ('stock_takes', ARRAY['staff', 'counted_by', 'staff', 'posted_by']),
+    ('ingredients', ARRAY['suppliers', 'supplier_id']),
+    ('fs_check_log', ARRAY['fs_check_type', 'check_type_id', 'staff', 'staff_id']),
+    ('fs_temp_log', ARRAY['fs_temp_type', 'temp_type_id', 'staff', 'staff_id']),
+    ('fs_delivery_check', ARRAY['purchase_orders', 'purchase_order_id', 'suppliers', 'supplier_id', 'staff', 'staff_id']),
+    ('fs_problem', ARRAY['staff', 'staff_id']),
+    ('fs_signoff', ARRAY['staff', 'staff_id']),
+    ('staff_messages', ARRAY['staff', 'created_by']),
+    ('audit_logs', ARRAY['staff', 'staff_id']),
+    ('platform_sales', ARRAY['staff', 'entered_by'])
+  ) v(tbl, args)
+  LOOP
+    child_rel := to_regclass(r.tbl);
+    IF child_rel IS NULL OR NOT EXISTS (
+      SELECT 1 FROM pg_attribute
+      WHERE attrelid = child_rel AND attname = 'business_id' AND attnum > 0 AND NOT attisdropped
+    ) THEN
+      RAISE EXCEPTION 'Migration 084 expected %.business_id to exist', r.tbl;
+    END IF;
+    FOR i IN 1..array_length(r.args, 1) BY 2 LOOP
+      parent_rel := to_regclass(r.args[i]);
+      IF parent_rel IS NULL
+         OR NOT EXISTS (
+           SELECT 1 FROM pg_attribute
+           WHERE attrelid = child_rel AND attname = r.args[i + 1] AND attnum > 0 AND NOT attisdropped
+         )
+         OR NOT EXISTS (
+           SELECT 1 FROM pg_attribute
+           WHERE attrelid = parent_rel AND attname = 'business_id' AND attnum > 0 AND NOT attisdropped
+         )
+         OR NOT EXISTS (
+           SELECT 1 FROM pg_attribute
+           WHERE attrelid = parent_rel AND attname = 'id' AND attnum > 0 AND NOT attisdropped
+         ) THEN
+        RAISE EXCEPTION 'Migration 084 expected relation %.% to connect %.id', r.tbl, r.args[i + 1], r.args[i];
+      END IF;
+    END LOOP;
+  END LOOP;
+END $$;
+
 -- Future child rows inherit their business from the owning row. Trigger
 -- signatures match the existing 076 helper: (parent table, FK column) pairs.
 DO $$
@@ -88,8 +186,8 @@ BEGIN
   END LOOP;
 END $$;
 
--- Migration 076 listed a non-existent print_jobs.work_period_id field. Print
--- jobs only reference orders, which already supplies their business.
+-- Repair this trigger in databases where the earlier 076 was already applied
+-- before its source was corrected. Print jobs only reference orders.
 DROP TRIGGER IF EXISTS trg_inherit_business ON print_jobs;
 CREATE TRIGGER trg_inherit_business BEFORE INSERT OR UPDATE ON print_jobs
   FOR EACH ROW EXECUTE FUNCTION inherit_business_id('orders', 'order_id');
@@ -176,6 +274,24 @@ BEGIN
       r.tbl, (SELECT string_agg(quote_literal(a), ', ') FROM unnest(r.args) a)
     );
   END LOOP;
+END $$;
+
+CREATE OR REPLACE FUNCTION loyalty_business_from_order() RETURNS trigger
+LANGUAGE plpgsql AS $$
+DECLARE
+  bid int;
+BEGIN
+  IF NEW.reference_type IN ('order', 'cash_credit', 'visit_bonus') AND NEW.reference_id IS NOT NULL THEN
+    SELECT business_id INTO bid FROM orders WHERE id = NEW.reference_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Order % does not exist for loyalty transaction', NEW.reference_id
+        USING ERRCODE = 'foreign_key_violation';
+    END IF;
+  ELSIF NEW.customer_id IS NOT NULL THEN
+    SELECT business_id INTO bid FROM customers WHERE id = NEW.customer_id;
+  END IF;
+  IF bid IS NOT NULL THEN NEW.business_id := bid; END IF;
+  RETURN NEW;
 END $$;
 
 DROP TRIGGER IF EXISTS trg_inherit_business ON loyalty_transactions;

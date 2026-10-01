@@ -25,7 +25,7 @@ with `business_id`. Decided 2026-09-29.
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Foundation: `businesses`, one home business per staff record, `business_id` on tenant-owned rows, relationship guards (migrations 076–079, 084) | **Done** |
+| 1 | Foundation: `businesses`, one home business per staff record, `business_id` on tenant-owned rows, relationship guards (migrations 076–079, 084) | Apply 084 |
 | 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | **Done** (both apps live) |
 | 2b | Fully separate staff, suppliers, customers + rewards (079); owner login, "Working in" switcher, All-businesses overview | **Done** |
 | 3 | Per-business settings + branding, `businesses/<slug>/` folders | Not started |
@@ -40,8 +40,8 @@ For an existing database where migrations 076–083 have already been applied,
 run `084_multi_business_integrity.sql` once in the Supabase SQL editor. It is
 transactional, retains existing rows, and backfills child business IDs from
 their parent records. Do not run `schema.sql` on an existing database; it drops
-tables. For a fresh database, apply the migration files in this exact order
-after the base schema has been created:
+tables. For a fresh database, apply the base schema and prerequisites through
+075 first, then apply these migrations in this exact order:
 
 `076_multi_business_foundation.sql` → `077_business_rows_stay_put.sql` →
 `078_business_messages_corrections_timesheets.sql` →
@@ -56,9 +56,9 @@ after the base schema has been created:
 | 078 messages, corrections, timesheets, points | run 29 Sep 2026 — attendance app pushed after it |
 | 079 fully separate staff / suppliers / customers, owner login | run 29 Sep 2026 — Phase 2b code pushed after it; owner login `owner` (staff #26) created |
 | 080 business setup (details, owner-only bank / payment keys, per-business settings) | run 29 Sep 2026 — Business setup page live (960ecc7) |
-| 081 loyalty discount line | run before 082–084 |
-| 082 business tagline | run before 083–084 |
-| 083 Royal Chilli settings catch-up | run before 084 |
+| 081 loyalty discount line | required before 082–084 |
+| 082 business tagline | required before 083–084 |
+| 083 Royal Chilli settings catch-up | required before 084 |
 | 084 tenant child rows, relationship guards, single-business staff constraint, and per-business unique rules | pending — run after 083 |
 
 Migration 084 adds `business_id` to previously unscoped child tables, backfills

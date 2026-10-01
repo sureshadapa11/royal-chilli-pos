@@ -6,6 +6,7 @@ import supabase from "@/lib/supabase";
 // staffWorksAt) rather than here. HR records, addresses and points history
 // follow their staff member / customer.
 export const BUSINESS_TABLES = new Set([
+  "business_private", "business_settings",
   "menu_categories", "menu_items", "modifier_groups", "featured_dishes", "promotions",
   "restaurant_tables", "table_requests", "reservations", "delivery_zones",
   "work_periods", "orders", "payments", "print_jobs",
@@ -17,7 +18,7 @@ export const BUSINESS_TABLES = new Set([
   "audit_logs", "loyalty_transactions", "platform_sales", "staff_messages", "attendance_corrections",
   // 079: every business independent
   "suppliers", "customers", "loyalty_tiers", "loyalty_rewards", "loyalty_redemptions", "newsletter_subscribers",
-  // 084: directly scopeable children; their database triggers enforce parent business matches.
+  // 080/084: per-business setup and directly scopeable children.
   "cash_paid_outs", "customer_addresses", "loyalty_tier_changes",
   "menu_item_modifier_groups", "modifier_options", "order_items", "order_item_modifiers",
   "payroll_entries", "payroll_payments", "purchase_order_items", "recipe_ingredients", "stock_take_lines",
