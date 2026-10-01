@@ -9,7 +9,9 @@ const JWT_SECRET = new TextEncoder().encode(
 );
 
 const COOKIE_NAME = "pos_session";
-const VALID_ROLES = new Set<SessionUser["role"]>(["employee", "manager", "hr", "admin"]);
+// "driver" (migration 091) isn't a StaffRole: drivers have no Staff Hub tabs,
+// only /staff/drivers and the /api/drivers/* endpoints.
+const VALID_ROLES = new Set<string>(["employee", "manager", "hr", "admin", "driver"]);
 
 export async function createSession(user: SessionUser): Promise<string> {
   const token = await new SignJWT({
@@ -40,7 +42,7 @@ async function verify(token: string | undefined): Promise<SessionUser | null> {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
     const { id, name, role, bid, own } = payload;
-    if (typeof id !== "number" || typeof name !== "string" || !VALID_ROLES.has(role as SessionUser["role"])) {
+    if (typeof id !== "number" || typeof name !== "string" || typeof role !== "string" || !VALID_ROLES.has(role)) {
       return null;
     }
     // Logins from before multi-business (and the attendance app's tokens,

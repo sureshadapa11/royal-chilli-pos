@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
-import { canAccess, isStaffManagement, canViewCrm } from "@/lib/permissions";
+import { canAccess, isStaffManagement, canViewCrm, canManageDrivers } from "@/lib/permissions";
 import { getHubNotifications } from "@/lib/hub-notifications";
 import { listBusinesses } from "@/lib/business";
 import { getBrand } from "@/lib/brand";
@@ -14,6 +14,8 @@ export const metadata: Metadata = { robots: { index: false } };
 // Staff Hub is management-only (manager / hr / admin). Employees work from the
 // POS; clock-in/out is the dedicated attendance app's kiosk. The menu only
 // lists what the role can open, and each page still enforces its own check.
+// Drivers get in too, but only see their own deliveries (every other page
+// redirects them back, and /staff sends them to /staff/drivers).
 export default async function StaffHubLayout({
   children,
 }: {
@@ -22,12 +24,15 @@ export default async function StaffHubLayout({
   const session = await getSession();
 
   if (!session) redirect("/login");
-  if (!isStaffManagement(session.role)) redirect("/pos");
+  const isDriver = (session.role as string) === "driver";
+  if (!isStaffManagement(session.role) && !isDriver) redirect("/pos");
 
   const see = (tab: Parameters<typeof canAccess>[1]) => canAccess(session.role, tab);
 
   // First entry = the plain "Dashboard" link; the rest are dropdown groups.
-  const nav: NavGroup[] = [
+  const nav: NavGroup[] = isDriver ? [
+    { label: "", items: [{ href: "/staff/drivers", label: "My Deliveries", icon: "📦" }] },
+  ] : [
     { label: "", items: [{ href: "/staff", label: "Dashboard", icon: "🏠" }] },
     {
       label: "Operations",
@@ -35,6 +40,7 @@ export default async function StaffHubLayout({
         ...(see("menu") ? [{ href: "/staff/menu", label: "Menu", icon: "🍽️" }] : []),
         ...(see("tables") ? [{ href: "/staff/tables", label: "Tables", icon: "🪑" }] : []),
         ...(see("inventory") ? [{ href: "/staff/inventory", label: "Inventory", icon: "📦" }] : []),
+        ...(canManageDrivers(session.role) ? [{ href: "/staff/drivers", label: "Drivers", icon: "🚗" }] : []),
         ...(see("finance") ? [{ href: "/staff/platforms", label: "Delivery platforms", icon: "🛵", note: "Enter daily totals" }] : []),
         { href: "/pos", label: "Till", icon: "💷" },
       ],
@@ -64,7 +70,7 @@ export default async function StaffHubLayout({
     },
   ].filter((g, i) => i === 0 || g.items.length > 0);
 
-  const notices = await getHubNotifications(session.businessId, session.role).catch(() => []);
+  const notices = isDriver ? [] : await getHubNotifications(session.businessId, session.role).catch(() => []);
   const brand = await getBrand(session.businessId);
   // Only the group owner can step into other businesses.
   const switcher = session.owner
@@ -80,7 +86,7 @@ export default async function StaffHubLayout({
       notices={notices}
     >
       {children}
-      <NewOrderAlerts />
+      {!isDriver && <NewOrderAlerts />}
       <Toaster />
     </StaffShell>
   );

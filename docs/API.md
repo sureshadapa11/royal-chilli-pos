@@ -273,6 +273,10 @@ Staff-side booking creation — unlike the public endpoint, does no capacity/wai
 
 ## 6. Delivery Zones & Drivers (`/api/delivery-zones/*`, `/api/drivers/*`)
 
+Drivers are staff with `role="driver"` (migration `091_driver_role.sql`). They sign in like other staff and land on `/staff/drivers` ("My Deliveries"); managers/admins (`canManageDrivers`) get the roster + assignment view on the same page, linked as 🚗 **Drivers** in the Staff Hub menu.
+
+> **Scoping:** driver calls are auto-scoped — `my-deliveries` filters on `driver_id = session.id`, `PATCH /api/drivers/status` only updates the caller's own `staff` row, and `delivery-status` rejects (`403`) any order not assigned to the caller. All order reads/writes go through `bizDb(session.businessId)`, so a driver can never see or change another business's orders, and managers can only assign drivers who belong to their own business. Covered by `app/api/drivers/__tests__/route.test.ts`.
+
 ### `GET /api/delivery-zones`
 **Auth:** `canManageDrivers(session.role)`
 **Response:** `{ zones }`
