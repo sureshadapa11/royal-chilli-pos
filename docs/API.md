@@ -357,7 +357,24 @@ Writes an `audit_logs` entry with the diff.
 - `400` if a manager tries to remove their own last location (keep at least one).
 - `403` if the caller tries to add or remove a location they aren't assigned to themselves. Only the group owner isn't limited, so an unassigned manager can't assign anyone until the owner assigns them.
 - Writes an `audit_logs` row: `action: "staff_location_assignment"`, `entity_type: "staff"`, `entity_id`, `changes: { from: [...], to: [...] }`.
-The Staff Hub page `/staff/:id/assignments` (linked from HR → employee → **Locations**) edits this with one checkbox per active location. `GET`/`POST /api/staff/:id/locations` and `DELETE /api/staff/:id/locations/:locationId` read / add / remove a single assignment.
+The Staff Hub page `/staff/:id/assignments` (linked from HR → employee → **Locations**) edits this with one checkbox per active location. `GET /api/staff/:id/locations` lists the staff member's `locationIds`.
+
+### `POST /api/staff/:id/locations`
+**Auth:** `canManageStaff(session.role)`; the staff member must belong to the session's business (`404` otherwise)
+**Body:** `{ location_id: number }` — adds one assignment.
+**Response:** `201 { success: true, staffId, locationId }`
+- `400` if `location_id` isn't a positive integer or isn't a location of this business.
+- `403` `"You can only assign locations you're assigned to"` unless the caller is the group owner or is assigned to that location themselves.
+- `409` if the staff member is already assigned to it.
+- Writes the same `staff_location_assignment` audit log as `PATCH`.
+
+### `DELETE /api/staff/:id/locations/:locationId`
+**Auth:** `canManageStaff(session.role)`; the staff member must belong to the session's business (`404` otherwise)
+**Response:** `200 { success: true }`
+- `403` `"You can only remove locations you're assigned to"` unless the caller is the group owner or is assigned to that location themselves.
+- `400` if a manager tries to remove their own last location.
+- `404` if the location isn't this business's or the staff member isn't assigned to it.
+- Writes the same `staff_location_assignment` audit log as `PATCH`.
 
 ### `GET /api/attendance`
 **Auth:** `canManageStaff(session.role)`

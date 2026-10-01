@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
 import { bizDb, staffWorksAt } from "@/lib/business-db";
+import { staffLocationIds } from "@/lib/locations";
 import supabase from "@/lib/supabase";
 
 function parseId(id: string): number | null {
@@ -46,6 +47,20 @@ export async function DELETE(
       return NextResponse.json({ error: "Location not found" }, { status: 404 });
     }
 
+    // Same rule as PATCH: a manager can only take away locations they're
+    // assigned to themselves; only the group owner isn't limited.
+    if (!session.owner && !(await staffLocationIds(session.id)).includes(locationId)) {
+      return NextResponse.json({ error: "You can only remove locations you're assigned to" }, { status: 403 });
+    }
+
+    const current = (await staffLocationIds(staffId)).sort((a, b) => a - b);
+    if (!current.includes(locationId)) {
+      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+    }
+    if (staffId === session.id && current.length === 1) {
+      return NextResponse.json({ error: "You must keep at least one location" }, { status: 400 });
+    }
+
     const { error } = await supabase
       .from("staff_locations")
       .delete()
@@ -53,10 +68,18 @@ export async function DELETE(
       .eq("location_id", locationId);
     if (error) throw error;
 
+    const { error: auditError } = await db.from("audit_logs").insert({
+      staff_id: session.id,
+      action: "staff_location_assignment",
+      entity_type: "staff",
+      entity_id: staffId,
+      changes: { from: current, to: current.filter((id) => id !== locationId) },
+    });
+    if (auditError) console.error("Staff location audit log error:", auditError);
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Remove staff location error:", error);
-    const message = error instanceof Error ? error.message : "Failed to remove assignment";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to remove assignment" }, { status: 500 });
   }
 }

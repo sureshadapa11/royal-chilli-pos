@@ -9,7 +9,8 @@ import { fakeDb } from "@/app/api/_test-helpers/fake-supabase";
 import { authedRequest } from "@/app/api/_test-helpers";
 import { GET as listEmployees } from "@/app/api/employees/route";
 import { GET as getEmployee } from "@/app/api/employees/[id]/route";
-import { PATCH } from "@/app/api/staff/[id]/locations/route";
+import { PATCH, POST } from "@/app/api/staff/[id]/locations/route";
+import { DELETE } from "@/app/api/staff/[id]/locations/[locationId]/route";
 
 // Manager 10 works at Kitchen only; manager 11 isn't tied to any location.
 const kitchenManager: SessionUser = { id: 10, name: "Kitchen Manager", role: "manager", businessId: 1 };
@@ -22,6 +23,19 @@ async function patch(user: SessionUser | null, staffId: string, body: unknown) {
     body: JSON.stringify(body),
   });
   return PATCH(req, { params: Promise.resolve({ id: staffId }) });
+}
+
+async function post(user: SessionUser | null, staffId: string, body: unknown) {
+  const req = await authedRequest(`http://localhost/api/staff/${staffId}/locations`, user, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+  return POST(req, { params: Promise.resolve({ id: staffId }) });
+}
+
+async function del(user: SessionUser | null, staffId: string, locationId: string) {
+  const req = await authedRequest(`http://localhost/api/staff/${staffId}/locations/${locationId}`, user, { method: "DELETE" });
+  return DELETE(req, { params: Promise.resolve({ id: staffId, locationId }) });
 }
 
 const assigned = (staffId: number) =>
@@ -113,6 +127,133 @@ describe("PATCH /api/staff/[id]/locations", () => {
     expect((await patch(owner, "13", { location_ids: [0] })).status).toBe(400);
     expect((await patch(null, "13", { location_ids: [1] })).status).toBe(401);
     expect((await patch({ ...floatingManager, role: "employee" }, "13", { location_ids: [1] })).status).toBe(401);
+  });
+});
+
+describe("POST /api/staff/[id]/locations", () => {
+  it("lets a manager add a location they're assigned to and writes an audit log", async () => {
+    fakeDb.rows("staff_locations").splice(0, fakeDb.rows("staff_locations").length, { staff_id: 10, location_id: 1 });
+    const res = await post(kitchenManager, "13", { location_id: 1 });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toEqual({ success: true, staffId: 13, locationId: 1 });
+    expect(assigned(13)).toEqual([1]);
+    expect(fakeDb.rows("audit_logs")).toEqual([
+      expect.objectContaining({
+        business_id: 1,
+        staff_id: 10,
+        action: "staff_location_assignment",
+        entity_type: "staff",
+        entity_id: 13,
+        changes: { from: [], to: [1] },
+      }),
+    ]);
+  });
+
+  it("409s when the staff member already has the location", async () => {
+    const res = await post(kitchenManager, "10", { location_id: 1 });
+    expect(res.status).toBe(409);
+    expect(assigned(10)).toEqual([1]);
+    expect(fakeDb.rows("audit_logs")).toHaveLength(0);
+  });
+
+  it("stops a manager adding a location they aren't assigned to, for anyone including themselves", async () => {
+    const res = await post(kitchenManager, "10", { location_id: 2 });
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("You can only assign locations you're assigned to");
+    expect((await post(kitchenManager, "13", { location_id: 2 })).status).toBe(403);
+    expect(assigned(10)).toEqual([1]);
+    expect(assigned(13)).toEqual([1]);
+    expect(fakeDb.rows("audit_logs")).toHaveLength(0);
+  });
+
+  it("stops an unassigned manager adding any location", async () => {
+    expect((await post(floatingManager, "11", { location_id: 1 })).status).toBe(403);
+    expect((await post(floatingManager, "13", { location_id: 2 })).status).toBe(403);
+    expect(assigned(11)).toEqual([]);
+    expect(assigned(13)).toEqual([1]);
+  });
+
+  it("lets the owner add any location", async () => {
+    expect((await post(owner, "13", { location_id: 2 })).status).toBe(201);
+    expect((await post(owner, "11", { location_id: 2 })).status).toBe(201);
+    expect(assigned(13)).toEqual([1, 2]);
+    expect(assigned(11)).toEqual([2]);
+    expect(fakeDb.rows("audit_logs")[0].changes).toEqual({ from: [1], to: [1, 2] });
+  });
+
+  it("400s for a missing or another business's location", async () => {
+    expect((await post(owner, "13", { location_id: 3 })).status).toBe(400);
+    expect((await post(owner, "13", { location_id: 99 })).status).toBe(400);
+    expect(assigned(13)).toEqual([1]);
+  });
+
+  it("validates the body, the staff member and the session", async () => {
+    expect((await post(owner, "13", { location_id: 0 })).status).toBe(400);
+    expect((await post(owner, "13", {})).status).toBe(400);
+    expect((await post(owner, "20", { location_id: 1 })).status).toBe(404);
+    expect((await post(null, "13", { location_id: 1 })).status).toBe(401);
+    expect((await post({ ...kitchenManager, role: "employee" }, "13", { location_id: 1 })).status).toBe(401);
+  });
+});
+
+describe("DELETE /api/staff/[id]/locations/[locationId]", () => {
+  it("lets a manager remove a location they're assigned to and writes an audit log", async () => {
+    fakeDb.rows("staff_locations").push({ staff_id: 10, location_id: 2 }, { staff_id: 13, location_id: 2 });
+    const res = await del(kitchenManager, "13", "2");
+    expect(res.status).toBe(200);
+    expect(assigned(13)).toEqual([1]);
+    expect(fakeDb.rows("audit_logs")).toEqual([
+      expect.objectContaining({
+        business_id: 1,
+        staff_id: 10,
+        action: "staff_location_assignment",
+        entity_type: "staff",
+        entity_id: 13,
+        changes: { from: [1, 2], to: [1] },
+      }),
+    ]);
+  });
+
+  it("stops a manager removing a location they aren't assigned to", async () => {
+    fakeDb.rows("staff_locations").push({ staff_id: 13, location_id: 2 });
+    const res = await del(kitchenManager, "13", "2");
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toBe("You can only remove locations you're assigned to");
+    expect(assigned(13)).toEqual([1, 2]);
+    expect(fakeDb.rows("audit_logs")).toHaveLength(0);
+  });
+
+  it("stops an unassigned manager removing any location", async () => {
+    expect((await del(floatingManager, "13", "1")).status).toBe(403);
+    expect(assigned(13)).toEqual([1]);
+  });
+
+  it("lets the owner remove any location", async () => {
+    fakeDb.rows("staff_locations").push({ staff_id: 13, location_id: 2 });
+    expect((await del(owner, "13", "2")).status).toBe(200);
+    expect((await del(owner, "10", "1")).status).toBe(200);
+    expect(assigned(13)).toEqual([1]);
+    expect(assigned(10)).toEqual([]);
+  });
+
+  it("won't let a manager remove their own only location", async () => {
+    const res = await del(kitchenManager, "10", "1");
+    expect(res.status).toBe(400);
+    expect(assigned(10)).toEqual([1]);
+    expect(fakeDb.rows("audit_logs")).toHaveLength(0);
+  });
+
+  it("404s when the assignment, location or staff member doesn't exist", async () => {
+    expect((await del(owner, "13", "2")).status).toBe(404);
+    expect((await del(owner, "13", "3")).status).toBe(404);
+    expect((await del(owner, "20", "1")).status).toBe(404);
+    expect(fakeDb.rows("audit_logs")).toHaveLength(0);
+  });
+
+  it("validates ids and the session", async () => {
+    expect((await del(owner, "13", "x")).status).toBe(400);
+    expect((await del(null, "13", "1")).status).toBe(401);
+    expect((await del({ ...kitchenManager, role: "employee" }, "13", "1")).status).toBe(401);
   });
 });
 
