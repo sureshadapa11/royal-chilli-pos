@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
+import { bizDb } from "@/lib/business-db";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const limit = Math.min(Number(searchParams.get("limit")) || 100, 500);
 
-  const { data, error } = await supabase
+  const { data, error } = await bizDb(session.businessId)
     .from("audit_logs")
     .select("*, staff:staff!audit_logs_staff_id_fkey(name, role)")
     .order("created_at", { ascending: false })

@@ -6,8 +6,8 @@ jest.mock("../supabase", () => ({
         order: () => ({
           order: () => Promise.resolve({
             data: [
-              { id: 1, slug: "royal-chilli", domain: "www.theroyalchilli.com", active: true },
-              { id: 2, slug: "melt-house", domain: "melthouse.co.uk", active: true },
+              { id: 1, slug: "royal-chilli", domain: "www.theroyalchilli.com", custom_domain: null, active: true },
+              { id: 2, slug: "melt-house", domain: "melthouse.co.uk", custom_domain: "www.melthouse.com", active: true },
               { id: 3, slug: "abcd", domain: null, active: false },
               { id: 4, slug: "efgh", domain: null, active: false },
             ],
@@ -35,6 +35,11 @@ describe("websiteBusinessId", () => {
     expect(await websiteBusinessId("www.theroyalchilli.com")).toBe(1);
     expect(await websiteBusinessId("theroyalchilli.com")).toBe(1);
     expect(await websiteBusinessId("www.melthouse.co.uk:443")).toBe(2);
+  });
+
+  it("resolves the custom domain with normalized host casing, port and www", async () => {
+    expect(await websiteBusinessId("WWW.MELTHOUSE.COM:443")).toBe(2);
+    expect(await websiteBusinessId("melthouse.com")).toBe(2);
   });
 
   it("treats unknown addresses as The Royal Chilli", async () => {
