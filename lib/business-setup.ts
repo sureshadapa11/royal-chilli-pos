@@ -57,6 +57,10 @@ export const checks = {
     const n = Number(v);
     return Number.isFinite(n) && n >= 0 && n <= 0.25 ? null : "Between 0 and 0.25 (20% = 0.20)";
   },
+  domain: (v: string) => {
+    const t = trimmed(v).toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+    return /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(t) ? null : "Enter a domain like melthouse.co.uk";
+  },
   stripeSecret: (v: string) => (/^(sk|rk)_(live|test)_[A-Za-z0-9]{10,}$/.test(trimmed(v)) ? null : "Starts sk_live_ (or sk_test_)"),
   stripePublishable: (v: string) => (/^pk_(live|test)_[A-Za-z0-9]{10,}$/.test(trimmed(v)) ? null : "Starts pk_live_ (or pk_test_)"),
   stripeWebhook: (v: string) => (/^whsec_[A-Za-z0-9]{10,}$/.test(trimmed(v)) ? null : "Starts whsec_"),
@@ -94,6 +98,7 @@ export const SECTIONS: SectionDef[] = [
       { key: "phone", label: "Phone", kind: "phone", check: checks.phone },
       { key: "email", label: "Email", kind: "email", check: checks.email },
       { key: "website", label: "Website", kind: "url", check: checks.url },
+      { key: "custom_domain", label: "Custom domain", kind: "text", hint: "e.g. melthouse.co.uk or www.melthouse.co.uk", check: checks.domain },
       { key: "logo_url", label: "Logo (image address)", kind: "text", hint: "Square image works best. Leave empty to show the business's initials." },
       { key: "brand_colour", label: "Brand colour", kind: "colour", check: checks.colour },
     ],
