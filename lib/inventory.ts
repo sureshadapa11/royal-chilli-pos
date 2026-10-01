@@ -65,7 +65,7 @@ export async function depleteStockForOrder(orderId: number, staffId: number | nu
 
   const { data: recipeIngredients } = await db
     .from("ingredients")
-    .select("id, name, unit, location_id")
+    .select("id, name, unit, location_id, reorder_level, reorder_quantity, cost_per_unit, supplier_id")
     .in("id", [...deltaByIngredient.keys()]);
   const { data: locationIngredients } = await db
     .from("ingredients")
@@ -82,9 +82,26 @@ export async function depleteStockForOrder(orderId: number, staffId: number | nu
   for (const [ingredientId, used] of deltaByIngredient) {
     const ingredient = byId.get(ingredientId);
     if (!ingredient) continue;
-    const targetIngredientId = ingredient.location_id == null || ingredient.location_id === locationId
+    let targetIngredientId = ingredient.location_id == null || ingredient.location_id === locationId
       ? ingredient.id
       : byNameAndUnit.get(`${ingredient.name.trim().toLowerCase()}\0${ingredient.unit.trim().toLowerCase()}`);
+    if (targetIngredientId == null && ingredient.location_id != null) {
+      const { data: target, error } = await db
+        .from("ingredients")
+        .insert({
+          name: ingredient.name,
+          unit: ingredient.unit,
+          location_id: locationId,
+          reorder_level: ingredient.reorder_level,
+          reorder_quantity: ingredient.reorder_quantity,
+          cost_per_unit: ingredient.cost_per_unit,
+          supplier_id: ingredient.supplier_id,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+      targetIngredientId = target.id;
+    }
     if (targetIngredientId == null) continue;
     locationUsage.set(targetIngredientId, (locationUsage.get(targetIngredientId) ?? 0) + used);
   }

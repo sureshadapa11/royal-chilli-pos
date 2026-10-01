@@ -562,6 +562,7 @@ If `ingredients` is present, full-replaces the ingredient list (delete-then-inse
 **Body:** `{ ingredient_id, movement_type: "waste"|"adjustment"|"usage", quantity, reason? }`
 **Response:** `201 { success: true, movement }`
 Rejects `movement_type="purchase"` and anything else outside the three allowed values — purchases must go through PO receiving instead. `waste`/`usage` always store a negative delta (server forces the sign via `-Math.abs(...)`); `adjustment` trusts the client-submitted signed delta as-is.
+Movements are recorded at the caller's primary location.
 
 ### `GET /api/inventory/alerts`
 **Auth:** `canManageInventory(session.role)`
