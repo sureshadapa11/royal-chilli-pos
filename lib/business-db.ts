@@ -6,7 +6,7 @@ import supabase from "@/lib/supabase";
 // staffWorksAt) rather than here. HR records, addresses and points history
 // follow their staff member / customer.
 export const BUSINESS_TABLES = new Set([
-  "business_private", "business_settings",
+  "business_private", "business_settings","pos_devices"
   "menu_categories", "menu_items", "modifier_groups", "featured_dishes", "promotions",
   "restaurant_tables", "table_requests", "reservations", "delivery_zones",
   "work_periods", "orders", "payments", "print_jobs",
