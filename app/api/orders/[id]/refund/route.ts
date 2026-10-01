@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
@@ -27,6 +26,7 @@ export async function POST(
     }
 
     const { id } = await params;
+    const db = bizDb(session.businessId);
     const { amount, method, reason, manager_pin } = await req.json().catch(() => ({}));
 
     // Refunds move money back out, so only a manager can make one: either a
@@ -55,7 +55,7 @@ export async function POST(
       return NextResponse.json({ error: "A reason is required" }, { status: 400 });
     }
 
-    const { data: order, error: fetchError } = await bizDb(session.businessId)
+    const { data: order, error: fetchError } = await db
       .from("orders")
       .select("id, total, amount_paid, customer_id, status, table_id")
       .eq("id", id)
@@ -81,7 +81,7 @@ export async function POST(
     let providerRefundIds: string[] = [];
     let shortfall = 0;
     if (method === "card" || method === "card_online") {
-      const result = await refundCard(Number(id), method, requestedAmount);
+      const result = await refundCard(session.businessId, Number(id), method, requestedAmount);
       if (!result.ok) {
         return NextResponse.json({ error: result.error }, { status: 502 });
       }
@@ -90,7 +90,7 @@ export async function POST(
       shortfall = result.shortfall;
     }
 
-    const { error: insertError } = await supabase.from("payments").insert({
+    const { error: insertError } = await db.from("payments").insert({
       order_id: Number(id),
       method,
       amount: -refundAmount,
@@ -100,24 +100,24 @@ export async function POST(
     if (insertError) throw insertError;
 
     if (order.customer_id) {
-      await reverseLoyaltyPointsForRefund(Number(id), order.customer_id, refundAmount, Number(order.total));
+      await reverseLoyaltyPointsForRefund(session.businessId, Number(id), order.customer_id, refundAmount, Number(order.total));
       // Refunded in full: the visit didn't really happen — take back its visit
       // bonus and re-lock a Bring a Friend voucher it unlocked (if unused).
-      const { data: refundRows } = await supabase.from("payments").select("amount").eq("order_id", id).lt("amount", 0);
+      const { data: refundRows } = await db.from("payments").select("amount").eq("order_id", id).lt("amount", 0);
       const refundedTotal = (refundRows ?? []).reduce((s, p) => s - Number(p.amount), 0);
       if (refundedTotal >= Number(order.total) - 0.01) {
-        await reverseVisitRewardsForFullRefund(Number(id), order.customer_id);
+        await reverseVisitRewardsForFullRefund(session.businessId, Number(id), order.customer_id);
       }
     }
 
-    const { data: refreshed } = await supabase.from("orders").select("total, amount_paid").eq("id", id).single();
+    const { data: refreshed } = await db.from("orders").select("total, amount_paid").eq("id", id).single();
 
     const inProgress = ["open", "sent_to_kitchen", "ready"].includes(String(order.status));
     const fullyRefunded = refreshed != null && Number(refreshed.amount_paid) <= 0.009;
     if (inProgress && fullyRefunded) {
-      await supabase.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", id);
+      await db.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", id);
       if (order.table_id) {
-        await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
+        await db.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
       }
     }
 
@@ -150,12 +150,13 @@ export async function POST(
 // Session (online). Returned refund ids are labelled "Stripe re_…" /
 // "SumUp <id>" for the refund row's reference.
 async function refundCard(
+  businessId: number,
   orderId: number,
   method: "card" | "card_online",
   amount: number
 ): Promise<{ ok: true; refundedAmount: number; refundIds: string[]; shortfall: number } | { ok: false; error: string }> {
 
-  const { data: originals } = await supabase
+  const { data: originals } = await bizDb(businessId)
     .from("payments")
     .select("amount, reference")
     .eq("order_id", orderId)
@@ -228,10 +229,11 @@ async function refundCard(
 // refunds on the same order can never over-reverse it, and caps at the
 // customer's current balance so it can never go negative. Never touches or
 // deletes the original earning rows — this is a separate ledger entry.
-async function reverseLoyaltyPointsForRefund(orderId: number, customerId: number, refundAmount: number, orderTotal: number) {
+async function reverseLoyaltyPointsForRefund(businessId: number, orderId: number, customerId: number, refundAmount: number, orderTotal: number) {
   if (orderTotal <= 0) return;
 
-  const { data: earnRows } = await supabase
+  const db = bizDb(businessId);
+  const { data: earnRows } = await db
     .from("loyalty_transactions")
     .select("points_delta")
     .eq("reference_type", "order")
@@ -240,7 +242,7 @@ async function reverseLoyaltyPointsForRefund(orderId: number, customerId: number
   const originalEarned = (earnRows || []).reduce((s, r) => s + Number(r.points_delta), 0);
   if (originalEarned <= 0) return;
 
-  const { data: priorReversals } = await supabase
+  const { data: priorReversals } = await db
     .from("loyalty_transactions")
     .select("points_delta")
     .eq("reference_type", "order")
@@ -254,11 +256,11 @@ async function reverseLoyaltyPointsForRefund(orderId: number, customerId: number
   let reversalAmount = Math.floor(originalEarned * refundFraction);
   reversalAmount = Math.min(reversalAmount, remainingReversible);
 
-  const { data: customer } = await supabase.from("customers").select("loyalty_points").eq("id", customerId).single();
+  const { data: customer } = await db.from("customers").select("loyalty_points").eq("id", customerId).single();
   reversalAmount = Math.min(reversalAmount, Math.max(0, Number(customer?.loyalty_points ?? 0)));
   if (reversalAmount <= 0) return;
 
-  await supabase.from("loyalty_transactions").insert({
+  await db.from("loyalty_transactions").insert({
     customer_id: customerId,
     points_delta: -reversalAmount,
     reason: "refund_reversal",

@@ -65,34 +65,27 @@ type Row = Record<string, unknown>;
 let orderRow: Row | null;
 let itemRows: Row[];
 let updateSpy: jest.Mock;
+let businessFilters: [string, unknown][];
 
 jest.mock("../supabase", () => ({
   __esModule: true,
   default: {
     from: (table: string) => {
-      if (table === "orders") {
-        return {
-          select: () => ({
-            eq: () => ({
-              single: () => Promise.resolve({ data: orderRow, error: null }),
-            }),
-          }),
-          update: (vals: Row) => {
-            updateSpy(vals);
-            return { eq: () => Promise.resolve({ data: null, error: null }) };
-          },
-        };
-      }
-      if (table === "order_items") {
-        return {
-          select: () => ({
-            eq: () => ({
-              neq: () => Promise.resolve({ data: itemRows, error: null }),
-            }),
-          }),
-        };
-      }
-      throw new Error(`Unexpected table in test: ${table}`);
+      const builder: Record<string, unknown> = {};
+      builder.select = () => builder;
+      builder.eq = (field: string, value: unknown) => {
+        if (field === "business_id") businessFilters.push([field, value]);
+        return builder;
+      };
+      builder.neq = () => builder;
+      builder.single = () => Promise.resolve({ data: orderRow, error: null });
+      builder.update = (vals: Row) => {
+        updateSpy(vals);
+        return builder;
+      };
+      builder.then = (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
+        Promise.resolve({ data: table === "order_items" ? itemRows : null, error: null }).then(resolve, reject);
+      return builder;
     },
   },
 }));
@@ -101,6 +94,7 @@ import { recalcTotals } from "@/lib/order-totals";
 
 beforeEach(() => {
   updateSpy = jest.fn();
+  businessFilters = [];
   orderRow = { discount: 0, discount_type: null, discount_pct: null, service_charge_pct: 0 };
   itemRows = [];
 });
@@ -108,16 +102,17 @@ beforeEach(() => {
 describe("recalcTotals", () => {
   it("sums active items (already VAT-inclusive) and writes back the computed bill", async () => {
     itemRows = [{ item_price: 10, quantity: 2 }, { item_price: 5, quantity: 1 }];
-    await recalcTotals("order-1");
+    await recalcTotals("order-1", 2);
     expect(updateSpy).toHaveBeenCalledWith(
       expect.objectContaining({ subtotal: 25, tax: 4.17, service_charge_amount: 0, total: 25 })
     );
+    expect(businessFilters).toEqual([["business_id", 2], ["business_id", 2], ["business_id", 2]]);
   });
 
   it("does NOT overwrite the stored discount for a flat-amount discount (it's the raw rule, not a cache)", async () => {
     orderRow = { discount: 20, discount_type: "amount", discount_pct: null, service_charge_pct: 0 };
     itemRows = [{ item_price: 100, quantity: 1 }];
-    await recalcTotals("order-1");
+    await recalcTotals("order-1", 1);
     const written = updateSpy.mock.calls[0][0];
     expect(written).not.toHaveProperty("discount");
     expect(written.total).toBe(80); // 100 inclusive - 20 discount
@@ -126,21 +121,21 @@ describe("recalcTotals", () => {
   it("DOES refresh the stored discount for a percent discount (it's a derived display cache)", async () => {
     orderRow = { discount: 0, discount_type: "percent", discount_pct: 10, service_charge_pct: 0 };
     itemRows = [{ item_price: 100, quantity: 1 }];
-    await recalcTotals("order-1");
+    await recalcTotals("order-1", 1);
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ discount: 10, total: 90 }));
   });
 
   it("applies service charge after the discount", async () => {
     orderRow = { discount: 20, discount_type: "amount", discount_pct: null, service_charge_pct: 10 };
     itemRows = [{ item_price: 100, quantity: 1 }];
-    await recalcTotals("order-1");
+    await recalcTotals("order-1", 1);
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ service_charge_amount: 8, total: 88 }));
   });
 
   it("keeps a staff discount and takes the stored loyalty amount off too", async () => {
     orderRow = { discount: 20, discount_type: "amount", discount_pct: null, service_charge_pct: 0, loyalty_discount: 10 };
     itemRows = [{ item_price: 100, quantity: 1 }];
-    await recalcTotals("order-1");
+    await recalcTotals("order-1", 1);
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ total: 70 }));
   });
 });

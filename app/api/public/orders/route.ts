@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
-import supabase from "@/lib/supabase";
 import { generateOrderNumber } from "@/lib/orders";
 import { customerForOrder } from "@/lib/customers";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
@@ -163,7 +162,7 @@ export async function POST(req: NextRequest) {
 
     for (const item of orderItems) {
       const { _modifiers, ...itemRow } = item;
-      const { data: insertedItem, error: itemErr } = await supabase
+      const { data: insertedItem, error: itemErr } = await db
         .from("order_items")
         .insert({ ...itemRow, order_id: order.id })
         .select("id")
@@ -171,7 +170,7 @@ export async function POST(req: NextRequest) {
       if (itemErr) throw itemErr;
 
       if (_modifiers.length > 0) {
-        const { error: modErr } = await supabase.from("order_item_modifiers").insert(
+        const { error: modErr } = await db.from("order_item_modifiers").insert(
           _modifiers.map((m) => ({ order_item_id: insertedItem.id, modifier_option_id: m.id, option_name: m.name, price_delta: m.price_delta }))
         );
         if (modErr) throw modErr;

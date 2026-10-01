@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
@@ -21,7 +20,8 @@ export async function POST(req: NextRequest) {
     if (!customer_id || !order_id) return NextResponse.json({ error: "customer_id and order_id are required" }, { status: 400 });
 
     // The till's own business's order only.
-    const { data: order, error: orderErr } = await bizDb(session.businessId)
+    const db = bizDb(session.businessId);
+    const { data: order, error: orderErr } = await db
       .from("orders")
       .select("id, status, is_paid, order_type, loyalty_discount, loyalty_reason")
       .eq("id", order_id)
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     // Guard against double-tapping the button (or a retried request) — never
     // debit twice for the same order.
-    const { data: existing } = await supabase
+    const { data: existing } = await db
       .from("loyalty_transactions")
       .select("id")
       .eq("reference_type", "cash_credit")
@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
     }
     const usePoints = Math.round(useAmount * cashCredit.rate);
 
-    const { error: ledgerErr } = await supabase.from("loyalty_transactions").insert({
+    const { error: ledgerErr } = await db.from("loyalty_transactions").insert({
       customer_id,
       points_delta: -usePoints,
       reason: "redeemed_reward",
@@ -76,7 +76,7 @@ export async function POST(req: NextRequest) {
     });
     if (ledgerErr) throw ledgerErr;
 
-    await supabase
+    await db
       .from("orders")
       .update({
         loyalty_discount: useAmount,
@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", order_id);
-    const bill = await recalcTotals(String(order_id));
+    const bill = await recalcTotals(String(order_id), session.businessId);
 
     return NextResponse.json({ success: true, amount: useAmount, points_spent: usePoints, bill });
   } catch (error) {

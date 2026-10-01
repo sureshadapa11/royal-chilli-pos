@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { londonDayRangeUtc } from "@/lib/london-date";
-import supabase from "@/lib/supabase";
 import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/orders";
@@ -97,8 +96,8 @@ export async function GET(req: NextRequest) {
     if (detailed && flatOrders.length > 0) {
       const orderIds = flatOrders.map((o) => o.id);
       const [{ data: itemRows }, { data: paymentRows }] = await Promise.all([
-        supabase.from("order_items").select("order_id").in("order_id", orderIds).neq("status", "cancelled"),
-        supabase.from("payments").select("order_id, method, amount").in("order_id", orderIds),
+        db.from("order_items").select("order_id").in("order_id", orderIds).neq("status", "cancelled"),
+        db.from("payments").select("order_id, method, amount").in("order_id", orderIds),
       ]);
 
       const itemCountMap: Record<number, number> = {};
@@ -309,7 +308,7 @@ export async function POST(req: NextRequest) {
       notes: item.notes || null,
     }));
 
-    const { data: insertedItems, error: itemsError } = await supabase
+    const { data: insertedItems, error: itemsError } = await db
       .from("order_items")
       .insert(itemRows)
       .select("id, menu_item_id");
@@ -325,7 +324,7 @@ export async function POST(req: NextRequest) {
       }))
     );
     if (modifierRows.length > 0) {
-      const { error: modErr } = await supabase.from("order_item_modifiers").insert(modifierRows);
+      const { error: modErr } = await db.from("order_item_modifiers").insert(modifierRows);
       if (modErr) throw modErr;
     }
 

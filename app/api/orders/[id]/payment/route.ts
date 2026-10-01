@@ -127,7 +127,7 @@ export async function POST(
         waitUntil(depleteStockForOrder(extra.id, session.id).catch((e) => console.error("Stock depletion failed for order", extra.id, e)));
         // a member linked to the table earns on every round, not just the first
         if (extra.customer_id) await awardPurchasePoints(extra.customer_id, Number(extra.total), extra.id);
-        waitUntil(sendOrderPaymentReceipt(extra.id));
+        waitUntil(sendOrderPaymentReceipt(session.businessId, extra.id));
       }
     }
 
@@ -144,7 +144,7 @@ export async function POST(
     // block above) specifically so the receipt can report the points this
     // order actually just earned, not a stale pre-award balance.
     if (isFullyPaid) {
-      waitUntil(sendOrderPaymentReceipt(Number(id)));
+      waitUntil(sendOrderPaymentReceipt(session.businessId, Number(id)));
     }
 
     const remainingAfter = Math.max(0, Math.round((Number(result.total) - Number(result.amount_paid)) * 100) / 100);

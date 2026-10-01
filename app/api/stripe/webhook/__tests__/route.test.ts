@@ -50,7 +50,12 @@ jest.mock("@/lib/supabase", () => ({
         return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: orderRow, error: null }) }) }) };
       }
       if (table === "order_items") {
-        return { select: () => ({ eq: () => Promise.resolve({ data: [], error: null }) }) };
+        // Chainable: the route reads these through bizDb, which adds its own business_id filter.
+        const items: Record<string, unknown> = {
+          eq: () => items,
+          then: (resolve: (v: unknown) => void) => Promise.resolve({ data: [], error: null }).then(resolve),
+        };
+        return { select: () => items };
       }
       throw new Error(`Unexpected table in test: ${table}`);
     },
@@ -71,7 +76,7 @@ beforeEach(() => {
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
   insertedPayments = [];
   existingReferences = new Set();
-  orderRow = { amount_paid: 0, total: 25 };
+  orderRow = { business_id: 1, amount_paid: 0, total: 25 };
 });
 
 describe("POST /api/stripe/webhook — idempotency", () => {
@@ -90,7 +95,7 @@ describe("POST /api/stripe/webhook — idempotency", () => {
   });
 
   it("does not insert once the order is already fully paid, even without a reference match", async () => {
-    orderRow = { amount_paid: 25, total: 25 };
+    orderRow = { business_id: 1, amount_paid: 25, total: 25 };
     const res = await POST(webhookRequest());
     expect(res.status).toBe(200);
     expect(insertedPayments).toHaveLength(0);

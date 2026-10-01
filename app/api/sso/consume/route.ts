@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 import { createSession, getSessionCookieOptions } from "@/lib/auth";
 import type { SessionUser } from "@/lib/types";
-import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
+import { getBusiness, staffHome } from "@/lib/business";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "royal-chilli-pos-fallback-secret-key-2024"
@@ -18,13 +18,22 @@ export async function GET(req: NextRequest) {
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
     if (payload.purpose !== "sso") throw new Error("not an sso handoff token");
+    if (!Number.isInteger(payload.id) || Number(payload.id) < 1) throw new Error("invalid staff id");
+    if (!Number.isInteger(payload.bid) || Number(payload.bid) < 1) throw new Error("invalid business id");
+    const businessId = Number(payload.bid);
+    if (!(await getBusiness(businessId))) throw new Error("unknown business");
+    const home = await staffHome(Number(payload.id));
+    const isOwner = payload.own === true;
+    if (home.isOwner !== isOwner || (!isOwner && home.businessId !== businessId)) {
+      throw new Error("staff member is not assigned to this business");
+    }
 
     const user: SessionUser = {
       id: payload.id as number,
       name: payload.name as string,
       role: payload.role as SessionUser["role"],
-      businessId: typeof payload.bid === "number" && payload.bid > 0 ? payload.bid : DEFAULT_BUSINESS_ID,
-      ...(payload.own === true ? { owner: true } : {}),
+      businessId,
+      ...(isOwner ? { owner: true } : {}),
     };
     const sessionToken = await createSession(user);
     const { name: cookieName, options } = getSessionCookieOptions();

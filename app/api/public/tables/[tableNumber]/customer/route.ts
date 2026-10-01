@@ -3,7 +3,7 @@ import { getTableByNumber, getOpenOrderForTable } from "@/lib/dine-in";
 import { websiteBusinessId } from "@/lib/business";
 import { customerForOrder } from "@/lib/customers";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 
 // Lets a customer submit their phone (for loyalty) independently of sending
 // an order — e.g. they filled it in after already sending their first
@@ -23,12 +23,12 @@ export async function POST(
     const { phone, name, email, marketing_consent } = await req.json();
     if (!phone || !String(phone).trim()) return NextResponse.json({ error: "Phone is required" }, { status: 400 });
 
-    const order = await getOpenOrderForTable(table.id);
+    const order = await getOpenOrderForTable(businessId, table.id);
     if (!order) return NextResponse.json({ success: true, attached: false });
 
     const account = await getCustomerSessionFromRequest(req);
     const customerId = await customerForOrder(table.business_id, account?.id, String(phone).trim(), name || "Guest", email, marketing_consent === true);
-    await supabase
+    await bizDb(businessId)
       .from("orders")
       .update({ customer_id: customerId, customer_name: name || null, customer_phone: String(phone).trim() })
       .eq("id", order.id);

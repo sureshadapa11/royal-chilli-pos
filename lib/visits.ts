@@ -3,6 +3,7 @@ import { tradingDayStr } from "@/lib/london-date";
 import { getLoyaltySetting, getPointsExpiryTimestamp } from "@/lib/loyalty";
 import { getBusinessSetting } from "@/lib/business-settings";
 import { customerBusinessId } from "@/lib/crm";
+import { bizDb } from "@/lib/business-db";
 
 // Rewards Club visit bonuses. A visit = a trading day (5am–5am UK) on which
 // the member had a paid, points-earning order; two bills on the same night
@@ -122,10 +123,11 @@ export async function awardVisitBonus(customerId: number, orderId: number): Prom
  * was the friend's visit that unlocked a Bring a Friend voucher that hasn't
  * been used yet, lock that voucher again (the next real visit unlocks it).
  */
-export async function reverseVisitRewardsForFullRefund(orderId: number, customerId: number): Promise<void> {
+export async function reverseVisitRewardsForFullRefund(businessId: number, orderId: number, customerId: number): Promise<void> {
+  const db = bizDb(businessId);
   // visit bonus — reversal row keyed by reference_type so the proportional
   // points reversal (which counts refund_reversal rows on 'order') ignores it
-  const { data: bonus } = await supabase
+  const { data: bonus } = await db
     .from("loyalty_transactions")
     .select("points_delta")
     .eq("customer_id", customerId)
@@ -133,7 +135,7 @@ export async function reverseVisitRewardsForFullRefund(orderId: number, customer
     .eq("reference_type", "order")
     .eq("reference_id", orderId);
   const given = (bonus ?? []).reduce((s, r) => s + Number(r.points_delta), 0);
-  const { data: reversed } = await supabase
+  const { data: reversed } = await db
     .from("loyalty_transactions")
     .select("id")
     .eq("reason", "refund_reversal")
@@ -141,10 +143,10 @@ export async function reverseVisitRewardsForFullRefund(orderId: number, customer
     .eq("reference_id", orderId)
     .limit(1);
   if (given > 0 && !(reversed && reversed.length)) {
-    const { data: c } = await supabase.from("customers").select("loyalty_points").eq("id", customerId).single();
+    const { data: c } = await db.from("customers").select("loyalty_points").eq("id", customerId).single();
     const take = Math.min(given, Math.max(0, Number(c?.loyalty_points ?? 0)));
     if (take > 0) {
-      await supabase.from("loyalty_transactions").insert({
+      await db.from("loyalty_transactions").insert({
         customer_id: customerId,
         points_delta: -take,
         reason: "refund_reversal",
@@ -155,14 +157,14 @@ export async function reverseVisitRewardsForFullRefund(orderId: number, customer
   }
 
   // Bring a Friend: was this the friend's only qualifying visit?
-  const { data: friend } = await supabase
+  const { data: friend } = await db
     .from("customers")
     .select("referred_by_customer_id, referral_completed_at")
     .eq("id", customerId)
     .single();
   if (!friend?.referred_by_customer_id || !friend.referral_completed_at) return;
-  const minSpend = await getLoyaltySetting(await customerBusinessId(customerId), "loyalty_referral_min_spend", 20);
-  const { data: others } = await supabase
+  const minSpend = await getLoyaltySetting(businessId, "loyalty_referral_min_spend", 20);
+  const { data: others } = await db
     .from("orders")
     .select("id, total")
     .eq("customer_id", customerId)
@@ -172,17 +174,17 @@ export async function reverseVisitRewardsForFullRefund(orderId: number, customer
   const otherIds = (others ?? []).map((o) => o.id);
   if (otherIds.length) {
     // a qualifying visit is one that wasn't itself refunded
-    const { data: refunded } = await supabase.from("payments").select("order_id").in("order_id", otherIds).lt("amount", 0);
+    const { data: refunded } = await db.from("payments").select("order_id").in("order_id", otherIds).lt("amount", 0);
     const refundedIds = new Set((refunded ?? []).map((p) => p.order_id));
     if (otherIds.some((id) => !refundedIds.has(id))) return;
   }
-  const { data: relocked } = await supabase
+  const { data: relocked } = await db
     .from("loyalty_redemptions")
     .update({ status: "locked", expires_at: new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString() })
     .eq("referred_customer_id", customerId)
     .eq("status", "issued")
     .select("id");
   if (relocked && relocked.length) {
-    await supabase.from("customers").update({ referral_completed_at: null }).eq("id", customerId);
+    await db.from("customers").update({ referral_completed_at: null }).eq("id", customerId);
   }
 }
