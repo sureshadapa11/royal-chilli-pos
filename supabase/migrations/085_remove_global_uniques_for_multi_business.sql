@@ -183,37 +183,84 @@ END $$;
 -- Drop any remaining standalone global unique indexes on the obsolete column sets
 DO $$
 DECLARE
-  r record;
   idx record;
 BEGIN
-  FOR r IN SELECT * FROM (VALUES
-    ('customers',              ARRAY['phone']),
-    ('newsletter_subscribers', ARRAY['email']),
-    ('loyalty_tiers',          ARRAY['name']),
-    ('timesheets',             ARRAY['period_end', 'period_start', 'staff_id'])
-  ) v(tbl, cols)
+  -- customers (phone) without business_id
+  FOR idx IN
+    SELECT i.relname AS index_name
+    FROM pg_index x
+    JOIN pg_class i ON i.oid = x.indexrelid
+    JOIN pg_class t ON t.oid = x.indrelid
+    WHERE t.oid = 'customers'::regclass
+      AND x.indisunique
+      AND NOT x.indisprimary
+      AND x.indpred IS NULL
+      AND pg_get_indexdef(x.indexrelid) ILIKE '%(phone)%'
+      AND pg_get_indexdef(x.indexrelid) NOT ILIKE '%business_id%'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_constraint con WHERE con.conindid = x.indexrelid
+      )
   LOOP
-    FOR idx IN
-      SELECT i.relname AS index_name
-      FROM pg_index x
-      JOIN pg_class i ON i.oid = x.indexrelid
-      JOIN pg_class t ON t.oid = x.indrelid
-      WHERE t.oid = r.tbl::regclass
-        AND x.indisunique
-        AND NOT x.indisprimary
-        AND x.indpred IS NULL
-        AND (
-          SELECT array_agg(a.attname::text ORDER BY a.attname::text)
-          FROM pg_attribute a
-          WHERE a.attrelid = t.oid
-            AND a.attnum = ANY (string_to_array(x.indkey::text, ' ')::smallint[])
-        ) = r.cols
-        AND NOT EXISTS (
-          SELECT 1 FROM pg_constraint con WHERE con.conindid = x.indexrelid
-        )
-    LOOP
-      EXECUTE format('DROP INDEX IF EXISTS %I', idx.index_name);
-    END LOOP;
+    EXECUTE format('DROP INDEX IF EXISTS %I', idx.index_name);
+  END LOOP;
+
+  -- newsletter_subscribers (email) without business_id
+  FOR idx IN
+    SELECT i.relname AS index_name
+    FROM pg_index x
+    JOIN pg_class i ON i.oid = x.indexrelid
+    JOIN pg_class t ON t.oid = x.indrelid
+    WHERE t.oid = 'newsletter_subscribers'::regclass
+      AND x.indisunique
+      AND NOT x.indisprimary
+      AND x.indpred IS NULL
+      AND pg_get_indexdef(x.indexrelid) ILIKE '%(email)%'
+      AND pg_get_indexdef(x.indexrelid) NOT ILIKE '%business_id%'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_constraint con WHERE con.conindid = x.indexrelid
+      )
+  LOOP
+    EXECUTE format('DROP INDEX IF EXISTS %I', idx.index_name);
+  END LOOP;
+
+  -- loyalty_tiers (name) without business_id
+  FOR idx IN
+    SELECT i.relname AS index_name
+    FROM pg_index x
+    JOIN pg_class i ON i.oid = x.indexrelid
+    JOIN pg_class t ON t.oid = x.indrelid
+    WHERE t.oid = 'loyalty_tiers'::regclass
+      AND x.indisunique
+      AND NOT x.indisprimary
+      AND x.indpred IS NULL
+      AND pg_get_indexdef(x.indexrelid) ILIKE '%(name)%'
+      AND pg_get_indexdef(x.indexrelid) NOT ILIKE '%business_id%'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_constraint con WHERE con.conindid = x.indexrelid
+      )
+  LOOP
+    EXECUTE format('DROP INDEX IF EXISTS %I', idx.index_name);
+  END LOOP;
+
+  -- timesheets (staff_id, period_start, period_end) without business_id
+  FOR idx IN
+    SELECT i.relname AS index_name
+    FROM pg_index x
+    JOIN pg_class i ON i.oid = x.indexrelid
+    JOIN pg_class t ON t.oid = x.indrelid
+    WHERE t.oid = 'timesheets'::regclass
+      AND x.indisunique
+      AND NOT x.indisprimary
+      AND x.indpred IS NULL
+      AND pg_get_indexdef(x.indexrelid) ILIKE '%staff_id%'
+      AND pg_get_indexdef(x.indexrelid) ILIKE '%period_start%'
+      AND pg_get_indexdef(x.indexrelid) ILIKE '%period_end%'
+      AND pg_get_indexdef(x.indexrelid) NOT ILIKE '%business_id%'
+      AND NOT EXISTS (
+        SELECT 1 FROM pg_constraint con WHERE con.conindid = x.indexrelid
+      )
+  LOOP
+    EXECUTE format('DROP INDEX IF EXISTS %I', idx.index_name);
   END LOOP;
 END $$;
 
