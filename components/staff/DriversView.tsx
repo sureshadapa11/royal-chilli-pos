@@ -230,8 +230,8 @@ export default function DriversView({ isManager, isDriver }: { isManager: boolea
         <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
-              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Drivers</h1>
-              <p className="text-muted-foreground text-sm">Driver roster, live deliveries and who's assigned to what.</p>
+              <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">{isDriver && !isManager ? "My Deliveries" : "Drivers"}</h1>
+              <p className="text-muted-foreground text-sm">{isDriver && !isManager ? "Your assigned deliveries and availability." : "Driver roster, live deliveries and who's assigned to what."}</p>
             </div>
           </div>
 

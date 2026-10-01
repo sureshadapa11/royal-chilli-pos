@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getDashboardData } from "@/lib/staff-dashboard";
 import { getAdminDashboard, RANGES, type RangeKey } from "@/lib/admin-dashboard";
@@ -23,6 +24,8 @@ function greeting(): string {
 export default async function StaffHubPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
   const session = await getSession();
   const role = session?.role;
+  // Drivers only have their deliveries screen in the hub.
+  if ((role as string) === "driver") redirect("/staff/drivers");
   const today = new Date().toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "long", day: "numeric", month: "long", year: "numeric" });
   const firstName = session?.name?.split(" ")[0] ?? session?.name;
 

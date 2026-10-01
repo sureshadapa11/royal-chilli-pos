@@ -682,6 +682,7 @@ const ROLES: { value: string; label: string }[] = [
   { value: "manager", label: "Manager — operations, no HR/Settings" },
   { value: "hr", label: "HR — attendance, HR, payroll, finance, reports" },
   { value: "admin", label: "Admin — full access" },
+  { value: "driver", label: "Driver — own deliveries only" },
 ];
 
 function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (staff: Staff) => void }) {

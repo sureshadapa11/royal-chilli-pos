@@ -10,7 +10,7 @@ import { initials } from "@/lib/brand-client";
 export type NavItem = { href: string; label: string; icon: string; note?: string; external?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
 
-const ROLE_LABEL: Record<string, string> = { admin: "Admin", hr: "HR", manager: "Manager", employee: "Employee" };
+const ROLE_LABEL: Record<string, string> = { admin: "Admin", hr: "HR", manager: "Manager", employee: "Employee", driver: "Driver" };
 
 // Staff Hub frame: a top menu bar. On a computer each group's list opens when
 // the mouse is over it (CSS, see .hub-mi in globals.css) or on click; on a

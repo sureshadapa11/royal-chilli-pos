@@ -118,8 +118,8 @@ export const canManageStaff = (role: StaffRole) => isStaffManagement(role);
 export const canManageInventory = (role: StaffRole) => canAccess(role, "inventory");
 export const canManageFinance = (role: StaffRole) => canAccess(role, "finance");
 export const canApproveStockTakes = (role: StaffRole) => canAccess(role, "inventory");
-// Drivers screen is still hidden from the nav for now; Customers & Loyalty
-// (this same admin/manager gate) is now linked from the Staff Hub sidebar.
+// Drivers (roster + assigning deliveries) and Customers & Loyalty share this
+// admin/manager gate; both are linked from the Staff Hub sidebar.
 export const canViewCrm = (role: StaffRole) => role === "admin" || role === "manager";
 export const canManageCrm = (role: StaffRole) => role === "admin" || role === "manager";
 export const canManageDrivers = (role: StaffRole) => role === "admin" || role === "manager";
