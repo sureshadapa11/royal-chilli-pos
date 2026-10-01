@@ -184,7 +184,7 @@ BEGIN
     ('inherit', 'featured_dishes',   ARRAY['menu_items', 'menu_item_id']),
     ('inherit', 'recipes',           ARRAY['menu_items', 'menu_item_id']),
     ('inherit', 'payments',          ARRAY['orders', 'order_id']),
-    ('inherit', 'print_jobs',        ARRAY['orders', 'order_id', 'work_periods', 'work_period_id']),
+    ('inherit', 'print_jobs',        ARRAY['orders', 'order_id']),
     ('inherit', 'table_requests',    ARRAY['restaurant_tables', 'table_id']),
     ('inherit', 'stock_movements',   ARRAY['ingredients', 'ingredient_id']),
     ('inherit', 'supplier_payments', ARRAY['purchase_orders', 'purchase_order_id']),

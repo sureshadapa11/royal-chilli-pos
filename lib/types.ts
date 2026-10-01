@@ -6,6 +6,8 @@ export type StaffRole = "employee" | "manager" | "hr" | "admin";
 export interface Staff {
   id: number;
   name: string;
+  business_id: number | null;
+  is_owner: boolean;
   pin_hash: string | null;
   username: string | null;
   password_hash: string | null;
