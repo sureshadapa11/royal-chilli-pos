@@ -45,8 +45,24 @@ import { copyRewardsScheme, createBusiness, setBusinessOpen, slugify } from "@/l
 beforeEach(() => {
   for (const k of Object.keys(db)) delete db[k];
   db.businesses = [
-    { id: 1, name: "The Royal Chilli", slug: "royal-chilli", order_prefix: "RC", active: true, display_order: 1 },
-    { id: 2, name: "Melt House", slug: "melt-house", order_prefix: "MH", active: false, display_order: 2 },
+    {
+      id: 1,
+      name: "The Royal Chilli",
+      slug: "royal-chilli",
+      order_prefix: "RC",
+      active: true,
+      display_order: 1,
+      trading_address: { line1: "43 Kingsley Road", city: "Hounslow", postcode: "TW3 1PA" },
+    },
+    {
+      id: 2,
+      name: "Melt House",
+      slug: "melt-house",
+      order_prefix: "MH",
+      active: false,
+      display_order: 2,
+      trading_address: { line1: "1 High Street", city: "London", postcode: "SW1A 1AA" },
+    },
   ];
   db.loyalty_tiers = [{ id: 10, business_id: 1, name: "Gold", min_lifetime_spend: 500, points_multiplier: 1, sort_order: 2, active: 1 }];
   db.loyalty_rewards = [
@@ -91,6 +107,12 @@ describe("adding a business", () => {
     expect(await createBusiness({ name: "X", orderPrefix: "12" })).toMatchObject({ ok: false, field: "order_prefix" });
   });
 
+  it("refuses reserved slugs", async () => {
+    expect(await createBusiness({ name: "admin", orderPrefix: "AD" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
+    expect(await createBusiness({ name: "api", orderPrefix: "AP" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
+    expect(await createBusiness({ name: "staff", orderPrefix: "ST" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
+  });
+
   it("makes a tidy web name", () => {
     expect(slugify("Melt House — Richmond!")).toBe("melt-house-richmond");
   });
@@ -101,5 +123,20 @@ describe("opening and closing", () => {
     expect(await setBusinessOpen(2, true)).toMatchObject({ ok: true });
     expect(db.businesses.find((b) => b.id === 2)!.active).toBe(true);
     expect(await setBusinessOpen(1, false)).toMatchObject({ ok: false });
+  });
+
+  it("refuses to open a business if setup prerequisites are missing", async () => {
+    db.businesses[1].trading_address = null;
+    const res = await setBusinessOpen(2, true);
+    expect(res).toMatchObject({ ok: false, error: /trading address/i });
+    expect(db.businesses.find((b) => b.id === 2)!.active).toBe(false);
+
+    db.businesses[1].trading_address = { line1: "1 High St", postcode: "INVALID" };
+    const res2 = await setBusinessOpen(2, true);
+    expect(res2).toMatchObject({ ok: false, error: /valid UK postcode/i });
+
+    db.businesses[1].order_prefix = "";
+    const res3 = await setBusinessOpen(2, true);
+    expect(res3).toMatchObject({ ok: false, error: /order prefix/i });
   });
 });

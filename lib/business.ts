@@ -84,7 +84,13 @@ const bareHost = (host: string) => host.toLowerCase().split(":")[0].replace(/^ww
 export async function businessForHost(host: string | null | undefined): Promise<Business | null> {
   if (!host) return null;
   const h = bareHost(host);
-  return (await listBusinesses()).find((b) => b.domain && bareHost(b.domain) === h) ?? null;
+  return (
+    (await listBusinesses()).find(
+      (b) =>
+        (b.domain && bareHost(b.domain) === h) ||
+        (b.custom_domain && bareHost(b.custom_domain) === h)
+    ) ?? null
+  );
 }
 
 // Every business is independent (migration 079): each staff member belongs to

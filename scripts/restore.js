@@ -10,15 +10,81 @@ const fs = require("fs");
 const path = require("path");
 
 const TABLES = [
-  "staff", "customers", "menu_categories", "menu_items", "restaurant_tables",
-  "work_periods", "delivery_zones", "orders", "order_items", "payments",
-  "reservations", "table_requests", "shifts", "clock_events", "breaks",
-  "leave_requests", "payroll_periods", "payroll_entries", "payroll_payments",
-  "audit_logs", "app_settings", "role_permissions", "staff_availability",
-  "suppliers", "ingredients", "purchase_orders", "purchase_order_items",
-  "stock_movements", "recipes", "recipe_ingredients", "loyalty_transactions",
-  "loyalty_rewards", "expenses", "supplier_payments", "modifier_groups",
-  "modifier_options", "menu_item_modifier_groups", "order_item_modifiers",
+  "businesses",
+  "business_settings",
+  "staff",
+  "business_private",
+  "staff_businesses",
+  "staff_hr_details",
+  "staff_onboarding_tasks",
+  "staff_references",
+  "staff_rtw_verification",
+  "employee_documents",
+  "employee_payslips",
+  "staff_availability",
+  "staff_messages",
+  "push_subscriptions",
+  "notification_prefs",
+  "notifications",
+  "shift_alerts_sent",
+  "customers",
+  "customer_addresses",
+  "newsletter_subscribers",
+  "loyalty_tiers",
+  "loyalty_rewards",
+  "loyalty_transactions",
+  "loyalty_redemptions",
+  "loyalty_tier_changes",
+  "menu_categories",
+  "modifier_groups",
+  "modifier_options",
+  "menu_items",
+  "menu_item_modifier_groups",
+  "featured_dishes",
+  "promotions",
+  "restaurant_tables",
+  "work_periods",
+  "delivery_zones",
+  "orders",
+  "order_items",
+  "order_item_modifiers",
+  "payments",
+  "print_jobs",
+  "reservations",
+  "table_requests",
+  "shifts",
+  "breaks",
+  "clock_events",
+  "timesheets",
+  "leave_requests",
+  "payroll_periods",
+  "payroll_entries",
+  "payroll_payments",
+  "audit_logs",
+  "app_settings",
+  "role_permissions",
+  "suppliers",
+  "ingredients",
+  "purchase_orders",
+  "purchase_order_items",
+  "stock_movements",
+  "stock_takes",
+  "stock_take_lines",
+  "recipes",
+  "recipe_ingredients",
+  "expenses",
+  "supplier_payments",
+  "cash_paid_outs",
+  "platform_sales",
+  "fs_check_type",
+  "fs_check_log",
+  "fs_course",
+  "fs_delivery_check",
+  "fs_problem",
+  "fs_signoff",
+  "fs_temp_type",
+  "fs_temp_log",
+  "fs_training_record",
 ];
 
 async function main() {
@@ -47,14 +113,25 @@ async function main() {
   await client.connect();
 
   try {
+    const { rows: tableRows } = await client.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+    );
+    const existingTables = new Set(tableRows.map((r) => r.table_name));
+
     await client.query("BEGIN");
 
     // Delete children before parents, insert parents before children.
     for (const table of [...TABLES].reverse()) {
+      if (!existingTables.has(table)) continue;
       await client.query(`DELETE FROM ${table}`);
     }
 
     for (const table of TABLES) {
+      if (!existingTables.has(table)) {
+        console.log(`  ${table}: table does not exist in target database, skipping`);
+        continue;
+      }
+
       const file = path.join(backupDir, `${table}.json`);
       if (!fs.existsSync(file)) {
         console.log(`  ${table}: no backup file, skipping`);
@@ -66,7 +143,7 @@ async function main() {
       const columns = Object.keys(rows[0]);
       const colList = columns.map((c) => `"${c}"`).join(", ");
       for (const row of rows) {
-        const values = columns.map((c) => row[c]);
+        const values = columns.map((c) => (row[c] === "[REDACTED]" ? null : row[c]));
         const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
         await client.query(`INSERT INTO ${table} (${colList}) VALUES (${placeholders})`, values);
       }
@@ -76,10 +153,14 @@ async function main() {
       // auto-increment sequence needs bumping past the highest one restored
       // or the next app-side insert would collide with a restored row.
       if (columns.includes("id")) {
-        await client.query(
-          `SELECT setval(pg_get_serial_sequence($1, 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 1))`,
-          [table]
-        );
+        try {
+          await client.query(
+            `SELECT setval(pg_get_serial_sequence($1, 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 1))`,
+            [table]
+          );
+        } catch {
+          // Table may not use a serial sequence on id; ignore.
+        }
       }
     }
 

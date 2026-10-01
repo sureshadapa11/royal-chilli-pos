@@ -12,6 +12,9 @@ describe("UK formats on the Business setup page", () => {
     expect(checks.postcode("TW3 1PA")).toBeNull();
     expect(checks.yearEnd("31-03")).toBeNull();
     expect(checks.iban("GB29 NWBK 6016 1331 9268 19")).toBeNull();
+    expect(checks.domain("melthouse.co.uk")).toBeNull();
+    expect(checks.domain("www.melthouse.co.uk")).toBeNull();
+    expect(checks.domain("https://order.melthouse.co.uk")).toBeNull();
   });
   it("refuses wrong ones with a message saying what's expected", () => {
     expect(checks.vatNumber("12345")).toMatch(/GB followed by 9 digits/);
@@ -19,6 +22,7 @@ describe("UK formats on the Business setup page", () => {
     expect(checks.yearEnd("31-02")).toMatch(/Not a real date/);
     expect(checks.postcode("12345")).toMatch(/UK postcode/);
     expect(checks.prefix("mh")).toMatch(/capital letters/);
+    expect(checks.domain("not a domain")).toMatch(/Enter a domain/);
   });
   it("validates a whole section, allowing empty optional fields", () => {
     expect(validateSection(section("tax"), { vat_number: "", utr: "12345" })).toEqual({ utr: "10 digits" });

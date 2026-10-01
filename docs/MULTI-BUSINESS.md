@@ -25,14 +25,14 @@ with `business_id`. Decided 2026-09-29.
 
 | Phase | What | Status |
 |---|---|---|
-| 1 | Foundation: `businesses`, one home business per staff record, `business_id` on tenant-owned rows, relationship guards (migrations 076–079, 084) | Apply 084 |
+| 1 | Foundation: `businesses`, one home business per staff record, `business_id` on tenant-owned rows, relationship guards (migrations 076–079, 084) | **Done** (applied & verified) |
 | 2 | Every screen / API per business (menu, orders, tables, payments, Finance, Inventory, HR, attendance, rewards, website) | **Done** (both apps live) |
 | 2b | Fully separate staff, suppliers, customers + rewards (079); owner login, "Working in" switcher, All-businesses overview | **Done** |
-| 3 | Per-business settings + branding, `businesses/<slug>/` folders | Not started |
-| 4 | Businesses admin screen (add a business, module switches, payments, printers) | Not started |
+| 3 | Per-business settings + branding, transactional emails, delivery zones, legal pages, encrypted secrets | **Done** |
+| 4 | Businesses admin screen (add a business, module switches, payments status, prerequisites guard, safe opening) | **Done** |
 | 5 | ~~Shared staff / customers / suppliers~~ — replaced by 2b (everything separate) | Dropped |
-| 6 | Websites + domains per business | Not started |
-| 7 | Launch Melt House, then ABCD, EFGH | Not started |
+| 6 | Websites + domains per business (`custom_domain` matching, host-based routing, fallback to Business 1) | **Done** |
+| 7 | Launch Melt House, then ABCD, EFGH | Ready for launch |
 
 ## Migrations
 
@@ -288,9 +288,48 @@ business's own admin — contact details, logo, receipt text, hours, busy mode.
 - Then ABCD, EFGH (real names, domains, logos, company + VAT numbers,
   Stripe/SumUp accounts needed).
 
+## Business 2 (Melt House) Launch Checklist
+
+Follow these steps from the **owner account** (`owner`):
+
+### 1. Database & Pre-flight
+- [x] Merged and verified migrations 076–085 in Supabase SQL Editor.
+- [ ] Take a manual Supabase backup snapshot in dashboard before creating live data.
+- [ ] Confirm `SETTINGS_ENCRYPTION_KEY` is present in production environment variables (Vercel).
+
+### 2. Business Creation
+- [ ] Sign in to Staff Hub with owner account at `/staff/login`.
+- [ ] Navigate to `/staff/settings?tab=businesses`.
+- [ ] Under **Add a business**, enter Trading name: `Melt House` and Order prefix: `MH`.
+- [ ] Click **Add business**. Business 2 is created inactive (`active: false`) and its rewards scheme is auto-copied from The Royal Chilli.
+
+### 3. Business Setup Configuration
+- [ ] Click **Set up** for Melt House.
+- [ ] **Business Details**: Enter phone, email, website (`https://www.melthouse.co.uk`), and `custom_domain` (`melthouse.co.uk` or `order.melthouse.co.uk`).
+- [ ] **Addresses**: Fill in `trading_address` (Line 1, Town, valid UK Postcode) and registered office.
+- [ ] **Tax & VAT**: Set VAT registration status, VAT number, and company UTR.
+- [ ] **Receipts & Numbering**: Configure receipt header, receipt footer, and PO prefix.
+- [ ] **Modules**: Enable required modules (Till, Inventory, Rewards, Food Safety; disable unneeded ones like Table Bookings or Kitchen Display if not applicable).
+- [ ] **Payments**: Connect Stripe publishable and secret keys, and/or SumUp merchant code & API key. Confirm status shows "Connected ✓".
+- [ ] **Legal Pages**: Review custom Terms & Conditions, Privacy Policy, and Refund Policy.
+- [ ] **Opening Hours & Operations**: Configure weekly opening hours, busy mode defaults, and delivery zones / radius under Settings.
+
+### 4. Staff & Operations Setup
+- [ ] Switch into Melt House using the header switcher ("Working in: Melt House").
+- [ ] Create Melt House staff accounts under HR & Staff (`/staff/hr`).
+- [ ] Set up Melt House menu categories, items, modifiers, ingredients, and recipes.
+- [ ] Pair till devices or print stations if applicable (`/staff/settings?tab=hardware`).
+
+### 5. Verification & Opening
+- [ ] Place a test in-person till order (starts with `MH-`).
+- [ ] Verify test card / cash payment and receipt header/footer details.
+- [ ] Check inventory stock deduction and audit log entries.
+- [ ] Test website/custom domain access and test delivery address check.
+- [ ] In `/staff/settings?tab=businesses`, click **Open for business** (prerequisite validation will verify trading address, postcode, name, and prefix).
+- [ ] Confirm Melt House is now live and accepting orders.
+
 ## Other notes
 
-- `scripts/backup.js` only backs up 38 of the 72 tables — update it (a full
-  REST backup was taken to `backups/pre-multi-business-2026-09-29-09-39-25`).
+- `scripts/backup.js` and `scripts/restore.js` cover all 73 tenant and system tables with automated secret redaction for encrypted keys (`[REDACTED]`).
 - The till accepts the on-screen price for a dish (only checks the dish is this
   business's) — enforce menu prices only if wanted.

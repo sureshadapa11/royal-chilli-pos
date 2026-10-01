@@ -36,6 +36,12 @@ export async function listBusinessSummaries(): Promise<BusinessSummary[]> {
 export const slugify = (name: string) =>
   name.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
 
+export const RESERVED_SLUGS = new Set([
+  "api", "staff", "admin", "login", "auth", "public", "static", "favicon", "robots", "sitemap",
+  "terms", "privacy", "privacy-policy", "checkout", "cart", "account", "menu", "book", "reservations",
+  "orders", "receipts", "rewards", "loyalty", "settings", "pos"
+]);
+
 type Result<T> = { ok: true; value: T } | { ok: false; error: string; field?: string };
 
 /** A new business: not open yet, every module on, Royal Chilli's rewards scheme to start from. */
@@ -47,6 +53,9 @@ export async function createBusiness(input: { name: string; orderPrefix: string 
   if (prefixErr) return { ok: false, error: prefixErr, field: "order_prefix" };
   const slug = slugify(name);
   if (!slug) return { ok: false, error: "Use letters or numbers in the name", field: "name" };
+  if (RESERVED_SLUGS.has(slug)) {
+    return { ok: false, error: `"${slug}" is a reserved system name. Please choose a different name`, field: "name" };
+  }
 
   const { data: all } = await supabase.from("businesses").select("name, slug, order_prefix");
   const samePrefix = (all ?? []).find((b) => b.order_prefix === prefix);
@@ -114,6 +123,35 @@ export async function copyRewardsScheme(fromId: number, toId: number): Promise<R
 /** Open a business (its website, QR links and ordering become reachable) or close it again. */
 export async function setBusinessOpen(id: number, active: boolean): Promise<Result<null>> {
   if (id === DEFAULT_BUSINESS_ID && !active) return { ok: false, error: "The Royal Chilli can't be closed from here" };
+
+  if (active) {
+    const { data: b, error: fetchErr } = await supabase
+      .from("businesses")
+      .select("id, name, order_prefix, trading_address")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (fetchErr || !b) return { ok: false, error: "Business not found" };
+
+    const missing: string[] = [];
+    if (!b.name || !b.name.trim()) missing.push("trading name");
+    if (!b.order_prefix || checks.prefix(b.order_prefix)) missing.push("valid order prefix");
+
+    const addr = (b.trading_address ?? {}) as { line1?: string; postcode?: string };
+    const line1 = String(addr.line1 ?? "").trim();
+    const postcode = String(addr.postcode ?? "").trim();
+    if (!line1 || !postcode || checks.postcode(postcode)) {
+      missing.push("trading address with valid postcode");
+    }
+
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        error: `Cannot open business until setup prerequisites are complete: missing ${missing.join(", ")}`,
+      };
+    }
+  }
+
   const { error } = await supabase.from("businesses").update({ active, updated_at: new Date().toISOString() }).eq("id", id);
   if (error) return { ok: false, error: "Couldn't update the business" };
   clearBusinessCache();

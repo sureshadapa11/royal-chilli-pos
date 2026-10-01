@@ -14,7 +14,7 @@ import { encryptSecret, secretsConfigured } from "@/lib/secrets";
 // the page only learns whether each is connected.
 
 const PUBLIC_COLUMNS = [
-  "id", "slug", "name", "tagline", "legal_name", "company_number", "phone", "email", "website", "logo_url", "brand_colour",
+  "id", "slug", "name", "tagline", "legal_name", "company_number", "phone", "email", "website", "custom_domain", "logo_url", "brand_colour",
   "trading_address", "registered_address", "vat_registered", "vat_number", "vat_rate", "vat_scheme", "utr",
   "paye_reference", "year_end", "accounts_email", "receipt_header", "receipt_footer", "order_prefix", "po_prefix",
   "modules", "privacy_policy", "terms", "refund_policy", "active",
@@ -112,6 +112,8 @@ export async function PUT(req: NextRequest) {
         patch[k] = Object.keys(tidy).length ? tidy : null;
       } else if (k === "company_number" || k === "vat_number" || k === "utr" || k === "order_prefix" || k === "po_prefix") {
         patch[k] = upper(v) || null;
+      } else if (k === "custom_domain") {
+        patch[k] = typeof v === "string" ? (v.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null) : null;
       } else if (k === "vat_rate") {
         patch[k] = Number(v);
       } else {
@@ -119,9 +121,17 @@ export async function PUT(req: NextRequest) {
       }
     }
     // Each business's order numbers must be told apart at a glance.
-    if (typeof patch.order_prefix === "string") {
+    if (typeof patch.order_prefix === "string" && patch.order_prefix) {
       const { data: clash } = await supabase.from("businesses").select("name").eq("order_prefix", patch.order_prefix).neq("id", bid).maybeSingle();
       if (clash) return NextResponse.json({ error: "Please check the highlighted fields", fields: { order_prefix: `${clash.name} already uses ${patch.order_prefix}` } }, { status: 400 });
+    }
+    if (typeof patch.po_prefix === "string" && patch.po_prefix) {
+      const { data: clash } = await supabase.from("businesses").select("name").eq("po_prefix", patch.po_prefix).neq("id", bid).maybeSingle();
+      if (clash) return NextResponse.json({ error: "Please check the highlighted fields", fields: { po_prefix: `${clash.name} already uses ${patch.po_prefix}` } }, { status: 400 });
+    }
+    if (typeof patch.custom_domain === "string" && patch.custom_domain) {
+      const { data: clash } = await supabase.from("businesses").select("name").or(`custom_domain.eq.${patch.custom_domain},domain.eq.${patch.custom_domain}`).neq("id", bid).maybeSingle();
+      if (clash) return NextResponse.json({ error: "Please check the highlighted fields", fields: { custom_domain: `${clash.name} already uses ${patch.custom_domain}` } }, { status: 400 });
     }
     const { error } = await supabase.from("businesses").update(patch).eq("id", bid);
     if (error) return NextResponse.json({ error: "Couldn't save" }, { status: 500 });

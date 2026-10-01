@@ -12,7 +12,7 @@ import { validateScheduledTime } from "@/lib/scheduling";
 import { isRestaurantOpen, weekFromDayHours } from "@/lib/hours";
 import { getOpeningHours } from "@/lib/opening-hours";
 import { busyOrderError, busyState, type BusyMode } from "@/lib/busy-mode";
-import { checkDeliveryEligibility, computeDeliveryFee, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
+import { checkDeliveryEligibility, computeDeliveryFee, getDeliveryConfig, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { queueKitchenTicketSafely, printAfterFor } from "@/lib/print-queue";
@@ -69,12 +69,13 @@ export async function POST(req: NextRequest) {
     const busyError = busyOrderError(busyState(busyMode ?? null), scheduled_for || null);
     if (busyError) return NextResponse.json({ error: busyError }, { status: 409 });
 
+    const deliveryConfig = await getDeliveryConfig(businessId);
     let deliverable = false;
     if (order_type === "delivery") {
-      const eligibility = await checkDeliveryEligibility(customer_postcode);
+      const eligibility = await checkDeliveryEligibility(customer_postcode, businessId);
       deliverable = eligibility.deliverable;
       if (!deliverable) {
-        return NextResponse.json({ error: "Sorry, we don't deliver there — we deliver within 5 miles of the restaurant" }, { status: 400 });
+        return NextResponse.json({ error: `Sorry, we don't deliver there — we deliver within ${deliveryConfig.maxDeliveryMiles} miles of the restaurant` }, { status: 400 });
       }
     }
 
@@ -98,13 +99,13 @@ export async function POST(req: NextRequest) {
     );
 
     const subtotal = orderItems.reduce((sum, i) => sum + i.item_price * i.quantity, 0);
-    if (deliverable && subtotal < MIN_DELIVERY_ORDER) {
+    if (deliverable && subtotal < deliveryConfig.minDeliveryOrder) {
       return NextResponse.json(
-        { error: `Minimum order for delivery is £${MIN_DELIVERY_ORDER.toFixed(2)} (currently £${subtotal.toFixed(2)})` },
+        { error: `Minimum order for delivery is £${deliveryConfig.minDeliveryOrder.toFixed(2)} (currently £${subtotal.toFixed(2)})` },
         { status: 400 }
       );
     }
-    const deliveryFee = deliverable ? computeDeliveryFee(subtotal) : 0;
+    const deliveryFee = deliverable ? computeDeliveryFee(subtotal, deliveryConfig) : 0;
     const total = Math.round((subtotal + deliveryFee) * 100) / 100;
     // Menu prices are VAT-inclusive — nothing is added here, `tax` is just
     // the 20% VAT component embedded in the food subtotal, reported for
@@ -177,6 +178,7 @@ export async function POST(req: NextRequest) {
     if (!pay_online) {
       waitUntil(sendOrderConfirmationEmail(customer_email, {
         orderNumber,
+        businessId,
         customerName: customer_name,
         orderType: order_type,
         scheduledFor: scheduled_for || null,

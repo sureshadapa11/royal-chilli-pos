@@ -12,19 +12,94 @@ const { Client } = require("pg");
 const fs = require("fs");
 const path = require("path");
 
-// Same order tables are CREATEd in supabase/schema.sql — parents before
-// children, so a restore can INSERT in this order without FK violations.
+// Same order tables are CREATEd in supabase/schema.sql and migrations — parents
+// before children, so a restore can INSERT in this order without FK violations.
 const TABLES = [
-  "staff", "customers", "menu_categories", "menu_items", "restaurant_tables",
-  "work_periods", "delivery_zones", "orders", "order_items", "payments",
-  "reservations", "table_requests", "shifts", "clock_events", "breaks",
-  "leave_requests", "payroll_periods", "payroll_entries", "payroll_payments",
-  "audit_logs", "app_settings", "role_permissions", "staff_availability",
-  "suppliers", "ingredients", "purchase_orders", "purchase_order_items",
-  "stock_movements", "recipes", "recipe_ingredients", "loyalty_transactions",
-  "loyalty_rewards", "expenses", "supplier_payments", "modifier_groups",
-  "modifier_options", "menu_item_modifier_groups", "order_item_modifiers",
+  "businesses",
+  "business_settings",
+  "staff",
+  "business_private",
+  "staff_businesses",
+  "staff_hr_details",
+  "staff_onboarding_tasks",
+  "staff_references",
+  "staff_rtw_verification",
+  "employee_documents",
+  "employee_payslips",
+  "staff_availability",
+  "staff_messages",
+  "push_subscriptions",
+  "notification_prefs",
+  "notifications",
+  "shift_alerts_sent",
+  "customers",
+  "customer_addresses",
+  "newsletter_subscribers",
+  "loyalty_tiers",
+  "loyalty_rewards",
+  "loyalty_transactions",
+  "loyalty_redemptions",
+  "loyalty_tier_changes",
+  "menu_categories",
+  "modifier_groups",
+  "modifier_options",
+  "menu_items",
+  "menu_item_modifier_groups",
+  "featured_dishes",
+  "promotions",
+  "restaurant_tables",
+  "work_periods",
+  "delivery_zones",
+  "orders",
+  "order_items",
+  "order_item_modifiers",
+  "payments",
+  "print_jobs",
+  "reservations",
+  "table_requests",
+  "shifts",
+  "breaks",
+  "clock_events",
+  "timesheets",
+  "leave_requests",
+  "payroll_periods",
+  "payroll_entries",
+  "payroll_payments",
+  "audit_logs",
+  "app_settings",
+  "role_permissions",
+  "suppliers",
+  "ingredients",
+  "purchase_orders",
+  "purchase_order_items",
+  "stock_movements",
+  "stock_takes",
+  "stock_take_lines",
+  "recipes",
+  "recipe_ingredients",
+  "expenses",
+  "supplier_payments",
+  "cash_paid_outs",
+  "platform_sales",
+  "fs_check_type",
+  "fs_check_log",
+  "fs_course",
+  "fs_delivery_check",
+  "fs_problem",
+  "fs_signoff",
+  "fs_temp_type",
+  "fs_temp_log",
+  "fs_training_record",
 ];
+
+// Sensitive columns that must be redacted in backups to protect private payment credentials
+const REDACTED_COLUMNS = {
+  business_private: [
+    "stripe_secret_key_enc",
+    "stripe_webhook_secret_enc",
+    "sumup_api_key_enc",
+  ],
+};
 
 async function main() {
   const dbUrl = process.env.DATABASE_URL;
@@ -42,11 +117,34 @@ async function main() {
   const manifest = { createdAt: new Date().toISOString(), tables: {} };
 
   try {
+    const { rows: tableRows } = await client.query(
+      "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'"
+    );
+    const existingTables = new Set(tableRows.map((r) => r.table_name));
+
     for (const table of TABLES) {
+      if (!existingTables.has(table)) {
+        console.log(`  ${table}: table does not exist in target database, skipping`);
+        continue;
+      }
+
       const { rows } = await client.query(`SELECT * FROM ${table}`);
-      fs.writeFileSync(path.join(outDir, `${table}.json`), JSON.stringify(rows, null, 2));
-      manifest.tables[table] = rows.length;
-      console.log(`  ${table}: ${rows.length} rows`);
+      const redactedFields = REDACTED_COLUMNS[table];
+      const safeRows = redactedFields
+        ? rows.map((r) => {
+            const copy = { ...r };
+            for (const field of redactedFields) {
+              if (copy[field] != null) {
+                copy[field] = "[REDACTED]";
+              }
+            }
+            return copy;
+          })
+        : rows;
+
+      fs.writeFileSync(path.join(outDir, `${table}.json`), JSON.stringify(safeRows, null, 2));
+      manifest.tables[table] = safeRows.length;
+      console.log(`  ${table}: ${safeRows.length} rows`);
     }
   } finally {
     await client.end();
