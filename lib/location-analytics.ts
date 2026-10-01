@@ -5,10 +5,9 @@ import { listLocations, staffLocationIds, type Location } from "@/lib/locations"
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import type { SessionUser } from "@/lib/types";
 
-// Per-location reports for managers. A staff member with location
-// assignments (staff_locations) sees only those locations; one with no
-// assignments works at — and so sees — every location of the business, as
-// does the group owner.
+// Per-location reports for managers. A staff member sees only the locations
+// they're assigned to (staff_locations); one with no assignments sees none —
+// explicit assignment is required. The group owner sees every location.
 
 export type SalesChannel = "pos" | "online";
 
@@ -60,7 +59,6 @@ export async function accessibleLocations(session: SessionUser): Promise<Locatio
   const all = await listLocations(session.businessId);
   if (session.owner) return all;
   const assigned = await staffLocationIds(session.id);
-  if (assigned.length === 0) return all;
   const allowed = new Set(assigned);
   return all.filter((l) => allowed.has(l.id));
 }

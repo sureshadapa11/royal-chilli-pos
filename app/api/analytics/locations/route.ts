@@ -6,8 +6,8 @@ import { accessibleLocations, getLocationAnalytics, parseDateRange, resolveRepor
 /**
  * GET /api/analytics/locations?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD&location_id=N
  * Per-location sales, inventory and staff snapshot for the locations this
- * session may see (its assigned locations; all of them for the group owner or
- * an unassigned manager).
+ * session may see: its assigned locations (none if unassigned), or all of
+ * them for the group owner.
  */
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);

@@ -26,7 +26,7 @@ export interface Staff {
   emergency_contact_phone: string | null;
   notes: string | null;
   created_at: string;
-  /** Assigned locations (staff_locations); empty = every location. Included by the employee APIs. */
+  /** Assigned locations (staff_locations); empty = unassigned (no location access). Included by the employee APIs. */
   location_ids?: number[];
 }
 

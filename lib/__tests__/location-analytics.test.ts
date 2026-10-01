@@ -103,8 +103,8 @@ describe("location scoping", () => {
     expect((await accessibleLocations(owner)).map((l) => l.name)).toEqual(["Kitchen", "Warehouse"]);
   });
 
-  it("an unassigned manager sees every location (no restriction)", async () => {
-    expect((await accessibleLocations(unassignedManager)).map((l) => l.id)).toEqual([1, 2]);
+  it("an unassigned manager sees no locations (explicit assignment required)", async () => {
+    expect(await accessibleLocations(unassignedManager)).toEqual([]);
   });
 });
 
@@ -198,6 +198,13 @@ describe("GET /api/analytics/locations", () => {
     expect(body.summary).toEqual({ total_sales: 30.5, total_orders: 2 });
   });
 
+  it("returns no locations for an unassigned manager", async () => {
+    const res = await get(unassignedManager, `?start_date=${DAY}&end_date=${DAY}`);
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ locations: [], summary: { total_sales: 0, total_orders: 0 } });
+    expect((await get(unassignedManager, "?location_id=1")).status).toBe(403);
+  });
+
   it("returns every location for the group owner", async () => {
     const body = await (await get(owner, `?start_date=${DAY}&end_date=${DAY}`)).json();
     expect(body.locations.map((l: { id: number }) => l.id)).toEqual([1, 2]);
@@ -234,15 +241,30 @@ describe("GET /api/analytics/locations/:id/{inventory,staff}", () => {
     expect((await call(getStaff, manager, "2")).status).toBe(403);
     expect((await call(getInventory, owner, "3")).status).toBe(404);
   });
+
+  it("403s every location for an unassigned manager", async () => {
+    expect((await call(getInventory, unassignedManager, "1")).status).toBe(403);
+    expect((await call(getStaff, unassignedManager, "1")).status).toBe(403);
+  });
 });
 
-describe("unassigned staff", () => {
-  it("fall back to their business's primary location", async () => {
-    expect(await resolveInventoryLocation(1, 11, null)).toEqual({ locationId: 1 });
-    expect(await resolveInventoryLocation(2, 21, null)).toEqual({ locationId: 3 });
+describe("resolveInventoryLocation", () => {
+  it("rejects unassigned staff instead of falling back to a location", async () => {
+    expect(await resolveInventoryLocation(1, 11, null)).toEqual({ error: "You aren't assigned to any location", status: 400 });
+    expect(await resolveInventoryLocation(1, 11, "")).toEqual({ error: "You aren't assigned to any location", status: 400 });
+    expect(await resolveInventoryLocation(1, 11, "1")).toEqual({ error: "You cannot access this location", status: 403 });
   });
 
-  it("assigned staff default to their first assigned location", async () => {
+  it("lets the group owner use any location, defaulting to the business's primary one", async () => {
+    expect(await resolveInventoryLocation(1, 12, null, true)).toEqual({ locationId: 1 });
+    expect(await resolveInventoryLocation(2, 12, null, true)).toEqual({ locationId: 3 });
+    expect(await resolveInventoryLocation(1, 12, "2", true)).toEqual({ locationId: 2 });
+    expect(await resolveInventoryLocation(1, 12, "3", true)).toEqual({ error: "Location not found", status: 404 });
+  });
+
+  it("assigned staff default to their first assigned location and are limited to their assignments", async () => {
     expect(await resolveInventoryLocation(1, 13, null)).toEqual({ locationId: 1 });
+    expect(await resolveInventoryLocation(1, 13, "2")).toEqual({ locationId: 2 });
+    expect(await resolveInventoryLocation(1, 10, "2")).toEqual({ error: "You cannot access this location", status: 403 });
   });
 });

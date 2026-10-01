@@ -84,7 +84,7 @@ export default function StaffLocationAssignments({ staffId }: { staffId: number 
         <div>
           <h2 className="text-foreground font-semibold">Locations</h2>
           <p className="text-muted-foreground text-xs">
-            Tick every location this person works at. Leave all unticked and they can work at any location.
+            Tick every location this person works at. Leave all unticked and they have no location access (they can still sign in).
           </p>
         </div>
         {locations.length === 0 && <p className="text-muted-foreground text-sm">No active locations set up yet.</p>}

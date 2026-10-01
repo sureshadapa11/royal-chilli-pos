@@ -72,7 +72,11 @@ export async function updateLocation(
   return data as Location;
 }
 
-/** Location ids a staff member is limited to. Empty = can work at every location. */
+/**
+ * Location ids a staff member is assigned to. Empty = unassigned: they have no
+ * location access for inventory or location analytics (explicit assignment is
+ * required; only the group owner is exempt).
+ */
 export async function staffLocationIds(staffId: number): Promise<number[]> {
   const { data, error } = await supabase
     .from("staff_locations")
@@ -82,7 +86,7 @@ export async function staffLocationIds(staffId: number): Promise<number[]> {
   return (data ?? []).map((r) => r.location_id).filter((id): id is number => id !== null);
 }
 
-/** Each staff member's assigned location ids (empty = every location). */
+/** Each staff member's assigned location ids (empty = unassigned). */
 export async function locationIdsByStaff(staffIds: number[]): Promise<Map<number, number[]>> {
   const map = new Map<number, number[]>(staffIds.map((id) => [id, []]));
   if (staffIds.length === 0) return map;
@@ -99,7 +103,7 @@ export async function locationIdsByStaff(staffIds: number[]): Promise<Map<number
   return map;
 }
 
-/** The business's primary location: its first active one (unassigned staff work here by default). */
+/** The business's primary location: its first active one (the group owner's default inventory location). */
 export async function primaryLocationId(businessId: number): Promise<number> {
   const { data, error } = await bizDb(businessId)
     .from("locations")
@@ -112,10 +116,18 @@ export async function primaryLocationId(businessId: number): Promise<number> {
   return (data as { id: number } | null)?.id ?? 1;
 }
 
+/**
+ * The inventory location a request works on: the requested one, else the
+ * caller's first assigned location. Staff must be assigned to the location —
+ * unassigned staff are rejected (400 with no location_id, 403 with one). The
+ * group owner (`owner`) can use any location of the business and defaults to
+ * its primary location.
+ */
 export async function resolveInventoryLocation(
   businessId: number,
   staffId: number,
   requestedLocationId: string | null,
+  owner = false,
 ): Promise<{ locationId: number } | { error: string; status: number }> {
   const { data: assignments, error: assignmentError } = await supabase
     .from("staff_locations")
@@ -125,14 +137,18 @@ export async function resolveInventoryLocation(
     .order("location_id", { ascending: true });
   if (assignmentError) throw assignmentError;
   const assigned = (assignments ?? []).map((row) => row.location_id).filter((id): id is number => id !== null);
-  const locationId = requestedLocationId == null || requestedLocationId === ""
-    ? assigned[0] ?? await primaryLocationId(businessId)
-    : Number(requestedLocationId);
+  const requested = requestedLocationId != null && requestedLocationId !== "";
+  if (!requested && !owner && assigned.length === 0) {
+    return { error: "You aren't assigned to any location", status: 400 };
+  }
+  const locationId = requested
+    ? Number(requestedLocationId)
+    : assigned[0] ?? await primaryLocationId(businessId);
 
   if (!Number.isInteger(locationId) || locationId < 1) {
     return { error: "Invalid location_id", status: 400 };
   }
-  if (requestedLocationId != null && assigned.length > 0 && !assigned.includes(locationId)) {
+  if (requested && !owner && !assigned.includes(locationId)) {
     return { error: "You cannot access this location", status: 403 };
   }
 
@@ -146,7 +162,8 @@ export async function resolveInventoryLocation(
   return { locationId };
 }
 
+/** Whether a staff member is assigned to a location (unassigned staff can access none). */
 export async function canAccessLocation(staffId: number, locationId: number): Promise<boolean> {
   const assigned = await staffLocationIds(staffId);
-  return assigned.length === 0 || assigned.includes(locationId);
+  return assigned.includes(locationId);
 }

@@ -52,14 +52,14 @@ beforeEach(() => {
 
 describe("PATCH /api/staff/[id]/locations", () => {
   it("lets a manager assign staff to multiple locations and writes an audit log", async () => {
-    const res = await patch(floatingManager, "13", { location_ids: [2, 1, 2] });
+    const res = await patch(owner, "13", { location_ids: [2, 1, 2] });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ success: true, staff: { id: 13, name: "Cook", location_ids: [1, 2] } });
     expect(assigned(13)).toEqual([1, 2]);
     expect(fakeDb.rows("audit_logs")).toEqual([
       expect.objectContaining({
         business_id: 1,
-        staff_id: 11,
+        staff_id: 12,
         action: "staff_location_assignment",
         entity_type: "staff",
         entity_id: 13,
@@ -69,7 +69,7 @@ describe("PATCH /api/staff/[id]/locations", () => {
   });
 
   it("an empty array unassigns the staff member", async () => {
-    const res = await patch(floatingManager, "13", { location_ids: [] });
+    const res = await patch(kitchenManager, "13", { location_ids: [] });
     expect(res.status).toBe(200);
     expect(assigned(13)).toEqual([]);
     expect(fakeDb.rows("audit_logs")[0].changes).toEqual({ from: [1], to: [] });
@@ -94,6 +94,14 @@ describe("PATCH /api/staff/[id]/locations", () => {
     expect((await patch(kitchenManager, "10", { location_ids: [1, 2] })).status).toBe(403);
     expect(assigned(13)).toEqual([1]);
     expect(assigned(10)).toEqual([1]);
+  });
+
+  it("stops an unassigned manager handing out any location, their own included", async () => {
+    expect((await patch(floatingManager, "13", { location_ids: [1, 2] })).status).toBe(403);
+    expect((await patch(floatingManager, "11", { location_ids: [1] })).status).toBe(403);
+    expect(assigned(13)).toEqual([1]);
+    expect(assigned(11)).toEqual([]);
+    expect(fakeDb.rows("audit_logs")).toHaveLength(0);
   });
 
   it("404s for staff of another business", async () => {

@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
   }
   const db = bizDb(session.businessId);
   const { searchParams } = new URL(req.url);
-  const location = await resolveInventoryLocation(session.businessId, session.id, searchParams.get("location_id"));
+  const location = await resolveInventoryLocation(session.businessId, session.id, searchParams.get("location_id"), session.owner);
   if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
   const ingredientId = searchParams.get("ingredient_id");
   const movementType = searchParams.get("movement_type");
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
-    const location = await resolveInventoryLocation(session.businessId, session.id, null);
+    const location = await resolveInventoryLocation(session.businessId, session.id, null, session.owner);
     if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
     const { ingredient_id, movement_type, quantity, reason } = await req.json();
     if (!ingredient_id || !movement_type || !quantity) {

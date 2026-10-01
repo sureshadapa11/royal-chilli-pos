@@ -12,7 +12,7 @@ function parseId(id: string): number | null {
 
 /**
  * GET /api/staff/[id]/locations — List locations assigned to a staff member.
- * Empty array means staff can work at all locations.
+ * Empty array means the staff member is unassigned (no location access).
  */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
@@ -100,8 +100,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
 /**
  * PATCH /api/staff/[id]/locations — Replace a staff member's location assignments.
- * Body: { location_ids: number[] } — an empty array unassigns them (they can
- * then work at every location).
+ * Body: { location_ids: number[] } — an empty array unassigns them (they then
+ * have no location access until reassigned).
  */
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
@@ -143,11 +143,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const toAdd = next.filter((id) => !current.includes(id));
     const toRemove = current.filter((id) => !next.includes(id));
 
-    // A manager limited to some locations can only hand out (or take away)
-    // those locations — never widen anyone's access, their own included.
+    // A manager can only hand out (or take away) the locations they're
+    // assigned to — never widen anyone's access, their own included. An
+    // unassigned manager has no locations, so only the group owner can make
+    // their first assignment.
     if (!session.owner) {
       const own = await staffLocationIds(session.id);
-      if (own.length > 0 && [...toAdd, ...toRemove].some((id) => !own.includes(id))) {
+      if ([...toAdd, ...toRemove].some((id) => !own.includes(id))) {
         return NextResponse.json({ error: "You can only assign locations you work at" }, { status: 403 });
       }
     }
