@@ -6,7 +6,7 @@ import { cancelOrderAndFreeTable } from "@/lib/orders";
 import { recalcTotals } from "@/lib/order-totals";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { queueKitchenTicketSafely } from "@/lib/print-queue";
-import { staffLocationFilter } from "@/lib/location-filter";
+import { staffLocationIds } from "@/lib/locations";
 
 export async function GET(
   req: NextRequest,
@@ -35,9 +35,10 @@ export async function GET(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    // Check location filter: if staff has assigned locations, verify this order belongs to one
-    const locationFilter = await staffLocationFilter(session.id);
-    if (locationFilter && !locationFilter.in.includes(order.location_id)) {
+    // Check location filter: if staff has assigned locations, verify this order belongs to one.
+    // NULL location_id is allowed for backward compatibility (staff with no restrictions see all).
+    const assignedLocationIds = await staffLocationIds(session.id);
+    if (assignedLocationIds.length > 0 && order.location_id !== null && !assignedLocationIds.includes(order.location_id)) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -92,9 +93,9 @@ export async function PUT(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    // Check location filter
-    const locationFilter = await staffLocationFilter(session.id);
-    if (locationFilter && !locationFilter.in.includes(order.location_id)) {
+    // Check location filter: if staff has assigned locations, verify access
+    const assignedLocationIds = await staffLocationIds(session.id);
+    if (assignedLocationIds.length > 0 && order.location_id !== null && !assignedLocationIds.includes(order.location_id)) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -257,8 +258,8 @@ export async function DELETE(
     }
 
     // Check location filter
-    const locationFilter = await staffLocationFilter(session.id);
-    if (locationFilter && !locationFilter.in.includes(order.location_id)) {
+    const assignedLocationIds = await staffLocationIds(session.id);
+    if (assignedLocationIds.length > 0 && order.location_id !== null && !assignedLocationIds.includes(order.location_id)) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 

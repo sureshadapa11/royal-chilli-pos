@@ -6,7 +6,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { computeBill } from "@/lib/order-totals";
-import { staffLocationFilter } from "@/lib/location-filter";
+import { staffLocationIds } from "@/lib/locations";
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,10 +35,11 @@ export async function GET(req: NextRequest) {
       `)
       .order("created_at", { ascending: false });
 
-    // Apply location filter: if staff has assigned locations, only show those
-    const locationFilter = await staffLocationFilter(session.id);
-    if (locationFilter) {
-      query = query.in("location_id", locationFilter.in);
+    // Apply location filter: if staff has assigned locations, only show those.
+    // If no restrictions, show all (including orders with NULL location_id for backward compatibility).
+    const assignedLocationIds = await staffLocationIds(session.id);
+    if (assignedLocationIds.length > 0) {
+      query = query.in("location_id", assignedLocationIds);
     }
 
     if (status === "open") {
@@ -143,7 +144,7 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const {
-      location_id,
+      location_id: providedLocationId,
       order_type,
       table_id,
       customer_name,
@@ -164,14 +165,26 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!location_id) {
-      return NextResponse.json(
-        { error: "location_id is required" },
-        { status: 400 }
-      );
-    }
-
     const db = bizDb(session.businessId);
+
+    // Determine the location_id: use provided, or auto-detect from staff assignments
+    let location_id = providedLocationId;
+    if (!location_id) {
+      const assignedLocationIds = await staffLocationIds(session.id);
+      if (assignedLocationIds.length === 1) {
+        // Staff is assigned to exactly one location — use it
+        location_id = assignedLocationIds[0];
+      } else if (assignedLocationIds.length === 0) {
+        // Staff has no restrictions — default to location 1 (business's primary location)
+        location_id = 1;
+      } else {
+        // Staff is assigned to multiple locations — they must choose
+        return NextResponse.json(
+          { error: "Please choose a location" },
+          { status: 400 }
+        );
+      }
+    }
 
     // Verify location exists and belongs to this business
     const { data: location, error: locError } = await db
@@ -185,8 +198,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Verify staff can access this location (if they have restrictions)
-    const locationFilter = await staffLocationFilter(session.id);
-    if (locationFilter && !locationFilter.in.includes(location_id)) {
+    const assignedLocationIds = await staffLocationIds(session.id);
+    if (assignedLocationIds.length > 0 && !assignedLocationIds.includes(location_id)) {
       return NextResponse.json({ error: "You cannot create orders at this location" }, { status: 403 });
     }
 
