@@ -19,7 +19,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const db = bizDb(session.businessId);
     const { id } = await params;
 
-    const { data: stockTake, error: stErr } = await db.from("stock_takes").select("status").eq("id", id).single();
+    const { data: stockTake, error: stErr } = await db.from("stock_takes").select("status, location_id").eq("id", id).single();
     if (stErr || !stockTake) return NextResponse.json({ error: "Stock take not found" }, { status: 404 });
     if (stockTake.status !== "submitted") {
       return NextResponse.json({ error: `Stock take is ${stockTake.status}, not submitted` }, { status: 400 });
@@ -46,6 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           reference_id: Number(id),
           reason: line.reason_code || "count_error",
           staff_id: session.id,
+          location_id: stockTake.location_id,
         });
         if (moveErr) throw moveErr;
       }

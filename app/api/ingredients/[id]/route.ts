@@ -27,7 +27,8 @@ export async function PATCH(
     if (typeof updates.name === "string") {
       updates.name = updates.name.trim().replace(/\s+/g, " ");
       if (!updates.name) return NextResponse.json({ error: "Name is required" }, { status: 400 });
-      const existing = await findActiveByName("ingredients", updates.name as string, Number(id), session.businessId);
+      const { data: current } = await db.from("ingredients").select("location_id").eq("id", id).maybeSingle();
+      const existing = await findActiveByName("ingredients", updates.name as string, Number(id), session.businessId, current?.location_id ?? undefined);
       if (existing) return NextResponse.json({ error: `"${existing.name}" is already an ingredient` }, { status: 409 });
     }
 

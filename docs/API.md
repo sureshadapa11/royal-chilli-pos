@@ -474,13 +474,15 @@ Computes real hours worked per active employee from attendance data (`computeHou
 
 ### `GET /api/ingredients`
 **Auth:** `canManageInventory(session.role)`
-**Query:** `low_stock` (`"1"` filters to `current_stock <= reorder_level`), `search` (name, case-insensitive)
+**Query:** `location_id` (defaults to the caller's primary location, or `1`), `low_stock` (`"1"` filters to `current_stock <= reorder_level`), `search` (name, case-insensitive)
 **Response:** `{ ingredients }` — supplier name flattened in
+Ingredients assigned to no location are shared and appear at every location.
 
 ### `POST /api/ingredients`
 **Auth:** `canManageInventory(session.role)`
 **Body:** `{ name, unit, reorder_level?, reorder_quantity?, cost_per_unit?, supplier_id?, opening_stock? }` — name + unit required
 **Response:** `201 { success: true, ingredient }`
+The new ingredient is assigned to the caller's primary location (or location `1` when unassigned).
 If `opening_stock > 0`, immediately records a `stock_movements` row of type `adjustment` — **every stock change, even the very first one, goes through the movements ledger.**
 
 ### `PATCH /api/ingredients/:id`
@@ -529,7 +531,7 @@ Auto-generates order number `PO-YYYYMMDD-###` (sequence per day, from a same-day
 **Auth:** `canManageInventory(session.role)`
 **Body:** `{ items?: [{item_id, received_quantity?, expiry_date?}] }`
 **Response:** `{ success: true, purchaseOrder }`
-Rejects if already `received` or `cancelled`. For each PO line item, records the received quantity (defaulting to the ordered quantity if no override given) and inserts a `stock_movements` row of type `purchase` — **stock changes are audit-tracked the same as everywhere else, never a direct increment.** Also updates each ingredient's `cost_per_unit` to the just-received unit cost (used for recipe costing) and stores per-line `expiry_date`.
+Rejects if already `received` or `cancelled`. For each PO line item, records the received quantity (defaulting to the ordered quantity if no override given) and inserts a `stock_movements` row of type `purchase` at the caller's primary location — **stock changes are audit-tracked the same as everywhere else, never a direct increment.** Also updates each ingredient's `cost_per_unit` to the just-received unit cost (used for recipe costing) and stores per-line `expiry_date`.
 
 ### `GET /api/recipes`
 **Auth:** `canManageInventory(session.role)`
@@ -552,7 +554,7 @@ If `ingredients` is present, full-replaces the ingredient list (delete-then-inse
 
 ### `GET /api/stock-movements`
 **Auth:** `canManageInventory(session.role)`
-**Query:** `ingredient_id`, `movement_type`, `from`, `to` (capped at 500 rows, newest first)
+**Query:** `location_id` (defaults to the caller's primary location, or `1`), `ingredient_id`, `movement_type`, `from`, `to` (capped at 500 rows, newest first)
 **Response:** `{ movements }` — ingredient name/unit and staff name flattened in
 
 ### `POST /api/stock-movements`
@@ -560,6 +562,7 @@ If `ingredients` is present, full-replaces the ingredient list (delete-then-inse
 **Body:** `{ ingredient_id, movement_type: "waste"|"adjustment"|"usage", quantity, reason? }`
 **Response:** `201 { success: true, movement }`
 Rejects `movement_type="purchase"` and anything else outside the three allowed values — purchases must go through PO receiving instead. `waste`/`usage` always store a negative delta (server forces the sign via `-Math.abs(...)`); `adjustment` trusts the client-submitted signed delta as-is.
+Movements are recorded at the caller's primary location.
 
 ### `GET /api/inventory/alerts`
 **Auth:** `canManageInventory(session.role)`
@@ -568,13 +571,14 @@ Rejects `movement_type="purchase"` and anything else outside the three allowed v
 
 ### `GET /api/stock-takes`
 **Auth:** `canManageInventory(session.role)`
+**Query:** `location_id` (defaults to the caller's primary location, or `1`)
 **Response:** `{ stockTakes }` — counted-by staff name flattened in, newest first
 
 ### `POST /api/stock-takes`
 **Auth:** `canManageInventory(session.role)`
-**Body:** `{ location?: "all"|"dry"|"chiller"|"freezer" }` — defaults to `"all"`
+**Body:** `{ location_id? }` — defaults to the caller's primary location, or `1`
 **Response:** `201 { success: true, stockTake }`
-Opens a take and snapshots every active ingredient's `current_stock` into `stock_take_lines.system_qty` — frozen at this instant so sales during the count don't move the baseline.
+Opens a take for that location and snapshots active location-specific and shared ingredients' `current_stock` into `stock_take_lines.system_qty` — frozen at this instant so sales during the count don't move the baseline.
 
 ### `GET /api/stock-takes/:id`
 **Auth:** `canManageInventory(session.role)`
