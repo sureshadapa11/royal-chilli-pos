@@ -15,7 +15,7 @@ import { canAccess, isStaffManagement, canManageFinance, canManageInventory } fr
 
 describe("canAccess — default matrix", () => {
   it("admin sees every tab", () => {
-    for (const t of ["attendance", "hr", "menu", "tables", "inventory", "finance", "analytics", "reports", "audit", "settings"] as const) {
+    for (const t of ["attendance", "hr", "menu", "tables", "inventory", "website", "finance", "analytics", "reports", "audit", "settings"] as const) {
       expect(canAccess("admin", t)).toBe(true);
     }
   });
@@ -24,12 +24,14 @@ describe("canAccess — default matrix", () => {
     expect(canAccess("employee", "menu")).toBe(false);
     expect(canAccess("employee", "attendance")).toBe(false);
     expect(canAccess("employee", "settings")).toBe(false);
+    expect(canAccess("employee", "website")).toBe(false);
   });
 
   it("manager: operations + attendance/finance/reports, not hr/audit/settings", () => {
     expect(canAccess("manager", "menu")).toBe(true);
     expect(canAccess("manager", "tables")).toBe(true);
     expect(canAccess("manager", "inventory")).toBe(true);
+    expect(canAccess("manager", "website")).toBe(true);
     expect(canAccess("manager", "attendance")).toBe(true);
     expect(canAccess("manager", "finance")).toBe(true);
     expect(canAccess("manager", "reports")).toBe(true);
@@ -45,6 +47,7 @@ describe("canAccess — default matrix", () => {
     expect(canAccess("hr", "reports")).toBe(true);
     expect(canAccess("hr", "menu")).toBe(false);
     expect(canAccess("hr", "inventory")).toBe(false);
+    expect(canAccess("hr", "website")).toBe(false);
     expect(canAccess("hr", "analytics")).toBe(false);
     expect(canAccess("hr", "settings")).toBe(false);
   });

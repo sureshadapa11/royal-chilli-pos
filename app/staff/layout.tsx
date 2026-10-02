@@ -42,6 +42,7 @@ export default async function StaffHubLayout({
         ...(see("inventory") ? [{ href: "/staff/inventory", label: "Inventory", icon: "📦" }] : []),
         ...(canManageDrivers(session.role) ? [{ href: "/staff/drivers", label: "Drivers", icon: "🚗" }] : []),
         ...(see("finance") ? [{ href: "/staff/platforms", label: "Delivery platforms", icon: "🛵", note: "Enter daily totals" }] : []),
+        ...(see("website") ? [{ href: "/staff/website", label: "Website", icon: "🌐" }] : []),
         { href: "/pos", label: "Till", icon: "💷" },
       ],
     },
