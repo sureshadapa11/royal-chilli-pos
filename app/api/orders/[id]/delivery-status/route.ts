@@ -21,7 +21,7 @@ export async function POST(
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     const { id } = await params;
-    const { status } = await req.json();
+    const { status, payment_method } = await req.json();
 
     const db = bizDb(session.businessId);
     const { data: order, error: fetchErr } = await db.from("orders").select("driver_id, delivery_status").eq("id", id).single();
@@ -34,14 +34,20 @@ export async function POST(
     }
 
     if (status === "delivered") {
-      // Cash on delivery is settled here: the cash still owed is recorded as
-      // a real payment (reference 'delivery_cash') and the order marked
+      // Pay on delivery is settled here: the money still owed is recorded as
+      // a real payment (reference 'delivery_collected', cash or card as the
+      // customer paid the driver — Close Day counts the two separately) and the order marked
       // delivered + paid in one transaction (complete_delivery, migration 095)
       // — so a double tap can't collect twice, and the takings have an audit row.
+      const method = payment_method ?? "cash";
+      if (method !== "cash" && method !== "card") {
+        return NextResponse.json({ error: "Payment method must be cash or card" }, { status: 400 });
+      }
       const { data: rpcData, error: rpcErr } = await supabase.rpc("complete_delivery", {
         p_business_id: session.businessId,
         p_order_id: Number(id),
         p_driver_id: session.id,
+        p_method: method,
       });
       if (rpcErr) throw rpcErr;
       const result = rpcData as { outcome: string; delivery_status?: string; collected?: number | string; order?: Record<string, unknown> };
@@ -54,6 +60,8 @@ export async function POST(
           return NextResponse.json({ error: "This order was cancelled" }, { status: 400 });
         case "wrong_status":
           return NextResponse.json({ error: `Cannot move from ${result.delivery_status} to delivered` }, { status: 409 });
+        case "invalid_method":
+          return NextResponse.json({ error: "Payment method must be cash or card" }, { status: 400 });
       }
 
       const delivered = result.order as { id: number; total: number | string; customer_id: number | null };

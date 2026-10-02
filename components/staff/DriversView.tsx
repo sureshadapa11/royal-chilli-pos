@@ -6,7 +6,7 @@ import { confirmDelete } from "@/components/ui/confirm";
 
 type Driver = { id: number; name: string; phone: string | null; vehicle_type: string | null; vehicle_registration: string | null; driver_status: string; delivered_count: number; delivered_value: number };
 type UnassignedOrder = { id: number; order_number: string; customer_name: string; customer_phone: string; customer_address: string; total: number };
-type MyDelivery = { id: number; order_number: string; customer_name: string; customer_phone: string; customer_address: string; total: number; delivery_status: string };
+type MyDelivery = { id: number; order_number: string; customer_name: string; customer_phone: string; customer_address: string; total: number; amount_paid: number | null; delivery_status: string };
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 
@@ -96,8 +96,8 @@ function DriverPanel() {
     await fetch("/api/drivers/status", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: s }) });
   }
 
-  async function advance(orderId: number, next: string) {
-    await fetch(`/api/orders/${orderId}/delivery-status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: next }) });
+  async function advance(orderId: number, next: string, paymentMethod?: "cash" | "card") {
+    await fetch(`/api/orders/${orderId}/delivery-status`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: next, payment_method: paymentMethod }) });
     load();
   }
 
@@ -119,7 +119,17 @@ function DriverPanel() {
             <p className="text-muted-foreground text-sm">📞 <a href={`tel:${d.customer_phone}`} className="text-blue-600">{d.customer_phone}</a></p>
             <div className="mt-2">
               {d.delivery_status === "assigned" && <button onClick={() => advance(d.id, "out_for_delivery")} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded-lg">🚗 Start Delivery</button>}
-              {d.delivery_status === "out_for_delivery" && <button onClick={() => advance(d.id, "delivered")} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg">✓ Mark Delivered</button>}
+              {d.delivery_status === "out_for_delivery" && (Number(d.total) - Number(d.amount_paid || 0) > 0.009 ? (
+                // Money still owed — the driver says how the customer paid,
+                // so Close Day counts it as cash or card correctly.
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-muted-foreground text-xs">Collect {fmtMoney(Number(d.total) - Number(d.amount_paid || 0))}:</span>
+                  <button onClick={() => advance(d.id, "delivered", "cash")} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg">✓ Delivered · Paid cash</button>
+                  <button onClick={() => advance(d.id, "delivered", "card")} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg">✓ Delivered · Paid card</button>
+                </div>
+              ) : (
+                <button onClick={() => advance(d.id, "delivered")} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg">✓ Mark Delivered (paid online)</button>
+              ))}
             </div>
           </div>
         ))}

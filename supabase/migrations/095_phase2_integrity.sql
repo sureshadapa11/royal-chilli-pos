@@ -31,9 +31,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS payments_online_reference_once
   ON payments (order_id, reference)
   WHERE method = 'card_online' AND reference IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS payments_delivery_cash_once
+DROP INDEX IF EXISTS payments_delivery_cash_once;
+CREATE UNIQUE INDEX IF NOT EXISTS payments_delivery_collected_once
   ON payments (order_id)
-  WHERE reference = 'delivery_cash';
+  WHERE reference = 'delivery_collected';
 
 -- 3 ──────────────────────────────────────────────────────────────────────────
 
@@ -102,14 +103,17 @@ BEGIN
   );
 END $$;
 
--- A driver hands over a cash-on-delivery order: records the cash still owed
--- as a payment (reference 'delivery_cash'), and marks it delivered + paid,
+-- A driver hands over a pay-on-delivery order: records the money still owed
+-- as a payment (reference 'delivery_collected', method 'cash' or 'card' as
+-- the customer paid the driver), and marks it delivered + paid,
 -- all in one transaction with the order row locked.
--- outcome: delivered | not_found | not_your_delivery | wrong_status | cancelled
+-- outcome: delivered | not_found | not_your_delivery | wrong_status | cancelled | invalid_method
+DROP FUNCTION IF EXISTS complete_delivery(INT, INT, INT);
 CREATE OR REPLACE FUNCTION complete_delivery(
   p_business_id INT,
   p_order_id    INT,
-  p_driver_id   INT
+  p_driver_id   INT,
+  p_method      TEXT DEFAULT 'cash'
 ) RETURNS jsonb
 LANGUAGE plpgsql
 SET search_path = public
@@ -132,10 +136,14 @@ BEGIN
     RETURN jsonb_build_object('outcome', 'wrong_status', 'delivery_status', o.delivery_status);
   END IF;
 
+  IF p_method NOT IN ('cash', 'card') THEN
+    RETURN jsonb_build_object('outcome', 'invalid_method');
+  END IF;
+
   due := round(COALESCE(o.total, 0) - COALESCE(o.amount_paid, 0), 2);
   IF due > 0.009 THEN
     INSERT INTO payments (order_id, method, amount, reference, staff_id)
-    VALUES (p_order_id, 'cash', due, 'delivery_cash', p_driver_id);
+    VALUES (p_order_id, p_method, due, 'delivery_collected', p_driver_id);
   ELSE
     due := 0;
   END IF;
@@ -194,10 +202,10 @@ END $$;
 
 -- Server only (service role). Never callable with the public anon key.
 REVOKE ALL ON FUNCTION record_order_payment(INT, INT, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, INT) FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION complete_delivery(INT, INT, INT) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION complete_delivery(INT, INT, INT, TEXT) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION post_stock_take(INT, INT, INT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION record_order_payment(INT, INT, TEXT, NUMERIC, NUMERIC, NUMERIC, TEXT, INT) TO service_role;
-GRANT EXECUTE ON FUNCTION complete_delivery(INT, INT, INT) TO service_role;
+GRANT EXECUTE ON FUNCTION complete_delivery(INT, INT, INT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION post_stock_take(INT, INT, INT) TO service_role;
 
 -- 4 ──────────────────────────────────────────────────────────────────────────

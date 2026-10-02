@@ -92,12 +92,16 @@ export async function POST(
     if (isFullyPaid) {
       // Best-effort stock depletion from recipes — never let this affect
       // whether the payment itself succeeds.
-      depleteStockForOrder(Number(id), session.id).catch((e) => console.error("Stock depletion failed for order", id, e));
+      waitUntil(depleteStockForOrder(Number(id), session.id).catch((e) => console.error("Stock depletion failed for order", id, e)));
     }
 
     // Merged/extra orders are paid in full alongside the primary one — record a real
     // payment row for each (previously they were marked paid with no payment history at all,
     // which would silently undercount cash/card totals in reporting).
+    // The primary payment is already saved by now, so a failure on one extra
+    // order must not throw: the till would show "Failed" for a bill that was
+    // taken, and skip the table/points/receipt below. Report it instead.
+    const unpaidMergedOrders: number[] = [];
     if (Array.isArray(extraOrderIds) && extraOrderIds.length > 0) {
       const { data: extraOrders } = await db.from("orders").select("id, total, amount_paid, customer_id").in("id", extraOrderIds);
       for (const extra of extraOrders || []) {
@@ -114,9 +118,13 @@ export async function POST(
           p_reference: reference ? `${reference} (merged with #${id})` : `Merged with #${id}`,
           p_staff_id: session.id,
         });
-        if (extraErr) throw extraErr;
+        if (extraErr) {
+          console.error("Payment failed for merged order", extra.id, extraErr);
+          unpaidMergedOrders.push(extra.id);
+          continue;
+        }
         if ((extraData as PaymentResult).outcome !== "recorded") continue; // paid/cancelled meanwhile
-        depleteStockForOrder(extra.id, session.id).catch((e) => console.error("Stock depletion failed for order", extra.id, e));
+        waitUntil(depleteStockForOrder(extra.id, session.id).catch((e) => console.error("Stock depletion failed for order", extra.id, e)));
         // a member linked to the table earns on every round, not just the first
         if (extra.customer_id) await awardPurchasePoints(extra.customer_id, Number(extra.total), extra.id);
         waitUntil(sendOrderPaymentReceipt(extra.id));
@@ -140,7 +148,7 @@ export async function POST(
     }
 
     const remainingAfter = Math.max(0, Math.round((Number(result.total) - Number(result.amount_paid)) * 100) / 100);
-    return NextResponse.json({ success: true, fully_paid: isFullyPaid, remaining_balance: remainingAfter });
+    return NextResponse.json({ success: true, fully_paid: isFullyPaid, remaining_balance: remainingAfter, unpaid_merged_orders: unpaidMergedOrders });
   } catch (error) {
     console.error("Payment error:", error);
     return NextResponse.json(

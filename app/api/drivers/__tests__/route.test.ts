@@ -41,14 +41,42 @@ jest.mock("@/lib/supabase", () => {
             const rows = run();
             return Promise.resolve(rows.length === 1 ? { data: rows[0], error: null } : { data: null, error: { message: "not found" } });
           },
+          maybeSingle: () => {
+            const rows = run();
+            return Promise.resolve({ data: rows[0] ?? null, error: null });
+          },
           then: (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
             Promise.resolve({ data: run(), error: null }).then(resolve, reject),
         };
         return builder;
       },
+      // Stand-in for complete_delivery (migration 095): same checks and
+      // outcomes, records what's owed as a payment row and marks the order.
+      rpc: (fn: string, args: Row) => {
+        if (fn !== "complete_delivery") return Promise.resolve({ data: null, error: { message: `unknown rpc ${fn}` } });
+        const o = (tables.orders ?? []).find((r) => r.id === args.p_order_id && r.business_id === args.p_business_id);
+        const out = (data: Row) => Promise.resolve({ data, error: null });
+        if (!o) return out({ outcome: "not_found" });
+        if (o.driver_id !== args.p_driver_id) return out({ outcome: "not_your_delivery" });
+        if (o.status === "cancelled") return out({ outcome: "cancelled" });
+        if (o.delivery_status !== "out_for_delivery") return out({ outcome: "wrong_status", delivery_status: o.delivery_status });
+        if (args.p_method !== "cash" && args.p_method !== "card") return out({ outcome: "invalid_method" });
+        const due = Math.round((Number(o.total ?? 0) - Number(o.amount_paid ?? 0)) * 100) / 100;
+        if (due > 0.009) {
+          (tables.payments ??= []).push({ order_id: o.id, method: args.p_method, amount: due, reference: "delivery_collected", staff_id: args.p_driver_id });
+          o.amount_paid = Number(o.amount_paid ?? 0) + due;
+        }
+        Object.assign(o, { delivery_status: "delivered", status: "paid" });
+        return out({ outcome: "delivered", collected: due > 0.009 ? due : 0, order: { ...o } });
+      },
     },
   };
 });
+
+// Follow-ups after a delivery collects money — not under test here.
+jest.mock("@vercel/functions", () => ({ waitUntil: () => {} }));
+jest.mock("@/lib/inventory", () => ({ depleteStockForOrder: () => Promise.resolve() }));
+jest.mock("@/lib/customers", () => ({ awardPurchasePoints: () => Promise.resolve() }));
 
 import { GET as listDrivers } from "@/app/api/drivers/route";
 import { GET as myDeliveries } from "@/app/api/drivers/my-deliveries/route";
@@ -192,8 +220,8 @@ describe("POST /api/orders/:id/assign-driver", () => {
 });
 
 describe("POST /api/orders/:id/delivery-status", () => {
-  const advance = async (user: SessionUser | null, id: number, status: string) =>
-    deliveryStatus(await authedRequest(`http://localhost/api/orders/${id}/delivery-status`, user, { method: "POST", body: JSON.stringify({ status }) }), params(id));
+  const advance = async (user: SessionUser | null, id: number, status: string, payment_method?: string) =>
+    deliveryStatus(await authedRequest(`http://localhost/api/orders/${id}/delivery-status`, user, { method: "POST", body: JSON.stringify({ status, payment_method }) }), params(id));
 
   it("walks a driver's own delivery through assigned → out_for_delivery → delivered", async () => {
     expect((await advance(dave, 101, "out_for_delivery")).status).toBe(200);
@@ -201,6 +229,21 @@ describe("POST /api/orders/:id/delivery-status", () => {
     const res = await advance(dave, 101, "delivered");
     expect(res.status).toBe(200);
     expect(order(101)).toMatchObject({ delivery_status: "delivered", status: "paid" });
+    // no method given = cash, as before
+    expect(tables.payments).toEqual([expect.objectContaining({ order_id: 101, method: "cash", amount: 15, reference: "delivery_collected" })]);
+  });
+
+  it("records a card payment to the driver as card, not cash", async () => {
+    await advance(dave, 101, "out_for_delivery");
+    expect((await advance(dave, 101, "delivered", "card")).status).toBe(200);
+    expect(tables.payments).toEqual([expect.objectContaining({ order_id: 101, method: "card", amount: 15 })]);
+  });
+
+  it("rejects an unknown payment method and leaves the order out for delivery", async () => {
+    await advance(dave, 101, "out_for_delivery");
+    expect((await advance(dave, 101, "delivered", "voucher")).status).toBe(400);
+    expect(order(101).delivery_status).toBe("out_for_delivery");
+    expect(tables.payments ?? []).toEqual([]);
   });
 
   it("rejects skipping or reversing a step", async () => {

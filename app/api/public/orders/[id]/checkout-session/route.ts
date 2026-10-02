@@ -24,7 +24,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: "Online ordering is currently unavailable" }, { status: 503 });
     }
     const { data: order } = await bizDb(businessId).from("orders").select("*").eq("id", id).maybeSingle();
-    if (!order) {
+    // Only a website order placed as "Pay Online Now" can be paid here. This
+    // route needs no login and order ids are sequential — without this check
+    // anyone could start a checkout on a till or dine-in order, and a started
+    // checkout keeps an unpaid order off the kitchen board.
+    if (!order || !order.pay_online || order.staff_id) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
     if (Number(order.amount_paid) >= Number(order.total)) {
@@ -51,7 +55,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ...(order.customer_email ? { customer_email: order.customer_email } : {}),
     });
 
-    await supabase.from("orders").update({ stripe_session_id: checkout.id, pay_online: true }).eq("id", id);
+    await supabase.from("orders").update({ stripe_session_id: checkout.id }).eq("id", id);
 
     return NextResponse.json({ url: checkout.url });
   } catch (error) {
