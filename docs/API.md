@@ -822,6 +822,17 @@ Validates `role`/`permission` against the known enums. Hardcoded guard: **`role 
 **Query:** `limit` (default 100, capped at 500)
 **Response:** `{ logs }` — staff name flattened in (falls back to `"System"` for entries with no `staff_id`)
 
+### `GET /api/website/config`
+**Auth:** `canAccess(session.role, "website")` (`401` no session, `403` employee/driver)
+**Query:** optional `businessId` — another business's id is only allowed for the group owner (`session.owner`, `403` otherwise)
+**Response:** `{ business, config, modules, canToggleOrdering }` — `config` is `businesses.website_config` (migration `093_website_config.sql`) filled out to the full shape in `lib/website-config.ts`
+
+### `POST /api/website/config`
+**Auth:** `canAccess(session.role, "website")`; always saves to `session.businessId` (a `businessId` in the body for another business → `403`)
+**Body:** `{ config?: Partial<WebsiteConfig>, online_ordering?: boolean }` — `online_ordering` (the `modules.online_ordering` switch) is owner-only (`403`), same as Settings → Business setup → Modules
+**Response:** `{ success: true, business, config, modules, canToggleOrdering }` (`400 { error, fields }` on validation failure: length limits, links must be `http(s)`)
+Merges into the existing config, clears the business cache and writes a `website_config_saved` audit log.
+
 ---
 
 ## 14. Misc
