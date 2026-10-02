@@ -825,13 +825,13 @@ Validates `role`/`permission` against the known enums. Hardcoded guard: **`role 
 ### `GET /api/website/config`
 **Auth:** `canAccess(session.role, "website")` (`401` no session, `403` employee/driver)
 **Query:** optional `businessId` — another business's id is only allowed for the group owner (`session.owner`, `403` otherwise)
-**Response:** `{ business, config, modules, canToggleOrdering }` — `config` is `businesses.website_config` (migration `093_website_config.sql`) filled out to the full shape in `lib/website-config.ts`
+**Response:** `{ business, config, modules, canToggleOrdering, version }` — `version` is `businesses.website_config_version` (migration `094_website_config_version.sql`); `config` is `businesses.website_config` (migration `093_website_config.sql`) filled out to the full shape in `lib/website-config.ts`
 
 ### `POST /api/website/config`
 **Auth:** `canAccess(session.role, "website")`; always saves to `session.businessId` (a `businessId` in the body for another business → `403`)
-**Body:** `{ config?: Partial<WebsiteConfig>, online_ordering?: boolean }` — `online_ordering` (the `modules.online_ordering` switch) is owner-only (`403`), same as Settings → Business setup → Modules
-**Response:** `{ success: true, business, config, modules, canToggleOrdering }` (`400 { error, fields }` on validation failure: length limits, links must be `http(s)`)
-Merges into the existing config, clears the business cache and writes a `website_config_saved` audit log.
+**Body:** `{ config?: Partial<WebsiteConfig>, online_ordering?: boolean, version?: number }` — `version` is the one the edit was based on; if someone has saved since → `409 { error, version }` (reload and retry). The update itself is also conditional on the version read, so overlapping saves never overwrite each other. `online_ordering` (the `modules.online_ordering` switch) is owner-only (`403`), same as Settings → Business setup → Modules
+**Response:** `{ success: true, business, config, modules, canToggleOrdering, version }` (`400 { error, fields }` on validation failure: length limits, links must be `http(s)`)
+Merges into the existing config, bumps `version`, clears the business cache and writes a `website_config_saved` audit log. If the audit log insert fails the change is undone and the response is `500`.
 
 ---
 

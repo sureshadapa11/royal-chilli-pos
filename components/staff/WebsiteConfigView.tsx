@@ -15,6 +15,7 @@ type Loaded = {
   config: WebsiteConfig;
   modules: Modules;
   canToggleOrdering: boolean;
+  version: number;
 };
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
@@ -25,10 +26,17 @@ const label = "mb-1 block text-xs text-muted-foreground";
 type SaveState = { saving: boolean; message: string; ok: boolean; fields: Record<string, string> };
 const idle: SaveState = { saving: false, message: "", ok: false, fields: {} };
 
-async function send(body: Record<string, unknown>): Promise<{ ok: boolean; data: Record<string, unknown> }> {
+const NETWORK_ERROR = "Couldn't reach the server — check your connection and try again";
+
+async function send(body: Record<string, unknown>): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
   const res = await fetch("/api/website/config", {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
   });
+  return { ok: res.ok, status: res.status, data: await res.json().catch(() => ({})) };
+}
+
+async function fetchConfig(): Promise<{ ok: boolean; data: Record<string, unknown> }> {
+  const res = await fetch("/api/website/config");
   return { ok: res.ok, data: await res.json().catch(() => ({})) };
 }
 
@@ -39,10 +47,13 @@ export default function WebsiteConfigView() {
   const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
-    const res = await fetch("/api/website/config");
-    const d = await res.json().catch(() => ({}));
-    if (!res.ok) return setLoadError(d.error || "Couldn't load the website settings");
-    setData(d);
+    try {
+      const { ok, data: d } = await fetchConfig();
+      if (!ok) return setLoadError(String(d.error || "Couldn't load the website settings"));
+      setData(d as unknown as Loaded);
+    } catch {
+      setLoadError(NETWORK_ERROR);
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -58,18 +69,35 @@ export default function WebsiteConfigView() {
   );
 }
 
-function useSave(onSaved: (d: Loaded) => void) {
+// Each save carries the version it was based on. If someone else saved first
+// (409), fetch the latest version and send this card's change once more — the
+// server merges it in, so other cards' changes are kept.
+function useSave(onSaved: (d: Loaded) => void, version: number) {
   const [state, setState] = useState<SaveState>(idle);
   const save = async (body: Record<string, unknown>) => {
     setState({ ...idle, saving: true });
-    const { ok, data } = await send(body);
-    if (!ok) {
-      setState({ saving: false, ok: false, message: String(data.error || "Couldn't save"), fields: (data.fields as Record<string, string>) ?? {} });
+    let result: SaveState = { ...idle, message: NETWORK_ERROR };
+    try {
+      let { ok, status, data } = await send({ ...body, version });
+      if (status === 409) {
+        const fresh = await fetchConfig();
+        if (fresh.ok) {
+          ({ ok, status, data } = await send({ ...body, version: (fresh.data as unknown as Loaded).version }));
+          if (!ok) onSaved(fresh.data as unknown as Loaded);
+        }
+      }
+      if (!ok) {
+        result = { ...idle, message: String(data.error || "Couldn't save"), fields: (data.fields as Record<string, string>) ?? {} };
+        return false;
+      }
+      result = { ...idle, ok: true, message: "Saved" };
+      onSaved(data as unknown as Loaded);
+      return true;
+    } catch {
       return false;
+    } finally {
+      setState({ ...result, saving: false });
     }
-    setState({ saving: false, ok: true, message: "Saved", fields: {} });
-    onSaved(data as unknown as Loaded);
-    return true;
   };
   return { state, save };
 }
@@ -120,7 +148,7 @@ const STATUS = {
 } as const;
 
 function OrderingCard({ data, onSaved }: { data: Loaded; onSaved: (d: Loaded) => void }) {
-  const { state, save } = useSave(onSaved);
+  const { state, save } = useSave(onSaved, data.version);
   const status = orderingStatus(data.modules.online_ordering, data.config.ordering_coming_soon);
   const channels = [
     { on: data.modules.online_ordering, text: "Website orders (collection & delivery)" },
@@ -179,7 +207,7 @@ function OrderingCard({ data, onSaved }: { data: Loaded; onSaved: (d: Loaded) =>
 // ── Homepage content ────────────────────────────────────────────────────────
 
 function HomepageCard({ data, onSaved }: { data: Loaded; onSaved: (d: Loaded) => void }) {
-  const { state, save } = useSave(onSaved);
+  const { state, save } = useSave(onSaved, data.version);
   const [form, setForm] = useState(() => pick(data.config, ["homepage_hours", "special_promo", "about", "gallery_enabled"]));
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -221,7 +249,7 @@ function HomepageCard({ data, onSaved }: { data: Loaded; onSaved: (d: Loaded) =>
 // ── SEO & social ────────────────────────────────────────────────────────────
 
 function SeoCard({ data, onSaved }: { data: Loaded; onSaved: (d: Loaded) => void }) {
-  const { state, save } = useSave(onSaved);
+  const { state, save } = useSave(onSaved, data.version);
   const [form, setForm] = useState(() => ({
     ...pick(data.config, ["seo_title", "seo_description", "og_image_url"]),
     social_links: { ...data.config.social_links },

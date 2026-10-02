@@ -6,7 +6,8 @@ jest.mock("@/lib/supabase", () => ({
   default: require("@/app/api/_test-helpers/fake-supabase").fakeSupabase,
 }));
 
-import { fakeDb } from "@/app/api/_test-helpers/fake-supabase";
+import { fakeDb, fakeSupabase } from "@/app/api/_test-helpers/fake-supabase";
+import { refreshPermissionsCache } from "@/lib/permissions";
 import { authedRequest } from "@/app/api/_test-helpers";
 import { GET, POST } from "@/app/api/website/config/route";
 
@@ -24,24 +25,28 @@ const post = async (user: SessionUser | null, body: unknown) =>
 
 const business = (id: number) => fakeDb.rows("businesses").find((b) => b.id === id)!;
 
-beforeEach(() => {
+beforeEach(async () => {
   fakeDb.reset({
     businesses: [
       {
         id: 1, name: "The Royal Chilli", tagline: "Authentic Flavours", logo_url: "https://cdn.example/rc.png",
-        domain: "theroyalchilli.com", custom_domain: null,
+        domain: "theroyalchilli.com", custom_domain: null, website_config_version: 1,
         modules: { website: true, online_ordering: false, qr_ordering: true, delivery: true, delivery_platforms: true },
         website_config: { homepage_hours: "Every day, 9:00 AM – 1:00 AM", social_links: { instagram: "https://instagram.com/rc" } },
       },
       {
-        id: 2, name: "Melt House", tagline: null, logo_url: null, domain: "melthouse.co.uk", custom_domain: null,
+        id: 2, name: "Melt House", tagline: null, logo_url: null, domain: "melthouse.co.uk", custom_domain: null, website_config_version: 1,
         modules: { website: true, online_ordering: true }, website_config: { special_promo: "Melt secret" },
       },
     ],
     role_permissions: [],
     audit_logs: [],
   });
+  // Empty role_permissions → the built-in defaults.
+  await refreshPermissionsCache();
 });
+
+afterEach(() => jest.restoreAllMocks());
 
 describe("GET /api/website/config", () => {
   it("returns the signed-in business's config, filled out to the full shape", async () => {
@@ -149,5 +154,110 @@ describe("POST /api/website/config", () => {
   it("rejects an empty request", async () => {
     expect((await post(manager, {})).status).toBe(400);
     expect((await post(owner, { online_ordering: "yes" })).status).toBe(400);
+  });
+
+  it("bumps the version on every save and refuses a save based on a stale version", async () => {
+    expect((await (await get(manager)).json()).version).toBe(1);
+
+    const first = await post(manager, { version: 1, config: { about: "First" } });
+    expect(first.status).toBe(200);
+    expect((await first.json()).version).toBe(2);
+
+    // A second editor still holding version 1 must not overwrite the first save.
+    const stale = await post(admin, { version: 1, config: { about: "Second" } });
+    expect(stale.status).toBe(409);
+    expect((await stale.json()).version).toBe(2);
+    expect(business(1).website_config).toMatchObject({ about: "First" });
+    expect(business(1).website_config_version).toBe(2);
+
+    // Retrying with the fresh version works and keeps the other fields.
+    const retry = await post(admin, { version: 2, config: { special_promo: "Second" } });
+    expect(retry.status).toBe(200);
+    expect(business(1).website_config).toMatchObject({ about: "First", special_promo: "Second" });
+    expect(business(1).website_config_version).toBe(3);
+    expect(fakeDb.rows("audit_logs")).toHaveLength(2);
+  });
+
+  it("returns 409 when another save lands between reading and writing", async () => {
+    // Simulate a concurrent save bumping the version right before our update.
+    const from = fakeSupabase.from;
+    jest.spyOn(fakeSupabase, "from").mockImplementation((table: string) => {
+      const q = from(table) as Record<string, (...a: unknown[]) => unknown>;
+      if (table !== "businesses") return q;
+      const update = q.update;
+      q.update = (...a: unknown[]) => { business(1).website_config_version = 5; return update(...a); };
+      return q;
+    });
+    const res = await post(manager, { config: { about: "Lost?" } });
+    expect(res.status).toBe(409);
+    expect(business(1).website_config).not.toHaveProperty("about");
+    expect(fakeDb.rows("audit_logs")).toHaveLength(0);
+  });
+
+  it("rejects a malformed version", async () => {
+    expect((await post(manager, { version: "1", config: { about: "x" } })).status).toBe(400);
+    expect((await post(manager, { version: 0, config: { about: "x" } })).status).toBe(400);
+  });
+
+  it("fails the save (and undoes it) when the audit log can't be written", async () => {
+    const from = fakeSupabase.from;
+    jest.spyOn(fakeSupabase, "from").mockImplementation((table: string) => {
+      if (table !== "audit_logs") return from(table);
+      return { insert: () => Promise.resolve({ data: null, error: new Error("audit down") }) } as unknown as ReturnType<typeof from>;
+    });
+    const res = await post(owner, { online_ordering: true, config: { about: "Unaudited" } });
+    expect(res.status).toBe(500);
+    expect((await res.json()).error).toMatch(/audit/i);
+    expect(business(1).website_config).not.toHaveProperty("about");
+    expect((business(1).modules as Record<string, boolean>).online_ordering).toBe(false);
+    expect(fakeDb.rows("audit_logs")).toHaveLength(0);
+  });
+});
+
+describe("manager access granted through role_permissions (migration 092)", () => {
+  beforeEach(async () => {
+    fakeDb.tables.role_permissions = [{ role: "manager", permission: "website", granted: true }];
+    await refreshPermissionsCache();
+  });
+
+  it("lets the manager read and save their business's website", async () => {
+    expect((await get(manager)).status).toBe(200);
+    const res = await post(manager, { config: { special_promo: "Manager promo" } });
+    expect(res.status).toBe(200);
+    expect(business(1).website_config).toMatchObject({ special_promo: "Manager promo" });
+  });
+
+  it("still keeps online ordering owner-only", async () => {
+    expect((await post(manager, { online_ordering: true })).status).toBe(403);
+    expect((business(1).modules as Record<string, boolean>).online_ordering).toBe(false);
+  });
+
+  it("denies managers once the table has rows but no website grant", async () => {
+    fakeDb.tables.role_permissions = [{ role: "manager", permission: "menu", granted: true }];
+    await refreshPermissionsCache();
+    expect((await get(manager)).status).toBe(403);
+    expect((await post(manager, { config: { about: "x" } })).status).toBe(403);
+  });
+});
+
+describe("plain admin (not the group owner)", () => {
+  it("reads and saves their own business's website", async () => {
+    const res = await get(admin);
+    expect(res.status).toBe(200);
+    expect((await res.json()).canToggleOrdering).toBe(false);
+    const saved = await post(admin, { config: { about: "Admin about" } });
+    expect(saved.status).toBe(200);
+    expect(business(1).website_config).toMatchObject({ about: "Admin about" });
+  });
+
+  it("can't read or save another business", async () => {
+    expect((await get(admin, "?businessId=2")).status).toBe(403);
+    expect((await post(admin, { businessId: 2, config: { about: "x" } })).status).toBe(403);
+    expect(business(2).website_config).toEqual({ special_promo: "Melt secret" });
+  });
+
+  it("can't switch online ordering — that's owner-only, like Business setup → Modules", async () => {
+    expect((await post(admin, { online_ordering: true })).status).toBe(403);
+    expect((business(1).modules as Record<string, boolean>).online_ordering).toBe(false);
   });
 });
