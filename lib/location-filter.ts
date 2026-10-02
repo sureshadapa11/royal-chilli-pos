@@ -17,10 +17,9 @@ export async function staffLocationFilter(staffId: number): Promise<{ in: number
  * If staff has no restriction, query is unchanged.
  * Otherwise, adds .in("location_id", staffLocationIds).
  */
-export async function applyLocationFilter(
-  query: ReturnType<BizDb["from"]>,
-  staffId: number,
-): Promise<ReturnType<BizDb["from"]>> {
+export async function applyLocationFilter<
+  Q extends { in(column: string, values: readonly unknown[]): Q },
+>(query: Q, staffId: number): Promise<Q> {
   const filter = await staffLocationFilter(staffId);
   if (!filter) return query;
   return query.in("location_id", filter.in);
