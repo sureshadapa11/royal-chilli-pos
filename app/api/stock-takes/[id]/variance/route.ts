@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
+import { stockTakeForCaller } from "@/lib/stock-takes";
 
 // Variance report: qty + value per line, plus a reason-code breakdown.
 // 'unknown' is the shrinkage signal — over-portioning, untracked waste, or
@@ -15,8 +16,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const db = bizDb(session.businessId);
   const { id } = await params;
 
-  const { data: stockTake, error: stErr } = await db.from("stock_takes").select("*").eq("id", id).single();
-  if (stErr || !stockTake) return NextResponse.json({ error: "Stock take not found" }, { status: 404 });
+  const access = await stockTakeForCaller(session, id);
+  if ("error" in access) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { stockTake } = access;
 
   const { data: lines, error: linesErr } = await db
     .from("stock_take_lines")

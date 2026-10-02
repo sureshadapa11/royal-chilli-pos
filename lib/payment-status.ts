@@ -14,6 +14,14 @@ export function isFullyPaid(order: Money): boolean {
   return total > 0 && Number(order.amount_paid || 0) >= total - PENNY;
 }
 
+// A pay-online website order (orders.pay_online, or one that started a Stripe
+// Checkout) whose payment hasn't landed yet — not a real order until it does,
+// so it's kept off the kitchen board and staff order lists.
+export function awaitingOnlinePayment(order: Money & { pay_online?: boolean | null; stripe_session_id?: string | null }): boolean {
+  if (!order.pay_online && !order.stripe_session_id) return false;
+  return !isFullyPaid(order);
+}
+
 // Money currently held against the order (payments minus refunds).
 export function amountHeld(order: Money): number {
   const paid = Number(order.amount_paid || 0);

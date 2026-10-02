@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { stripe, siteUrl } from "@/lib/stripe";
 import { bizDb } from "@/lib/business-db";
-import { getBusiness, websiteBusinessId } from "@/lib/business";
+import { getBusiness, onlineOrderingEnabled, websiteBusinessId } from "@/lib/business";
 
 // Creates a Stripe Checkout Session for an already-created order (from
 // POST /api/public/orders) so the customer can pay online instead of at
@@ -20,6 +20,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { id } = await params;
     const businessId = await websiteBusinessId(req.headers.get("host"));
+    if (!(await onlineOrderingEnabled(businessId))) {
+      return NextResponse.json({ error: "Online ordering is currently unavailable" }, { status: 503 });
+    }
     const { data: order } = await bizDb(businessId).from("orders").select("*").eq("id", id).maybeSingle();
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       ...(order.customer_email ? { customer_email: order.customer_email } : {}),
     });
 
-    await supabase.from("orders").update({ stripe_session_id: checkout.id }).eq("id", id);
+    await supabase.from("orders").update({ stripe_session_id: checkout.id, pay_online: true }).eq("id", id);
 
     return NextResponse.json({ url: checkout.url });
   } catch (error) {

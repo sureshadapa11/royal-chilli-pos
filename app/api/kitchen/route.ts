@@ -6,6 +6,7 @@ import { allOwned, bizDb } from "@/lib/business-db";
 import { KITCHEN_LEAD_MINUTES } from "@/lib/scheduling";
 import { getSessionFromRequest } from "@/lib/auth";
 import { openTableOrders, roundNumbers } from "@/lib/kitchen-rounds";
+import { awaitingOnlinePayment } from "@/lib/payment-status";
 
 export async function GET(req: NextRequest) {
   try {
@@ -35,6 +36,10 @@ export async function GET(req: NextRequest) {
     // time of its slot (KITCHEN_LEAD_MINUTES, lib/scheduling.ts).
     const now = Date.now();
     const orders = (rawOrders ?? []).filter((o) => {
+      // A website order the customer chose to pay online isn't real until
+      // Stripe confirms the payment (webhook) — an abandoned or failed
+      // checkout must never reach the kitchen to be cooked.
+      if (awaitingOnlinePayment(o)) return false;
       if (!o.scheduled_for) return true;
       const leadMinutes = KITCHEN_LEAD_MINUTES[o.order_type] ?? 30;
       return new Date(o.scheduled_for).getTime() - now <= leadMinutes * 60_000;

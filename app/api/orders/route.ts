@@ -7,6 +7,7 @@ import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { computeBill } from "@/lib/order-totals";
 import { staffLocationIds } from "@/lib/locations";
+import { awaitingOnlinePayment } from "@/lib/payment-status";
 
 export async function GET(req: NextRequest) {
   try {
@@ -86,13 +87,11 @@ export async function GET(req: NextRequest) {
     });
 
     if (source === "website") {
-      // A stripe_session_id means the customer chose to pay online — don't
+      // A pay-online order (pay_online / stripe_session_id) — don't
       // surface it to staff (who'd otherwise start cooking) until the
       // webhook actually confirms payment. An order with no session (paid
       // at collection/delivery) still shows immediately as normal.
-      flatOrders = flatOrders.filter(
-        (o) => !o.stripe_session_id || Number(o.amount_paid) >= Number(o.total)
-      );
+      flatOrders = flatOrders.filter((o) => !awaitingOnlinePayment(o));
     }
 
     if (detailed && flatOrders.length > 0) {
