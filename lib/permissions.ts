@@ -10,14 +10,16 @@ export const ROLE_LABELS: Record<StaffRole, string> = {
   admin: "Admin",
 };
 
-// One permission per Staff Hub tab (tab-level access, per the owner's decision —
-// no finer-grained switches). `role_permissions.permission` holds these keys.
+// One permission per Staff Hub tab (tab-level access, per the owner's decision),
+// plus approve_stock_takes: posting a counted stock take is a separate sign-off
+// from counting it (Inventory). `role_permissions.permission` holds these keys.
 export const TAB_KEYS = [
   "attendance",
   "hr",
   "menu",
   "tables",
   "inventory",
+  "approve_stock_takes",
   "website",
   "finance",
   "analytics",
@@ -34,6 +36,7 @@ export const TAB_LABELS: Record<TabKey, string> = {
   menu: "Menu Management",
   tables: "Tables",
   inventory: "Inventory",
+  approve_stock_takes: "Approve Stock Takes",
   website: "Website",
   finance: "Finance",
   analytics: "Analytics",
@@ -51,6 +54,7 @@ const DEFAULTS: Record<TabKey, StaffRole[]> = {
   menu: ["manager", "admin"],
   tables: ["manager", "admin"],
   inventory: ["manager", "admin"],
+  approve_stock_takes: ["manager", "admin"],
   website: ["manager", "admin"],
   finance: ["manager", "hr", "admin"],
   analytics: ["manager", "admin"],
@@ -120,7 +124,7 @@ export function isStaffManagement(role: StaffRole): boolean {
 export const canManageStaff = (role: StaffRole) => isStaffManagement(role);
 export const canManageInventory = (role: StaffRole) => canAccess(role, "inventory");
 export const canManageFinance = (role: StaffRole) => canAccess(role, "finance");
-export const canApproveStockTakes = (role: StaffRole) => canAccess(role, "inventory");
+export const canApproveStockTakes = (role: StaffRole) => canAccess(role, "approve_stock_takes");
 // Drivers (roster + assigning deliveries) and Customers & Loyalty share this
 // admin/manager gate; both are linked from the Staff Hub sidebar.
 export const canViewCrm = (role: StaffRole) => role === "admin" || role === "manager";

@@ -5,7 +5,7 @@ import { generateOrderNumber } from "@/lib/orders";
 import { customerForOrder } from "@/lib/customers";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { resolveItemWithModifiers } from "@/lib/modifiers";
-import { websiteBusinessId } from "@/lib/business";
+import { onlineOrderingEnabled, websiteBusinessId } from "@/lib/business";
 import { bizDb } from "@/lib/business-db";
 import { priceTypeFor } from "@/lib/menu";
 import { validateScheduledTime } from "@/lib/scheduling";
@@ -36,6 +36,12 @@ export async function POST(req: NextRequest) {
       pay_online, // customer picked "Pay Online Now" — a checkout session follows this call
       items, // [{ menu_item_id, quantity, notes, selected_options }]
     } = body;
+
+    // Operations → Website "Online ordering" switch (modules.online_ordering):
+    // off means the website takes no orders at all, whatever the page shows.
+    if (!(await onlineOrderingEnabled(businessId))) {
+      return NextResponse.json({ error: "Online ordering is currently unavailable" }, { status: 503 });
+    }
 
     if (order_type !== "takeaway" && order_type !== "delivery") {
       return NextResponse.json({ error: "Invalid order type" }, { status: 400 });
@@ -139,6 +145,8 @@ export async function POST(req: NextRequest) {
         customer_postcode: order_type === "delivery" ? customer_postcode.trim().toUpperCase() : null,
         delivery_zone_id: null, // no more named zones — eligibility is a live 5-mile radius check
         status: "sent_to_kitchen",
+        // Kept off the kitchen board until the payment lands (GET /api/kitchen).
+        pay_online: pay_online === true,
         scheduled_for: scheduled_for || null,
         work_period_id: workPeriod?.id || null,
         subtotal: Math.round(subtotal * 100) / 100,

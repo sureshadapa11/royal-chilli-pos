@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
+import { stockTakeForCaller } from "@/lib/stock-takes";
 
 // Hands an open count over for approval — no ledger writes yet, just a
 // status flip. Posting (which writes stock_movements) now only happens
@@ -15,8 +16,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const db = bizDb(session.businessId);
     const { id } = await params;
 
-    const { data: stockTake, error: stErr } = await db.from("stock_takes").select("status").eq("id", id).single();
-    if (stErr || !stockTake) return NextResponse.json({ error: "Stock take not found" }, { status: 404 });
+    const access = await stockTakeForCaller(session, id);
+    if ("error" in access) return NextResponse.json({ error: access.error }, { status: access.status });
+    const { stockTake } = access;
     if (stockTake.status !== "open") {
       return NextResponse.json({ error: `Stock take is already ${stockTake.status}` }, { status: 400 });
     }
@@ -25,9 +27,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .from("stock_takes")
       .update({ status: "submitted" })
       .eq("id", id)
+      .eq("status", "open")
       .select()
-      .single();
+      .maybeSingle();
     if (subErr) throw subErr;
+    // Someone else moved it on between the read and this write.
+    if (!submitted) return NextResponse.json({ error: "This stock take was just changed — refresh and try again" }, { status: 409 });
 
     return NextResponse.json({ success: true, stockTake: submitted });
   } catch (error) {

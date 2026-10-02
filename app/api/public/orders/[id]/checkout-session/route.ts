@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { stripe, siteUrl } from "@/lib/stripe";
 import { bizDb } from "@/lib/business-db";
-import { getBusiness, websiteBusinessId } from "@/lib/business";
+import { getBusiness, onlineOrderingEnabled, websiteBusinessId } from "@/lib/business";
 
 // Creates a Stripe Checkout Session for an already-created order (from
 // POST /api/public/orders) so the customer can pay online instead of at
@@ -20,8 +20,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { id } = await params;
     const businessId = await websiteBusinessId(req.headers.get("host"));
+    if (!(await onlineOrderingEnabled(businessId))) {
+      return NextResponse.json({ error: "Online ordering is currently unavailable" }, { status: 503 });
+    }
     const { data: order } = await bizDb(businessId).from("orders").select("*").eq("id", id).maybeSingle();
-    if (!order) {
+    // Only a website order placed as "Pay Online Now" can be paid here. This
+    // route needs no login and order ids are sequential — without this check
+    // anyone could start a checkout on a till or dine-in order, and a started
+    // checkout keeps an unpaid order off the kitchen board.
+    if (!order || !order.pay_online || order.staff_id) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
     if (Number(order.amount_paid) >= Number(order.total)) {

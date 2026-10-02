@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await bizDb(session.businessId)
     .from("orders")
-    .select("id, order_number, customer_name, customer_phone, customer_address, total, delivery_status")
+    .select("id, order_number, customer_name, customer_phone, customer_address, total, amount_paid, delivery_status")
     .eq("driver_id", session.id)
     .in("delivery_status", ["assigned", "out_for_delivery"])
     .order("created_at", { ascending: true });

@@ -37,25 +37,29 @@ export async function POST(req: NextRequest) {
 
     try {
       if (type === "order" && order_id) {
-        // Stripe can redeliver the same event (retries, manual resend) — guard
-        // against inserting a second payment row for a session we've already
-        // recorded, since there's no DB-level unique constraint on reference.
-        const { data: existingPayment } = await supabase
-          .from("payments").select("id").eq("order_id", Number(order_id)).eq("reference", session.id).maybeSingle();
+        // Stripe can redeliver the same event (retries, manual resend), and
+        // two deliveries can arrive at once. The database allows one
+        // card_online payment per (order, session) — payments_online_reference_once,
+        // migration 095 — so whichever insert loses is a duplicate and
+        // skips every follow-up below (points, stock, ticket, email).
         const { data: order } = await supabase
           .from("orders")
           .select("order_number, order_type, subtotal, total, amount_paid, scheduled_for, customer_id, customer_name, customer_email, customer_address, customer_postcode")
           .eq("id", order_id).single();
-        if (!existingPayment && order && Number(order.amount_paid) < Number(order.total)) {
-          const amount = (session.amount_total || 0) / 100;
-          await supabase.from("payments").insert({
+        let recorded = false;
+        const amount = (session.amount_total || 0) / 100;
+        if (order && Number(order.amount_paid) < Number(order.total)) {
+          const { error: insertErr } = await supabase.from("payments").insert({
             order_id: Number(order_id),
             method: "card_online",
             amount,
             staff_id: null,
             reference: session.id,
           });
-
+          if (insertErr && (insertErr as { code?: string }).code !== "23505") throw insertErr;
+          recorded = !insertErr;
+        }
+        if (order && recorded) {
           // Fully paid online: the same follow-ups a till payment runs —
           // loyalty points for a signed-in customer and stock depletion —
           // which online payments used to skip. Inside the idempotency guard,

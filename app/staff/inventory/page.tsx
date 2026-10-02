@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { canAccess } from "@/lib/permissions";
+import { canAccess, canApproveStockTakes } from "@/lib/permissions";
 import InventoryView from "@/components/staff/InventoryView";
 
 export default async function InventoryPage() {
@@ -8,5 +8,5 @@ export default async function InventoryPage() {
   if (!session || !canAccess(session.role, "inventory")) {
     redirect("/staff");
   }
-  return <InventoryView canApproveStockTakes={canAccess(session.role, "inventory")} canRecordSpending={canAccess(session.role, "finance")} />;
+  return <InventoryView canApproveStockTakes={canApproveStockTakes(session.role)} canRecordSpending={canAccess(session.role, "finance")} />;
 }

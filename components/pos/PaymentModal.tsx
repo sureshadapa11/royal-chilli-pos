@@ -490,6 +490,9 @@ export default function PaymentModal({
         return;
       }
 
+      if (data.unpaid_merged_orders?.length) {
+        toast({ variant: "destructive", title: "Some merged orders weren't paid", description: "This bill was taken, but check the merged orders in Open Orders and settle them." });
+      }
       setLastPaymentAmount(amount);
       // Derive amountPaidSoFar from the server's authoritative remaining
       // balance (localTotal - remaining) rather than setting remainingBalance

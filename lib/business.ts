@@ -177,3 +177,14 @@ export async function orderNumberPrefix(businessId: number): Promise<string> {
 export async function poNumberPrefix(businessId: number): Promise<string> {
   return (await getBusiness(businessId))?.po_prefix || "PO";
 }
+
+/**
+ * Is website ordering switched on for this business (modules.online_ordering)?
+ * Read straight from the database rather than the per-instance cache above, so
+ * switching ordering off takes effect on every server at once.
+ */
+export async function onlineOrderingEnabled(businessId: number): Promise<boolean> {
+  const { data, error } = await supabase.from("businesses").select("modules").eq("id", businessId).maybeSingle();
+  if (error) throw error;
+  return (data as { modules?: Partial<BusinessModules> | null } | null)?.modules?.online_ordering === true;
+}

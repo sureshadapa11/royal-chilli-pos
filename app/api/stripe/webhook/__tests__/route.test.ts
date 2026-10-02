@@ -1,11 +1,12 @@
-// Verifies the idempotency guard added alongside the webhook signature check:
-// a redelivered checkout.session.completed event for an order that already
-// has a payment recorded under that session id must not insert a second
-// payment row.
+// Verifies the webhook's idempotency: a redelivered checkout.session.completed
+// event for an order that already has a payment under that session id must
+// not record a second payment. The database enforces this with a unique index
+// (payments_online_reference_once, migration 095); the fake below rejects a
+// repeat (order, reference) with the same 23505 error Postgres returns.
 type Row = Record<string, unknown>;
 
 let insertedPayments: Row[];
-let existingPaymentForReference: Row | null;
+let existingReferences: Set<string>;
 let orderRow: Row | null;
 
 const fakeEvent = {
@@ -34,14 +35,12 @@ jest.mock("@/lib/supabase", () => ({
     from: (table: string) => {
       if (table === "payments") {
         return {
-          select: () => ({
-            eq: () => ({
-              eq: () => ({
-                maybeSingle: () => Promise.resolve({ data: existingPaymentForReference, error: null }),
-              }),
-            }),
-          }),
           insert: (vals: Row) => {
+            const key = `${vals.order_id}:${vals.reference}`;
+            if (existingReferences.has(key)) {
+              return Promise.resolve({ data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } });
+            }
+            existingReferences.add(key);
             insertedPayments.push(vals);
             return Promise.resolve({ data: null, error: null });
           },
@@ -71,7 +70,7 @@ function webhookRequest() {
 beforeEach(() => {
   process.env.STRIPE_WEBHOOK_SECRET = "whsec_test";
   insertedPayments = [];
-  existingPaymentForReference = null;
+  existingReferences = new Set();
   orderRow = { amount_paid: 0, total: 25 };
 });
 
@@ -84,7 +83,7 @@ describe("POST /api/stripe/webhook — idempotency", () => {
   });
 
   it("does not insert a second payment when the same event is redelivered", async () => {
-    existingPaymentForReference = { id: 1 };
+    existingReferences.add("7:cs_test_123");
     const res = await POST(webhookRequest());
     expect(res.status).toBe(200);
     expect(insertedPayments).toHaveLength(0);

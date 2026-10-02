@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageInventory } from "@/lib/permissions";
+import { stockTakeForCaller } from "@/lib/stock-takes";
 
 // The count sheet: every line with system vs counted qty (and variance, since
 // it's a generated column so it's always live even before posting).
@@ -13,8 +14,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const db = bizDb(session.businessId);
   const { id } = await params;
 
-  const { data: stockTake, error: stErr } = await db.from("stock_takes").select("*").eq("id", id).single();
-  if (stErr || !stockTake) return NextResponse.json({ error: "Stock take not found" }, { status: 404 });
+  const access = await stockTakeForCaller(session, id);
+  if ("error" in access) return NextResponse.json({ error: access.error }, { status: access.status });
+  const { stockTake } = access;
 
   const { data: lines, error: linesErr } = await db
     .from("stock_take_lines")
