@@ -4,7 +4,9 @@ import { getBusiness } from "@/lib/business";
 
 // Delivery eligibility: calculated radius from the restaurant, computed
 // by geocoding postcodes via postcodes.io (a free, no-key-required UK postcode API).
-// Scoped per business, falling back to The Royal Chilli's Hounslow location.
+// Scoped per business. Only The Royal Chilli falls back to its Hounslow
+// location; another business with no coordinates or postcode set up doesn't
+// deliver at all (rather than silently delivering around Hounslow).
 
 const DEFAULT_LAT = 51.471985;
 const DEFAULT_LNG = -0.355561;
@@ -15,8 +17,8 @@ export const FREE_DELIVERY_THRESHOLD = 25;
 export const MIN_DELIVERY_ORDER = 10;
 
 export type DeliveryConfig = {
-  restaurantLat: number;
-  restaurantLng: number;
+  restaurantLat: number | null;
+  restaurantLng: number | null;
   maxDeliveryMiles: number;
   deliveryFee: number;
   freeDeliveryThreshold: number;
@@ -50,10 +52,6 @@ export async function getDeliveryConfig(businessId: number = DEFAULT_BUSINESS_ID
           lat = point.lat;
           lng = point.lng;
         }
-      }
-      if (lat == null || lng == null) {
-        lat = DEFAULT_LAT;
-        lng = DEFAULT_LNG;
       }
     }
   }
@@ -111,6 +109,7 @@ export async function checkDeliveryEligibility(
   businessId: number = DEFAULT_BUSINESS_ID
 ): Promise<DeliveryEligibility> {
   const config = await getDeliveryConfig(businessId);
+  if (config.restaurantLat == null || config.restaurantLng == null) return { deliverable: false, config };
   const point = await geocodePostcode(postcode);
   if (!point) return { deliverable: false, config };
   const distanceMiles = haversineMiles(config.restaurantLat, config.restaurantLng, point.lat, point.lng);

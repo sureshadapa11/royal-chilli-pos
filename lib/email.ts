@@ -86,10 +86,11 @@ const esc = (v: string) => (v || "").replace(/&/g, "&amp;").replace(/</g, "&lt;"
 // (Gmail/Outlook show their own "Unsubscribe" button) alongside the footer link.
 async function sendBrevoEmail(to: string, subject: string, html: string, unsubscribeUrl?: string, brand?: EmailBrand) {
   if (!BREVO_API_KEY) return;
-  const sender = {
-    name: brand?.name ?? FROM.name,
-    email: brand?.email ?? FROM.email,
-  };
+  // Always send from the Brevo-verified address (an unverified sender domain is
+  // rejected); the business's own name shows as the sender and replies go to
+  // its own inbox.
+  const sender = { name: brand?.name ?? FROM.name, email: FROM.email };
+  const replyTo = brand?.email && brand.email !== FROM.email ? { email: brand.email, name: brand.name } : undefined;
   try {
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -100,6 +101,7 @@ async function sendBrevoEmail(to: string, subject: string, html: string, unsubsc
       },
       body: JSON.stringify({
         sender,
+        ...(replyTo ? { replyTo } : {}),
         to: [{ email: to }],
         subject,
         htmlContent: html,
