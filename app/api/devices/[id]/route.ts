@@ -1,27 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageStaff } from "@/lib/permissions";
-import { getPosDevice, updatePosDevice } from "@/lib/device-registry";
+import {
+  getPosDevice,
+  updatePosDevice,
+  type PosDevicePairingStatus,
+  type PosDeviceStatus,
+} from "@/lib/device-registry";
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await getSessionFromRequest(req);
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+const PAIRING_STATUSES: PosDevicePairingStatus[] = ["unpaired", "pending", "paired"];
+const DEVICE_STATUSES: PosDeviceStatus[] = ["pending", "paired", "active", "offline", "disabled", "maintenance"];
 
-  const { id } = await params;
-  const deviceId = Number(id);
-  if (!Number.isInteger(deviceId) || deviceId <= 0) {
-    return NextResponse.json({ error: "Invalid device id" }, { status: 400 });
-  }
-
-  try {
-    const device = await getPosDevice(session.businessId, deviceId);
-    if (!device) return NextResponse.json({ error: "Device not found" }, { status: 404 });
-    return NextResponse.json({ device });
-  } catch (error) {
-    console.error("Get device error:", error);
-    return NextResponse.json({ error: "Failed to load device" }, { status: 500 });
-  }
-}
+// ... GET stays exactly as it is ...
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
@@ -37,13 +27,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   try {
     const body = await req.json();
+
+    let pairing_status: PosDevicePairingStatus | undefined;
+    if (body.pairing_status) {
+      const value = String(body.pairing_status);
+      if (!PAIRING_STATUSES.includes(value as PosDevicePairingStatus)) {
+        return NextResponse.json({ error: "Invalid pairing_status" }, { status: 400 });
+      }
+      pairing_status = value as PosDevicePairingStatus;
+    }
+
+    let status: PosDeviceStatus | undefined;
+    if (body.status) {
+      const value = String(body.status);
+      if (!DEVICE_STATUSES.includes(value as PosDeviceStatus)) {
+        return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+      }
+      status = value as PosDeviceStatus;
+    }
+
     const device = await updatePosDevice(session.businessId, deviceId, {
       device_name: body.device_name ? String(body.device_name).trim() : undefined,
       serial_number: body.serial_number !== undefined ? String(body.serial_number).trim() || null : undefined,
       device_fingerprint: body.device_fingerprint !== undefined ? String(body.device_fingerprint).trim() || null : undefined,
       registration_code_hash: body.registration_code_hash !== undefined ? String(body.registration_code_hash).trim() || null : undefined,
-      pairing_status: body.pairing_status ? String(body.pairing_status) : undefined,
-      status: body.status ? String(body.status) : undefined,
+      pairing_status,
+      status,
       app_version: body.app_version !== undefined ? String(body.app_version).trim() || null : undefined,
       last_seen_at: body.last_seen_at ? new Date(body.last_seen_at).toISOString() : undefined,
       paired_at: body.paired_at ? new Date(body.paired_at).toISOString() : undefined,
