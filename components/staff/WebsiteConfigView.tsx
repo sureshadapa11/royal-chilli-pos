@@ -63,7 +63,6 @@ export default function WebsiteConfigView() {
   return (
     <>
       <OrderingCard data={data} onSaved={setData} />
-      <HomepageCard data={data} onSaved={setData} />
       <SeoCard data={data} onSaved={setData} />
     </>
   );
@@ -200,48 +199,6 @@ function OrderingCard({ data, onSaved }: { data: Loaded; onSaved: (d: Loaded) =>
           {state.ok ? "✓ Saved" : state.message}
         </p>
       )}
-    </section>
-  );
-}
-
-// ── Homepage content ────────────────────────────────────────────────────────
-
-function HomepageCard({ data, onSaved }: { data: Loaded; onSaved: (d: Loaded) => void }) {
-  const { state, save } = useSave(onSaved, data.version);
-  const [form, setForm] = useState(() => pick(data.config, ["homepage_hours", "special_promo", "about", "gallery_enabled"]));
-  const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
-
-  return (
-    <section className={card} aria-labelledby="website-homepage">
-      <SectionTitle id="website-homepage" title="Homepage content" />
-      <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); save({ config: form }); }}>
-        <div>
-          <label htmlFor="wc-hours" className={label}>Opening hours</label>
-          <input id="wc-hours" className={input} maxLength={LIMITS.homepage_hours} placeholder="Every day, 9:00 AM – 1:00 AM"
-            value={form.homepage_hours} onChange={(e) => set("homepage_hours", e.target.value)} />
-          <FieldError msg={state.fields.homepage_hours} />
-        </div>
-        <div>
-          <label htmlFor="wc-promo" className={label}>Special promotion / banner</label>
-          <textarea id="wc-promo" rows={2} className={input} maxLength={LIMITS.special_promo} placeholder="e.g. 20% off collection orders every Monday"
-            value={form.special_promo} onChange={(e) => set("special_promo", e.target.value)} />
-          <Counter value={form.special_promo} max={LIMITS.special_promo} />
-          <FieldError msg={state.fields.special_promo} />
-        </div>
-        <div>
-          <label htmlFor="wc-about" className={label}>About / tagline</label>
-          <textarea id="wc-about" rows={3} className={input} maxLength={LIMITS.about} placeholder={data.business.tagline || "A line or two about your business"}
-            value={form.about} onChange={(e) => set("about", e.target.value)} />
-          <Counter value={form.about} max={LIMITS.about} />
-          <p className="text-xs text-muted-foreground">Left blank, the website uses the tagline from Settings → Business setup.</p>
-          <FieldError msg={state.fields.about} />
-        </div>
-        <label className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm text-foreground">
-          <input type="checkbox" className="h-4 w-4 accent-red-600" checked={form.gallery_enabled} onChange={(e) => set("gallery_enabled", e.target.checked)} />
-          Show the gallery section on the website
-        </label>
-        <SaveRow state={state} />
-      </form>
     </section>
   );
 }

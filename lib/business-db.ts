@@ -18,6 +18,8 @@ export const BUSINESS_TABLES = new Set([
   "audit_logs", "loyalty_transactions", "platform_sales", "staff_messages", "attendance_corrections",
   // 098: day-end accounts sheet
   "daily_accounts",
+  // 104: website traffic and gallery
+  "page_views", "website_gallery",
   // 079: every business independent
   "suppliers", "customers", "loyalty_tiers", "loyalty_rewards", "loyalty_redemptions", "newsletter_subscribers",
   // 080/084: per-business setup and directly scopeable children.

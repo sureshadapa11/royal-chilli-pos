@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { canAccess } from "@/lib/permissions";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
-const ALLOWED_FOLDERS = new Set(["hero", "dishes"]);
+const ALLOWED_FOLDERS = new Set(["hero", "dishes", "menu", "gallery"]);
 
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  // Website photos (Website → Menu & photos) and homepage photos (Settings).
+  if (!session || !(canAccess(session.role, "website") || canAccess(session.role, "settings"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
   const folderInput = form.get("folder");
   const folder = typeof folderInput === "string" && ALLOWED_FOLDERS.has(folderInput) ? folderInput : "hero";
   const ext = file.name.split(".").pop() || "jpg";
-  const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  const path = `b${session.businessId}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
   const { error } = await supabase.storage
     .from("site-content")

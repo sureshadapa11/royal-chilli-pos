@@ -47,6 +47,8 @@ export type MenuItem = {
   protein_g: number | null;
   carbs_g: number | null;
   fat_g: number | null;
+  /** The dish's photo (Staff Hub → Website → Menu & photos), if any. */
+  image_url: string | null;
   modifierGroups: MenuItemModifierGroup[];
 };
 
@@ -75,7 +77,7 @@ export async function getActiveMenu(businessId: number, channel: MenuChannel = "
   const availabilityCol = channel === "online" ? "online_available" : "pos_available";
   const { data: items, error: itemErr } = await db
     .from("menu_items")
-    .select("id, category_id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g, sold_out_until")
+    .select("id, category_id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g, sold_out_until, image_url")
     .eq("active", 1)
     .eq(availabilityCol, 1)
     .order("display_order");
@@ -121,7 +123,7 @@ export async function getActiveMenu(businessId: number, channel: MenuChannel = "
       items: (items || [])
         // Dishes marked sold out at the till are left off (website, table QR).
         .filter((i) => i.category_id === c.id && !isSoldOut(i))
-        .map(({ id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g }) => ({
+        .map(({ id, name, description, price, online_price, is_veg, display_order, allergens, calories, protein_g, carbs_g, fat_g, image_url }) => ({
           id, name, description,
           price: basePriceFor({ price, online_price }, "collection"),
           delivery_price: basePriceFor({ price, online_price }, "delivery"),
@@ -131,6 +133,7 @@ export async function getActiveMenu(businessId: number, channel: MenuChannel = "
           protein_g: protein_g !== null ? Number(protein_g) : null,
           carbs_g: carbs_g !== null ? Number(carbs_g) : null,
           fat_g: fat_g !== null ? Number(fat_g) : null,
+          image_url: image_url ?? null,
           modifierGroups: modifierGroupsByItem.get(id) || [],
         })),
     }))
