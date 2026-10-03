@@ -6,6 +6,6 @@ import PlatformSalesView from "@/components/staff/PlatformSalesView";
 
 export default async function PlatformsPage() {
   const session = await getSession();
-  if (!session || !canAccess(session.role, "finance")) redirect("/staff");
+  if (!session || !canAccess(session.role, "delivery_platforms")) redirect("/staff");
   return <PlatformSalesView today={tradingDayStr()} />;
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageFinance } from "@/lib/permissions";
+import { canManageDailyAccounts } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { tillFigures } from "@/lib/daily-accounts";
 import { DAILY_KEYS } from "@/lib/daily-accounts-fields";
@@ -17,7 +17,7 @@ const canUnlock = (s: { role: string; owner?: boolean }) => !!s.owner || s.role 
 /** GET ?date=YYYY-MM-DD → the saved sheet (or null) and the till's figures to pre-fill it. */
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageFinance(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !canManageDailyAccounts(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const date = req.nextUrl.searchParams.get("date") ?? "";
   if (!DATE.test(date)) return NextResponse.json({ error: "Pick a date" }, { status: 400 });
 
@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
 /** PUT { date, values: { z_report: 123.45, … }, notes, submit } — save a draft, or submit. */
 export async function PUT(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageFinance(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !canManageDailyAccounts(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json().catch(() => null);
   const date = String(body?.date ?? "");
   if (!DATE.test(date)) return NextResponse.json({ error: "Pick a date" }, { status: 400 });

@@ -7,7 +7,7 @@ import DailyAccountsPage from "@/components/staff/DailyAccountsPage";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ date?: string; month?: string }> }) {
   const session = await getSession();
-  if (!session || !canAccess(session.role, "finance")) redirect("/staff");
+  if (!session || !canAccess(session.role, "daily_accounts")) redirect("/staff");
   const today = tradingDayStr();
   // ?date= from the reminder opens that day; ?month= (Summary → Open sheet) opens the month.
   const { date, month } = await searchParams;

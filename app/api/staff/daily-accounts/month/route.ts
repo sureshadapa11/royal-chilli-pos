@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageFinance } from "@/lib/permissions";
+import { canManageDailyAccounts } from "@/lib/permissions";
 import { columnTotals, savedDays } from "@/lib/daily-accounts";
 
 // GET ?month=YYYY-MM → that month's saved day-end sheets (draft and submitted)
 // and the month total row, like the paper Daily Accounts Report.
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageFinance(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !canManageDailyAccounts(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const month = req.nextUrl.searchParams.get("month") ?? "";
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return NextResponse.json({ error: "Pick a month" }, { status: 400 });
 
