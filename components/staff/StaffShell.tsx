@@ -93,7 +93,10 @@ export default function StaffShell({
 
   return (
     <div className="min-h-screen bg-background" style={{ fontFamily: "var(--font-worksans)" }}>
-      <header ref={barRef} className="sticky top-0 z-30 border-b border-border bg-white print:hidden">
+      {/* z-35: above pages' own sticky headings (z-30, e.g. Customers & Loyalty),
+          so this bar's dropdown menus are never hidden behind them; below the
+          phone drawer (z-40/50). */}
+      <header ref={barRef} className="sticky top-0 z-[35] border-b border-border bg-white print:hidden">
         <div className="mx-auto flex max-w-[1240px] items-center gap-4 px-4 py-2.5">
           <Link href="/staff" className="flex min-w-0 items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
