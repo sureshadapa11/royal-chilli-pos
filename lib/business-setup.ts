@@ -84,7 +84,7 @@ export const MODULES: { key: string; label: string }[] = [
   { key: "inventory", label: "Stock & recipes" },
   { key: "rewards", label: "Rewards club" },
   { key: "food_safety", label: "Food safety records" },
-  { key: "delivery_platforms", label: "Delivery platforms (Just Eat, Uber Eats, Deliveroo)" },
+  { key: "delivery_platforms", label: "Delivery platforms (Just Eat, Uber Eats, Deliveroo, Hiest)" },
 ];
 
 export const SECTIONS: SectionDef[] = [

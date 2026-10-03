@@ -154,7 +154,7 @@ function OrderingCard({ data, onSaved }: { data: Loaded; onSaved: (d: Loaded) =>
     { on: data.modules.online_ordering, text: "Website orders (collection & delivery)" },
     { on: data.modules.qr_ordering, text: "QR table ordering" },
     { on: data.modules.delivery, text: "Own delivery drivers" },
-    { on: data.modules.delivery_platforms, text: "Delivery platforms (Just Eat, Uber Eats, Deliveroo)" },
+    { on: data.modules.delivery_platforms, text: "Delivery platforms (Just Eat, Uber Eats, Deliveroo, Hiest)" },
   ].filter((c) => c.on);
 
   return (

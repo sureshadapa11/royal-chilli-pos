@@ -45,7 +45,7 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
     out.push({ icon: "🕐", text: `${pending} waiting for approval`, sub: "Leave requests & time corrections", href: "/api/sso/attendance" });
   }
   if (platforms && !platforms.error && (platforms.count ?? 0) === 0) {
-    out.push({ icon: "🛵", text: "Enter yesterday's platform totals", sub: "Just Eat, Uber Eats, Deliveroo", href: "/staff/platforms" });
+    out.push({ icon: "🛵", text: "Enter yesterday's platform totals", sub: "Just Eat, Uber Eats, Deliveroo, Hiest", href: "/staff/platforms" });
   }
   return out;
 }

@@ -10,9 +10,9 @@ import type { AdminDashboard as Data, RangeKey } from "@/lib/admin-dashboard";
 
 // Admin-only Staff Hub home. Fixed colour per channel (never by rank), one
 // y-axis per chart, hover tooltips everywhere, legends on multi-series charts.
-const S = { s1: "#2a78d6", s2: "#eb6834", s3: "#1baf7a", s4: "#eda100", s5: "#e87ba4", s6: "#4a3aa7", neutral: "#B9B0A4" };
+const S = { s1: "#2a78d6", s2: "#eb6834", s3: "#1baf7a", s4: "#eda100", s5: "#e87ba4", s6: "#4a3aa7", s7: "#0e8a8c", neutral: "#B9B0A4" };
 const CHANNEL_COLOUR: Record<string, string> = {
-  dine_in: S.s1, takeaway: S.s2, delivery: S.s3, just_eat: S.s4, uber_eats: S.s5, deliveroo: S.s6,
+  dine_in: S.s1, takeaway: S.s2, delivery: S.s3, just_eat: S.s4, uber_eats: S.s5, deliveroo: S.s6, hiest: S.s7,
 };
 const GRID = "#F0EBDF";
 const INK_MUTED = "#8A8078";
