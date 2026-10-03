@@ -211,3 +211,86 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
     },
   };
 }
+
+// ── Owner: every business combined ("Working in: All businesses") ────────────
+
+const add = (a: number, b: number) => r2(a + b);
+
+/**
+ * Several businesses' dashboards as one: every figure added up, comparisons
+ * worked out again from the totals (not averaged), and top dishes from all of
+ * them, each labelled with its business. Pure.
+ */
+export function mergeDashboards(list: { name: string; data: AdminDashboard }[]): AdminDashboard {
+  if (list.length === 1) return list[0].data;
+  const [first, ...rest] = list.map((l) => l.data);
+  const today = first.today;
+
+  const byIndex = <T,>(pick: (d: AdminDashboard) => T[], sum: (a: T, b: T) => T) =>
+    pick(first).map((row, i) => rest.reduce((acc, d) => sum(acc, pick(d)[i] ?? acc), row));
+  const byKey = <T extends { key: string }>(pick: (d: AdminDashboard) => T[], sum: (a: T, b: T) => T): T[] => {
+    const out = new Map<string, T>();
+    for (const d of [first, ...rest]) for (const row of pick(d)) out.set(row.key, out.has(row.key) ? sum(out.get(row.key)!, row) : { ...row });
+    return [...out.values()];
+  };
+
+  const week = byIndex((d) => d.week, (a, b) => ({ ...a, revenue: add(a.revenue, b.revenue), lastWeek: add(a.lastWeek, b.lastWeek), staffCost: add(a.staffCost, b.staffCost) }));
+  const todayRevenue = list.reduce((s, l) => add(s, l.data.todayRevenue), 0);
+  const daysSoFar = week.filter((d) => d.date <= today);
+  const sm = list.map((l) => l.data.summary);
+  const da = sm.map((s) => s.dailyAccounts).filter((d): d is DailySummary => !!d);
+  const sumDa = (f: (d: DailySummary) => number) => da.reduce((s, d) => add(s, f(d)), 0);
+  const balances = (f: (d: DailySummary) => number | null) => {
+    const v = da.map(f).filter((x): x is number => x != null);
+    return v.length ? v.reduce(add, 0) : null;
+  };
+
+  return {
+    today,
+    todayRevenue,
+    todayVsLastWeekPct: pct(todayRevenue, week.find((d) => d.date === today)?.lastWeek ?? 0),
+    todayHourly: byIndex((d) => d.todayHourly, (a, b) => ({ ...a, revenue: add(a.revenue, b.revenue) })),
+    week,
+    weekRevenue: list.reduce((s, l) => add(s, l.data.weekRevenue), 0),
+    weekVsLastWeekPct: pct(daysSoFar.reduce((s, d) => s + d.revenue, 0), daysSoFar.reduce((s, d) => s + d.lastWeek, 0)),
+    channels: byKey((d) => d.channels, (a, b) => ({ ...a, revenue: add(a.revenue, b.revenue), orders: a.orders + b.orders })),
+    topDishes: list
+      .flatMap((l) => l.data.topDishes.map((t) => ({ ...t, name: `${t.name} · ${l.name}` })))
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 8),
+    platforms: byKey((d) => d.platforms, (a, b) => ({ ...a, orders: a.orders + b.orders, sales: add(a.sales, b.sales), commission: add(a.commission, b.commission), keep: add(a.keep, b.keep) })),
+    platformsMissingYesterday: list.some((l) => l.data.platformsMissingYesterday),
+    summary: {
+      range: first.summary.range,
+      from: first.summary.from,
+      to: first.summary.to,
+      totalSales: sm.reduce((s, x) => add(s, x.totalSales), 0),
+      exVat: sm.reduce((s, x) => add(s, x.exVat), 0),
+      costs: {
+        ingredients: sm.reduce((s, x) => add(s, x.costs.ingredients), 0),
+        staff: sm.reduce((s, x) => add(s, x.costs.staff), 0),
+        expenses: sm.reduce((s, x) => add(s, x.costs.expenses), 0),
+        expenseLines: first.summary.costs.expenseLines.map((l) => ({
+          ...l, amount: sm.reduce((s, x) => add(s, x.costs.expenseLines.find((y) => y.key === l.key)?.amount ?? 0), 0),
+        })),
+        commission: sm.reduce((s, x) => add(s, x.costs.commission), 0),
+        cardFees: sm.reduce((s, x) => add(s, x.costs.cardFees), 0),
+        total: sm.reduce((s, x) => add(s, x.costs.total), 0),
+      },
+      profit: sm.reduce((s, x) => add(s, x.profit), 0),
+      dailyAccounts: da.length ? {
+        bankIn: sumDa((d) => d.bankIn),
+        cash: sumDa((d) => d.cash),
+        notBanked: sumDa((d) => d.notBanked),
+        pending: sumDa((d) => d.pending),
+        cateringPaid: sumDa((d) => d.cateringPaid),
+        cateringPending: sumDa((d) => d.cateringPending),
+        opening: balances((d) => d.opening),
+        closing: balances((d) => d.closing),
+        submitted: da.reduce((s, d) => s + d.submitted, 0),
+        daysSoFar: da.reduce((s, d) => s + d.daysSoFar, 0),
+        missing: da.flatMap((d) => d.missing),
+      } : null,
+    },
+  };
+}

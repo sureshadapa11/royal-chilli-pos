@@ -8,6 +8,8 @@ import { getBrand } from "@/lib/brand";
 import StaffShell, { type NavGroup } from "@/components/staff/StaffShell";
 import { Toaster } from "@/components/ui/toaster";
 import NewOrderAlerts from "@/components/pos/NewOrderAlerts";
+import { cookies } from "next/headers";
+import { ALL_BUSINESSES_COOKIE } from "@/lib/owner-view";
 
 export const metadata: Metadata = { title: "Staff Hub", robots: { index: false } };
 
@@ -79,11 +81,15 @@ export default async function StaffHubLayout({
     ? (await listBusinesses()).map((b) => ({ id: b.id, name: b.name, active: b.active }))
     : undefined;
 
+  // Owner chose "Working in: All businesses" (lib/owner-view).
+  const allMode = !!session.owner && (await cookies()).get(ALL_BUSINESSES_COOKIE)?.value === "1";
+
   return (
     <StaffShell
       user={{ name: session.name, role: session.role }}
       business={{ id: session.businessId, name: brand.name, logoUrl: brand.logoUrl, tagline: brand.tagline }}
       switcher={switcher}
+      allMode={allMode}
       nav={nav}
       notices={notices}
     >
