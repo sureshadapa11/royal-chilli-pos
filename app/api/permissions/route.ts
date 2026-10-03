@@ -6,6 +6,7 @@ import {
   TAB_KEYS,
   TAB_LABELS,
   ROLE_LABELS,
+  LEVELS,
   getPermissionMatrix,
   refreshPermissionsCache,
 } from "@/lib/permissions";
@@ -33,13 +34,16 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { role, permission, granted } = await req.json();
+    // { role, permission, level: "off" | "view" | "full" } (older callers send granted).
+    const body = await req.json();
+    const { role, permission } = body;
+    const level: string | undefined = typeof body.level === "string" ? body.level : typeof body.granted === "boolean" ? (body.granted ? "full" : "off") : undefined;
     if (
       !ALL_ROLES.includes(role) ||
       !(TAB_KEYS as readonly string[]).includes(permission) ||
-      typeof granted !== "boolean"
+      !level || !(LEVELS as readonly string[]).includes(level)
     ) {
-      return NextResponse.json({ error: "Invalid role, tab, or value" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid role, area, or level" }, { status: 400 });
     }
     // Super admin always has everything; Front House and Kitchen never see
     // Staff Hub — none of them is editable.
@@ -49,7 +53,7 @@ export async function PUT(req: NextRequest) {
 
     const { error } = await supabase
       .from("role_permissions")
-      .upsert({ role, permission, granted }, { onConflict: "role,permission" });
+      .upsert({ role, permission, level, granted: level !== "off" }, { onConflict: "role,permission" });
     if (error) throw error;
 
     await refreshPermissionsCache();

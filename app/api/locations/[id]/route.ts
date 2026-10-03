@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { manageAllows } from "@/lib/permissions";
 import { getLocation, updateLocation } from "@/lib/locations";
 
 function parseId(id: string): number | null {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !manageAllows(session.role, "settings", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

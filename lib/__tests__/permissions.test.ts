@@ -11,7 +11,7 @@ jest.mock("../supabase", () => ({
   },
 }));
 
-import { canAccess, isStaffManagement, canManageFinance, canManageInventory } from "@/lib/permissions";
+import { canAccess, canEdit, levelOf, areaAllows, manageAllows, isStaffManagement, canManageFinance, canManageInventory, canManageCrm, canViewCrm } from "@/lib/permissions";
 
 describe("canAccess — default matrix", () => {
   it("Super admin sees every area", () => {
@@ -29,15 +29,18 @@ describe("canAccess — default matrix", () => {
     expect(canAccess("kitchen", "menu")).toBe(false);
   });
 
-  it("Manager: operations, attendance, customers, settings — no HR, no Insights", () => {
-    for (const role of ["manager"] as const) {
-      for (const t of ["menu", "tables", "inventory", "approve_stock_takes", "drivers", "delivery_platforms", "daily_accounts", "website", "till", "attendance", "customers", "settings"] as const) {
-        expect(canAccess(role, t)).toBe(true);
-      }
-      for (const t of ["hr", "analytics", "reports", "finance", "audit"] as const) {
-        expect(canAccess(role, t)).toBe(false);
-      }
+  it("Manager: full on the day-to-day areas, view only on Customers and Insights, no HR or Audit log", () => {
+    for (const t of ["menu", "tables", "inventory", "approve_stock_takes", "drivers", "delivery_platforms", "daily_accounts", "website", "till", "attendance", "settings"] as const) {
+      expect(levelOf("manager", t)).toBe("full");
     }
+    for (const t of ["customers", "analytics", "reports", "finance"] as const) {
+      expect(levelOf("manager", t)).toBe("view");
+      expect(canAccess("manager", t)).toBe(true);
+      expect(canEdit("manager", t)).toBe(false);
+      expect(areaAllows("manager", t, "GET")).toBe(true);
+      expect(areaAllows("manager", t, "POST")).toBe(false);
+    }
+    for (const t of ["hr", "audit"] as const) expect(canAccess("manager", t)).toBe(false);
   });
 
   it("HR: attendance, HR & Payroll, reports only", () => {
@@ -62,7 +65,13 @@ describe("helpers", () => {
 
   it("legacy shims map to tabs", () => {
     expect(canManageFinance("hr")).toBe(false);
-    expect(canManageFinance("manager")).toBe(false);
+    expect(canManageFinance("manager")).toBe(true); // view
+    expect(canViewCrm("manager")).toBe(true);
+    expect(canManageCrm("manager")).toBe(false);
+    // Shared data: any management role reads it, changing needs full.
+    expect(manageAllows("hr", "menu", "GET")).toBe(true);
+    expect(manageAllows("hr", "menu", "PATCH")).toBe(false);
+    expect(manageAllows("manager", "menu", "PATCH")).toBe(true);
     expect(canManageInventory("hr")).toBe(false);
     expect(canManageInventory("manager")).toBe(true);
   });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { canEdit } from "@/lib/permissions";
 
 const EDITABLE_FIELDS = [
   "category_id", "name", "description", "price", "online_price", "is_veg", "active", "display_order",
@@ -15,7 +15,8 @@ export async function PATCH(
 ) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageStaff(session.role)) {
+    // Menu → edit a dish, or Website → Menu & photos (online switch, photo).
+    if (!session || !(canEdit(session.role, "menu") || canEdit(session.role, "website"))) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);

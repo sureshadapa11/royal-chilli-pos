@@ -54,65 +54,59 @@ export const TAB_LABELS: Record<TabKey, string> = {
   settings: "Settings",
 };
 
-// The agreed defaults — also the seed for role_permissions (migration 102) and
-// the fail-closed fallback if that table can't be read. Super admin always has
-// everything; Front House only the till; Kitchen nothing here. Manager:
-// operations, attendance, customers
-// and settings — no HR & Payroll, no Insights (analytics, reports, finance,
-// audit log). HR: attendance, HR & Payroll and reports.
-const MGR: StaffRole[] = ["manager", "admin"];
-const DEFAULTS: Record<TabKey, StaffRole[]> = {
-  menu: MGR,
-  tables: MGR,
-  inventory: MGR,
-  approve_stock_takes: MGR,
-  drivers: MGR,
-  delivery_platforms: MGR,
-  daily_accounts: MGR,
-  website: MGR,
-  till: MGR,
-  attendance: ["manager", "hr", "admin"],
-  hr: ["hr", "admin"],
-  customers: MGR,
-  analytics: ["admin"],
-  reports: ["hr", "admin"],
-  finance: ["admin"],
-  audit: ["admin"],
-  settings: MGR,
+// Each role gets one of three levels per area (agreed 2026-10-03):
+//   off  — not in their menu; the area's APIs refuse them
+//   view — they can open it and see everything, but change nothing (every
+//          non-GET request is refused; the page says "View only")
+//   full — see and change
+export const LEVELS = ["off", "view", "full"] as const;
+export type Level = (typeof LEVELS)[number];
+
+// The agreed defaults — also the seed for role_permissions (migrations
+// 102/106) and the fallback if that table can't be read. Super admin always
+// has everything, Front House only the till, Kitchen nothing here. Manager:
+// full on the day-to-day areas; view only on Customers & Loyalty and the
+// Insights pages (Analytics, Reports, Finance); no HR & Payroll or Audit log.
+// HR: Attendance & Rota, HR & Payroll and Reports.
+const DEFAULTS: Record<TabKey, Partial<Record<StaffRole, Level>>> = {
+  menu: { manager: "full" },
+  tables: { manager: "full" },
+  inventory: { manager: "full" },
+  approve_stock_takes: { manager: "full" },
+  drivers: { manager: "full" },
+  delivery_platforms: { manager: "full" },
+  daily_accounts: { manager: "full" },
+  website: { manager: "full" },
+  till: { manager: "full" },
+  attendance: { manager: "full", hr: "full" },
+  hr: { hr: "full" },
+  customers: { manager: "view" },
+  analytics: { manager: "view" },
+  reports: { manager: "view", hr: "full" },
+  finance: { manager: "view" },
+  audit: {},
+  settings: { manager: "full" },
 };
 
-const ADDED_IN_102: TabKey[] = ["drivers", "delivery_platforms", "daily_accounts", "till", "customers"];
-
-function defaultsAsSets(): Record<TabKey, Set<StaffRole>> {
-  return Object.fromEntries(TAB_KEYS.map((k) => [k, new Set(DEFAULTS[k])])) as Record<
-    TabKey,
-    Set<StaffRole>
-  >;
-}
-
-let cache: Record<TabKey, Set<StaffRole>> | null = null;
+type Cache = Record<TabKey, Partial<Record<StaffRole, Level>>>;
+let cache: Cache | null = null;
 let inFlight: Promise<void> | null = null;
 
+const asLevel = (row: { level?: string | null; granted?: boolean | null }): Level =>
+  row.level === "off" || row.level === "view" || row.level === "full" ? row.level : row.granted ? "full" : "off";
+
 async function loadCache(): Promise<void> {
-  const { data, error } = await supabase.from("role_permissions").select("role, permission, granted");
+  const { data, error } = await supabase.from("role_permissions").select("role, permission, granted, level");
   if (error || !data || data.length === 0) {
-    cache = defaultsAsSets();
+    cache = DEFAULTS;
     return;
   }
-  const next = Object.fromEntries(TAB_KEYS.map((k) => [k, new Set<StaffRole>()])) as Record<
-    TabKey,
-    Set<StaffRole>
-  >;
-  const stored = new Set<string>();
+  const next = Object.fromEntries(TAB_KEYS.map((k) => [k, {}])) as Cache;
   for (const row of data) {
     const key = row.permission as TabKey;
     if (!(TAB_KEYS as readonly string[]).includes(key)) continue;
-    stored.add(key);
-    if (row.granted) next[key].add(row.role as StaffRole);
+    next[key][row.role as StaffRole] = asLevel(row);
   }
-  // Areas added with migration 102: until it has run, use the agreed defaults
-  // rather than locking everyone out of the till, drivers, customers, etc.
-  for (const k of ADDED_IN_102) if (!stored.has(k)) next[k] = new Set(DEFAULTS[k]);
   cache = next;
 }
 
@@ -127,15 +121,46 @@ refreshPermissionsCache();
 
 // ---------------------------------------------------------------------------
 
-/** Can this role use the given area? Super admin: always. Front House: the
+/** This role's level for an area. Super admin: always full. Front House: the
  *  till only. Kitchen (and old driver accounts): nothing here. */
-export function canAccess(role: StaffRole, tab: TabKey): boolean {
+let loadedAt = Date.now(); // the import above already loaded it
+function keepFresh() {
+  if (!inFlight && Date.now() - loadedAt > 60_000) {
+    loadedAt = Date.now();
+    refreshPermissionsCache().catch(() => {});
+  }
+}
+
+export function levelOf(role: StaffRole, tab: TabKey): Level {
+  keepFresh();
   // transition safety net: pre-migration-032 accounts may still be "owner"
-  if (role === "admin" || (role as string) === "owner") return true;
-  if (role === "employee") return tab === "till";
-  if (isFrontLine(role)) return false;
-  const set = cache?.[tab];
-  return set ? set.has(role) : DEFAULTS[tab].includes(role);
+  if (role === "admin" || (role as string) === "owner") return "full";
+  if (role === "employee") return tab === "till" ? "full" : "off";
+  if (isFrontLine(role)) return "off";
+  return (cache ?? DEFAULTS)[tab]?.[role] ?? "off";
+}
+
+/** Can open the area (view or full). */
+export function canAccess(role: StaffRole, tab: TabKey): boolean {
+  return levelOf(role, tab) !== "off";
+}
+
+/** Can change things in the area (full only). */
+export function canEdit(role: StaffRole, tab: TabKey): boolean {
+  return levelOf(role, tab) === "full";
+}
+
+/** For an API route: reading (GET/HEAD) needs view or full, anything that
+ *  changes data needs full. */
+export function areaAllows(role: StaffRole, tab: TabKey, method: string): boolean {
+  return method === "GET" || method === "HEAD" ? canAccess(role, tab) : canEdit(role, tab);
+}
+
+/** For an area whose data other screens also read (the till's tables, the
+ *  menu, business settings): any management role can read it, but changing
+ *  it needs full on that area. */
+export function manageAllows(role: StaffRole, tab: TabKey, method: string): boolean {
+  return method === "GET" || method === "HEAD" ? isStaffManagement(role) : canEdit(role, tab);
 }
 
 /** Management-level at all (Staff Hub layout gate). Excludes the front-line
@@ -144,39 +169,37 @@ export function isStaffManagement(role: StaffRole): boolean {
   return !["employee", "cashier", "waiter", "chef", "kitchen", "driver"].includes(role as string);
 }
 
-// --- back-compat shims: existing API routes still import these -------------
-// They now mean "some management role", tightened per-tab at the page level.
-// A follow-up will point the API routes at canAccess() directly.
+// --- shims used by API routes / pages --------------------------------------
 export const canManageStaff = (role: StaffRole) => isStaffManagement(role);
 export const canManageInventory = (role: StaffRole) => canAccess(role, "inventory");
 export const canManageFinance = (role: StaffRole) => canAccess(role, "finance");
-export const canApproveStockTakes = (role: StaffRole) => canAccess(role, "approve_stock_takes");
+export const canApproveStockTakes = (role: StaffRole) => canEdit(role, "approve_stock_takes");
 export const canViewCrm = (role: StaffRole) => canAccess(role, "customers");
-export const canManageCrm = (role: StaffRole) => canAccess(role, "customers");
+export const canManageCrm = (role: StaffRole) => canEdit(role, "customers");
 export const canManageDrivers = (role: StaffRole) => canAccess(role, "drivers");
 export const canManageDailyAccounts = (role: StaffRole) => canAccess(role, "daily_accounts");
 export const canManagePlatformSales = (role: StaffRole) => canAccess(role, "delivery_platforms");
-/** Taking orders and payments on the till. */
-export const canUseTill = (role: StaffRole) => canAccess(role, "till");
+/** Taking orders and payments on the till (full only). */
+export const canUseTill = (role: StaffRole) => canEdit(role, "till");
 
 // --- Settings → Roles & Permissions editor --------------------------------
-export async function getPermissionMatrix(): Promise<Record<TabKey, Record<StaffRole, boolean>>> {
-  const { data } = await supabase.from("role_permissions").select("role, permission, granted");
+export async function getPermissionMatrix(): Promise<Record<TabKey, Record<StaffRole, Level>>> {
+  const { data } = await supabase.from("role_permissions").select("role, permission, granted, level");
   const matrix = Object.fromEntries(
-    TAB_KEYS.map((k) => [k, Object.fromEntries(ALL_ROLES.map((r) => [r, DEFAULTS[k].includes(r)]))]),
-  ) as Record<TabKey, Record<StaffRole, boolean>>;
+    TAB_KEYS.map((k) => [k, Object.fromEntries(ALL_ROLES.map((r) => [r, DEFAULTS[k][r] ?? "off"]))]),
+  ) as Record<TabKey, Record<StaffRole, Level>>;
   for (const row of data ?? []) {
     const key = row.permission as TabKey;
     if ((TAB_KEYS as readonly string[]).includes(key) && ALL_ROLES.includes(row.role as StaffRole)) {
-      matrix[key][row.role as StaffRole] = !!row.granted;
+      matrix[key][row.role as StaffRole] = asLevel(row);
     }
   }
-  // Super admin is always on, Front House only the till, Kitchen always off —
+  // Super admin is always full, Front House only the till, Kitchen always off —
   // not editable.
   for (const k of TAB_KEYS) {
-    matrix[k].admin = true;
-    matrix[k].employee = k === "till";
-    matrix[k].kitchen = false;
+    matrix[k].admin = "full";
+    matrix[k].employee = k === "till" ? "full" : "off";
+    matrix[k].kitchen = "off";
   }
   return matrix;
 }

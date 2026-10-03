@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canAccess } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 
 // Staff Hub → Website → Menu & photos → Gallery: the photos on this
 // business's website Gallery page (website_gallery). Upload the file first
@@ -9,7 +9,7 @@ import { canAccess } from "@/lib/permissions";
 
 async function guard(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canAccess(session.role, "website")) return null;
+  if (!session || !areaAllows(session.role, "website", req.method)) return null;
   return session;
 }
 

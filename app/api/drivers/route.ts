@@ -3,11 +3,11 @@ import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { staffIdsAt } from "@/lib/business";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageDrivers } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageDrivers(session.role)) {
+  if (!session || !areaAllows(session.role, "drivers", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

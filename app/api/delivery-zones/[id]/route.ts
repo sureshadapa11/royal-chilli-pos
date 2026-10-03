@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageDrivers } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 
 export async function PATCH(
   req: NextRequest,
@@ -9,7 +9,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageDrivers(session.role)) {
+    if (!session || !areaAllows(session.role, "drivers", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
@@ -38,7 +38,7 @@ export async function DELETE(
 ) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageDrivers(session.role)) {
+    if (!session || !areaAllows(session.role, "drivers", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);

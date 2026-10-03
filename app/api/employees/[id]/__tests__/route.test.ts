@@ -76,30 +76,20 @@ beforeEach(() => {
 });
 
 describe("PATCH /api/employees/[id] — privilege-escalation guard", () => {
-  it("403s a manager trying to change their own role", async () => {
-    const res = await patch(manager, "2", { role: "admin" });
-    expect(res.status).toBe(403);
+  it("refuses a Manager outright — HR & Payroll is off for Managers", async () => {
+    expect((await patch(manager, "2", { role: "admin" })).status).toBe(401);
+    expect((await patch(manager, "5", { phone: "07700900000" })).status).toBe(401);
     expect(updatedRow).toBeNull();
   });
 
-  it("403s a manager trying to change another employee's active status", async () => {
-    const res = await patch(manager, "5", { active: 0 });
-    expect(res.status).toBe(403);
-  });
-
-  it("403s a manager trying to reset another employee's password", async () => {
-    const res = await patch(manager, "1", { password: "newpassword123" });
-    expect(res.status).toBe(403);
-  });
-
-  it("still lets a manager update ordinary profile fields", async () => {
-    const res = await patch(manager, "5", { phone: "07700900000" });
+  it("lets HR update ordinary profile fields", async () => {
+    const res = await patch(hr, "5", { phone: "07700900000" });
     expect(res.status).toBe(200);
     expect(updatedRow).toEqual({ phone: "07700900000" });
   });
 
-  it("lets a manager save a form that re-sends the unchanged role", async () => {
-    const res = await patch(manager, "5", { role: "employee", phone: "07700900001" });
+  it("lets HR save a form that re-sends the unchanged role", async () => {
+    const res = await patch(hr, "5", { role: "employee", phone: "07700900001" });
     expect(res.status).toBe(200);
   });
 

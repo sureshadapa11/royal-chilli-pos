@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageStaff(session.role)) {
+    if (!session || !areaAllows(session.role, "hr", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);

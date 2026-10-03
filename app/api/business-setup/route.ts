@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canAccess } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { clearBusinessCache } from "@/lib/business";
 import { SECRET_FIELDS, SECTIONS, validateSection, type Address } from "@/lib/business-setup";
@@ -23,7 +23,7 @@ const PUBLIC_COLUMNS = [
 async function allowed(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session) return null;
-  if (!session.owner && !canAccess(session.role, "settings")) return null;
+  if (!session.owner && !areaAllows(session.role, "settings", req.method)) return null;
   return session;
 }
 

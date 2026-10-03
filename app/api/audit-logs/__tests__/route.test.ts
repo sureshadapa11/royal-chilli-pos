@@ -27,7 +27,7 @@ jest.mock("@/lib/supabase", () => ({
 jest.mock("@/lib/auth", () => ({
   getSessionFromRequest: jest.fn(() => Promise.resolve(mockSession)),
 }));
-jest.mock("@/lib/permissions", () => ({ canManageStaff: () => true }));
+jest.mock("@/lib/permissions", () => ({ canManageStaff: () => true, areaAllows: () => true }));
 
 import { GET } from "@/app/api/audit-logs/route";
 

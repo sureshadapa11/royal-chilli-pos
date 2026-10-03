@@ -22,8 +22,8 @@ function greeting(): string {
   return "Good evening";
 }
 
-// Admins get the sales & costs dashboard; managers and HR keep their
-// day-to-day operations view.
+// Super admins and Managers get the sales & costs dashboard; HR keeps its
+// people view.
 export default async function StaffHubPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
   const session = await getSession();
   const role = session?.role;
@@ -41,7 +41,9 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
     </div>
   );
 
-  if (role === "admin") {
+  // Super admins and Managers: the sales & costs dashboard (a Manager only
+  // ever sees their own business — no switcher, no All businesses table).
+  if (role === "admin" || role === "manager") {
     const { range } = await searchParams;
     // Summary offers whole weeks and months; an old ?range=today link gets this week.
     const key: RangeKey = range && range in RANGES && range !== "today" ? (range as RangeKey) : "this_week";

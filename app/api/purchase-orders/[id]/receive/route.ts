@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageInventory } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { londonDateStr } from "@/lib/london-date";
 import { resolveInventoryLocation } from "@/lib/locations";
 
@@ -13,7 +13,7 @@ export async function POST(
 ) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageInventory(session.role)) {
+    if (!session || !areaAllows(session.role, "inventory", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);

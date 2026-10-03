@@ -18,7 +18,7 @@ jest.mock("@/lib/supabase", () => {
 });
 jest.mock("@/lib/business-db", () => ({ __esModule: true, bizDb: () => ({ from: () => ({ insert: async () => ({ error: null }) }) }) }));
 jest.mock("@/lib/business", () => ({ __esModule: true, clearBusinessCache: () => {} }));
-jest.mock("@/lib/permissions", () => ({ __esModule: true, canAccess: (role: string) => role === "admin" || role === "manager" }));
+jest.mock("@/lib/permissions", () => ({ __esModule: true, canAccess: (role: string) => role === "admin" || role === "manager", areaAllows: (role: string) => role === "admin" || role === "manager" }));
 
 import { NextRequest } from "next/server";
 import { GET, PUT } from "@/app/api/business-setup/route";

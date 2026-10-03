@@ -30,6 +30,7 @@ jest.mock("@/lib/auth", () => ({
 }));
 jest.mock("@/lib/permissions", () => ({
   canManageInventory: jest.fn(() => true),
+  areaAllows: jest.fn(() => true),
 }));
 jest.mock("@/lib/business-db", () => ({
   bizDb: jest.fn(() => mockDb),

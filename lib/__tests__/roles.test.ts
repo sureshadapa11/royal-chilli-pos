@@ -40,7 +40,7 @@ describe("roles", () => {
   it("gives Managers their tabs and keeps Kitchen out of the Staff Hub", () => {
     expect(canAccess("manager", "menu")).toBe(true);
     expect(canAccess("manager", "audit")).toBe(false);
-    expect(canAccess("manager", "finance")).toBe(false);
+    expect(canAccess("manager", "hr")).toBe(false);
     expect(canAccess("kitchen", "menu")).toBe(false);
     expect(canAccess("admin", "audit")).toBe(true);
   });

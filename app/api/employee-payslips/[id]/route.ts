@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 
 // PATCH { status: "paid" | "unpaid" } — flips the payment switch and stamps
 // (or clears) paid_at in the same write, so there's never a paid payslip
 // with no timestamp behind it.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);
@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);

@@ -3,7 +3,7 @@ import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { staffIdsAt } from "@/lib/business";
 import { bizDb, staffWorksAt } from "@/lib/business-db";
-import { canManageStaff } from "@/lib/permissions";
+import { canEdit } from "@/lib/permissions";
 import { findStaffByPin, hashPin, PIN_PATTERN } from "@/lib/staff-pin";
 
 // GET — whether any till PINs exist yet. The till only locks once at least
@@ -20,8 +20,9 @@ export async function GET(req: NextRequest) {
 // alone. pin: null removes it.
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
-    return NextResponse.json({ error: "Only a manager can set PINs" }, { status: 401 });
+  // Set in Staff Hub → HR, so it needs full HR & Payroll access.
+  if (!session || !canEdit(session.role, "hr")) {
+    return NextResponse.json({ error: "Only HR or a Super admin can set PINs" }, { status: 401 });
   }
   const { staff_id, pin } = await req.json().catch(() => ({}));
   const staffId = Number(staff_id);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   if (!periodId) return NextResponse.json({ error: "period_id is required" }, { status: 400 });
   if (!(await allOwned(db, "payroll_periods", [periodId]))) return NextResponse.json({ error: "Pay period not found" }, { status: 404 });
 
-  const isManager = canManageStaff(session.role);
+  const isManager = areaAllows(session.role, "hr", req.method);
   let query = db
     .from("payroll_entries")
     .select("*, staff:staff!payroll_entries_staff_id_fkey(name)")
