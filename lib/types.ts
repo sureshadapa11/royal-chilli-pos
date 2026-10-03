@@ -166,6 +166,10 @@ export interface RestaurantTable {
   location: "main" | "outdoor" | "private";
   occupied_since?: string | null; // created_at of the table's oldest active order, if any
   self_order_enabled: boolean; // staff-controlled: gates public QR ordering for this table
+  // Floor plan (Staff Hub → Tables, lib/floor-plan.ts): top-left cell and shape.
+  pos_x?: number | null;
+  pos_y?: number | null;
+  shape?: "square" | "round" | "rect" | null;
 }
 
 export interface WorkPeriod {

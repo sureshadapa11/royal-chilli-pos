@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { cn, TABLE_ATTENTION_MINUTES, minutesSince, tableElapsedLabel } from "@/lib/utils";
 import type { RestaurantTable } from "@/lib/types";
+import { placeTables, usedBox } from "@/lib/floor-plan";
 
 interface Props {
   tables: RestaurantTable[];
@@ -18,33 +19,13 @@ interface Props {
   upcomingReservationCount: number;
 }
 
-// Fills a grid column-by-column instead of row-by-row, each column
-// top-to-bottom highest-to-lowest — e.g. 9 items over 3 columns reads
-// 3,6,9 / 2,5,8 / 1,4,7 rather than the plain ascending 1,2,3 / 4,5,6 / 7,8,9.
-function columnMajor<T>(items: T[], cols: number): T[] {
-  const rows = Math.ceil(items.length / cols);
-  const columns = Array.from({ length: cols }, (_, c) => items.slice(c * rows, c * rows + rows).reverse());
-  const flat: T[] = [];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      if (columns[c][r] !== undefined) flat.push(columns[c][r]);
-    }
-  }
-  return flat;
-}
-
 export default function TableGrid({ tables, selectedTable, onSelect, onStatusChange, upcomingReservationCount }: Props) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
-  // Single floor, no location zones — tables are laid out purely by table
-  // number: the first 9 as a 3x3 block (column-major, matching the
-  // restaurant's physical layout), the rest as a 4-wide row beneath it.
-  const sorted = [...tables].sort(
-    (a, b) => parseInt(a.table_number.replace(/\D/g, ""), 10) - parseInt(b.table_number.replace(/\D/g, ""), 10)
-  );
-  const groups = [
-    { cols: 3, tables: columnMajor(sorted.slice(0, 9), 3) },
-    { cols: 4, tables: sorted.slice(9) },
-  ].filter(g => g.tables.length > 0);
+  // The floor plan from Staff Hub → Tables (lib/floor-plan.ts), cropped to
+  // the part the tables use and scaled to fit this panel. Tables without a
+  // saved spot are laid out like the old fixed grid.
+  const placed = placeTables(tables);
+  const box = usedBox(placed);
 
   const stats = {
     free:     tables.filter(t => t.status === "available").length,
@@ -69,12 +50,9 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
         ))}
       </div>
 
-      {/* Table groups */}
-      {groups.map((group, i) => {
-        return (
-          <div key={i}>
-            <div className={cn("grid gap-2", group.cols === 3 ? "grid-cols-3" : "grid-cols-4")}>
-              {group.tables.map(table => {
+      {/* Floor plan */}
+      <div className="relative w-full" style={{ aspectRatio: `${box.w} / ${box.h}` }}>
+              {placed.map(table => {
                 const isSelected = selectedTable === table.id;
                 const status = table.status as "available" | "occupied" | "reserved";
                 const elapsedMins = table.occupied_since ? minutesSince(table.occupied_since) : null;
@@ -111,6 +89,8 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                   },
                 }[needsAttention ? "attention" : status];
 
+                // Near the top of the plan, the status menu opens downwards.
+                const menuBelow = table.y - box.y < 8;
                 return (
                   <div
                     key={table.id}
@@ -118,19 +98,27 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                     tabIndex={0}
                     onClick={() => onSelect(table)}
                     onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(table); }}
+                    style={{
+                      left: `calc(${((table.x - box.x) / box.w) * 100}% + 2px)`,
+                      top: `calc(${((table.y - box.y) / box.h) * 100}% + 2px)`,
+                      width: `calc(${(table.w / box.w) * 100}% - 4px)`,
+                      height: `calc(${(table.h / box.h) * 100}% - 4px)`,
+                    }}
                     className={cn(
-                      "relative flex flex-col items-center justify-center rounded-xl border overflow-hidden cursor-pointer",
-                      "h-[72px] transition-all duration-150 no-select pos-btn",
+                      "absolute flex flex-col items-center justify-center border cursor-pointer",
+                      table.shape === "round" ? "rounded-full" : "rounded-xl",
+                      menuFor === table.id ? "z-50" : "",
+                      "transition-all duration-150 no-select pos-btn",
                       isSelected
                         ? "border-blue-400 bg-blue-50 ring-2 ring-blue-400/40 ring-offset-1 ring-offset-background"
                         : statusCfg.card
                     )}
                   >
-                    {/* Top colour stripe */}
-                    <div className={cn(
-                      "absolute top-0 left-0 right-0 h-[3px]",
+                    {/* Top colour stripe (square / long tables) */}
+                    {table.shape !== "round" && <div className={cn(
+                      "absolute top-0 left-3 right-3 h-[3px] rounded-b",
                       isSelected ? "bg-blue-400" : statusCfg.stripe
-                    )} />
+                    )} />}
 
                     {/* Pulsing dot for occupied / attention */}
                     {status === "occupied" && !isSelected && (
@@ -186,7 +174,7 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                         <div className="fixed inset-0 z-40" onClick={(e) => { e.stopPropagation(); setMenuFor(null); }} />
                         <div
                           onClick={(e) => e.stopPropagation()}
-                          className="absolute bottom-full right-0 z-50 mb-1 w-32 rounded-lg border border-border bg-surface shadow-lg py-1"
+                          className={cn("absolute right-0 z-50 w-32 rounded-lg border border-border bg-surface shadow-lg py-1", menuBelow ? "top-full mt-1" : "bottom-full mb-1")}
                         >
                           {([
                             { value: "available", label: "Mark Available" },
@@ -209,10 +197,7 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                   </div>
                 );
               })}
-            </div>
-          </div>
-        );
-      })}
+      </div>
     </div>
   );
 }

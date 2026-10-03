@@ -3,6 +3,23 @@ import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { manageAllows } from "@/lib/permissions";
 import { londonNowDateAndMinutes } from "@/lib/hours";
+import { GRID_H, GRID_W, SHAPES } from "@/lib/floor-plan";
+
+// Floor plan fields (lib/floor-plan.ts): a cell on the grid and a shape.
+function layoutFields(b: { pos_x?: unknown; pos_y?: unknown; shape?: unknown }): Record<string, unknown> | { error: string } {
+  const out: Record<string, unknown> = {};
+  for (const [k, max] of [["pos_x", GRID_W], ["pos_y", GRID_H]] as const) {
+    if (b[k] === undefined) continue;
+    const v = Math.round(Number(b[k]));
+    if (!Number.isFinite(v) || v < 0 || v >= max) return { error: "That spot is off the floor plan" };
+    out[k] = v;
+  }
+  if (b.shape !== undefined) {
+    if (!(SHAPES as readonly string[]).includes(String(b.shape))) return { error: "Unknown table shape" };
+    out.shape = b.shape;
+  }
+  return out;
+}
 
 // A reservation counts as "coming up soon" starting this many minutes ahead
 // of the booked time — mirrors the kitchen board's KITCHEN_LEAD_MINUTES
@@ -83,7 +100,10 @@ export async function POST(req: NextRequest) {
     }
     const db = bizDb(session.businessId);
 
-    const { table_number, capacity, location } = await req.json();
+    const body = await req.json();
+    const { table_number, capacity, location } = body;
+    const layout = layoutFields(body);
+    if ("error" in layout) return NextResponse.json({ error: layout.error }, { status: 400 });
 
     const number = String(table_number ?? "").trim();
     if (!number) {
@@ -110,6 +130,7 @@ export async function POST(req: NextRequest) {
         capacity: seats,
         location: location ?? "main",
         status: "available",
+        ...layout,
       })
       .select()
       .single();
@@ -134,16 +155,20 @@ export async function PUT(req: NextRequest) {
     }
     const db = bizDb(session.businessId);
 
-    const { id, status, capacity, location, table_number, self_order_enabled } = await req.json();
+    const body = await req.json();
+    const { id, status, capacity, location, table_number, self_order_enabled } = body;
 
     // Floor staff flip `status` all shift; changing a table's number/capacity/
-    // area is a manager-only setup action.
-    const editsLayout = capacity !== undefined || location !== undefined || table_number !== undefined;
+    // area/spot on the floor plan is a setup action (Tables → Full).
+    const editsLayout = capacity !== undefined || location !== undefined || table_number !== undefined ||
+      body.pos_x !== undefined || body.pos_y !== undefined || body.shape !== undefined;
     if (editsLayout && !manageAllows(session.role, "tables", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const updateFields: Record<string, unknown> = {};
+    const layout = layoutFields(body);
+    if ("error" in layout) return NextResponse.json({ error: layout.error }, { status: 400 });
+    const updateFields: Record<string, unknown> = { ...layout };
     if (status !== undefined) updateFields.status = status;
     if (location !== undefined) updateFields.location = location;
     if (self_order_enabled !== undefined) updateFields.self_order_enabled = !!self_order_enabled;
