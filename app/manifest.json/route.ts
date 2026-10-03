@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { businessForHost } from "@/lib/business";
 import { appPrefix } from "@/lib/app-hosts";
+import { shortName } from "@/lib/home-screen";
 
 // The home-screen app ("Add to Home screen") for the address it's installed
 // from: a business's own name, opening on the till for pos.<domain> and the
@@ -16,8 +17,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(
     {
       name: till ? `${name} — Till` : `${name} — Staff Hub`,
-      // Shown under the home-screen icon, so keep it short.
-      short_name: till ? `${name.slice(0, 7).trim()} Till` : name.length <= 12 ? name : name.slice(0, 12).trim(),
+      short_name: shortName(name, b?.login_code ?? null, till),
       description: till ? `Till for ${name}.` : `Staff Hub for ${name}.`,
       start_url: till ? "/pos" : "/staff",
       display: "standalone",
