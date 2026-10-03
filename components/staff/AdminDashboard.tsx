@@ -147,6 +147,35 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
             <span className="border-t border-[#ECE5D6] pt-1 text-right font-semibold tabular-nums text-foreground">{gbp2(sm.costs.total)}</span>
           </div>
           <p className="mt-2 text-[12px] text-muted-foreground">Profit = sales ex VAT − costs. Staff pay is from clocked-out shifts × pay rate.</p>
+
+          {/* The managers' day-end sheets for the same period (Operations → Daily accounts). */}
+          {sm.dailyAccounts && (() => {
+            const da = sm.dailyAccounts;
+            const rows: [string, string][] = [
+              ["Bank in", gbp2(da.bankIn)],
+              ["Cash not yet banked", gbp2(da.notBanked)],
+              ["Pending bills (pay later)", gbp2(da.pending)],
+              ["Catering paid / pending", `${gbp2(da.cateringPaid)} / ${gbp2(da.cateringPending)}`],
+              ["Opening → closing balance", `${da.opening == null ? "—" : gbp2(da.opening)} → ${da.closing == null ? "—" : gbp2(da.closing)}`],
+            ];
+            return (
+              <div className="mt-4 border-t border-[#ECE5D6] pt-3">
+                <div className="mb-1.5 flex items-baseline justify-between gap-2">
+                  <h3 style={heading} className="text-[13.5px] font-semibold text-foreground">Daily accounts</h3>
+                  <Link href={`/staff/daily-accounts?month=${sm.from.slice(0, 7)}`} className="text-[12.5px] font-semibold text-[#C82D1D] hover:underline">Open sheet →</Link>
+                </div>
+                <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[13px] text-[#5B524B]">
+                  {rows.map(([k, v]) => (
+                    <div key={k} className="contents"><span>{k}</span><span className="text-right tabular-nums text-foreground">{v}</span></div>
+                  ))}
+                  <span>Days submitted</span>
+                  <span className={`text-right tabular-nums font-semibold ${da.missing.length ? "text-[#B45309]" : "text-[#1F7A4D]"}`}>
+                    {da.submitted} of {da.daysSoFar}{da.missing.length ? ` · ${da.missing.length} missing` : ""}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
         </Card>
       </div>
 

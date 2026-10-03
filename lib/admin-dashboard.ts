@@ -3,6 +3,7 @@ import { tradingDayStr } from "@/lib/london-date";
 import { PLATFORMS, type PlatformKey } from "@/lib/platforms";
 import { chunked, getPnl, getSalesData, labourCostByDay, r2 } from "@/lib/finance";
 import { bizDb } from "@/lib/business-db";
+import { savedDays, summarise, type DailySummary } from "@/lib/daily-accounts";
 
 // Admin dashboard figures (Staff Hub home, admin only). Revenue = our own paid
 // orders (till, QR, website) after discounts, VAT included, minus refunds on
@@ -43,6 +44,8 @@ export type AdminDashboard = {
     exVat: number;
     costs: { ingredients: number; staff: number; expenses: number; expenseLines: { key: string; label: string; amount: number }[]; commission: number; cardFees: number; total: number };
     profit: number;
+    /** From the managers' day-end sheets (Staff Hub → Daily accounts); null if they couldn't be read. */
+    dailyAccounts: DailySummary | null;
   };
 };
 
@@ -99,10 +102,12 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
   const yesterday = addDays(today, -1);
 
   // One fetch covering last week → this week.
-  const [sales14, costByDay, summary] = await Promise.all([
+  const [sales14, costByDay, summary, daily] = await Promise.all([
     getSalesData(businessId, lastMon, sun),
     labourCostByDay(businessId, mon, sun),
     getPnl(businessId, sum.from, sum.to),
+    // The manager's day-end sheets for the same period (Summary → Daily accounts).
+    savedDays(businessId, sum.from, sum.to).catch((e) => { console.error("Daily accounts for the dashboard failed:", e); return null; }),
   ]);
   const plat14 = sales14.platforms;
 
@@ -202,6 +207,7 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
         commission: summary.costs.commission, cardFees: summary.costs.card_fees, total: summary.costs.total,
       },
       profit: summary.profit,
+      dailyAccounts: daily ? summarise(daily, sum.from, sum.to, today) : null,
     },
   };
 }
