@@ -1,11 +1,19 @@
-// Regression coverage for the privilege-escalation fix: a manager/hr session
-// must not be able to change role/active/password on any employee (including
-// themselves) — only admin can. Everything else on the profile stays open to
-// any canManageStaff role, exactly as before the fix.
+// Regression coverage for the privilege-escalation guard: only Super admin,
+// Supervisor and HR may change role/active/password (never on their own
+// account), nobody else can be made Super admin, and only Super admin may
+// edit the Super admin account. Everything else on the profile stays open to
+// any canManageStaff role.
 import { NextRequest } from "next/server";
 import type { SessionUser } from "@/lib/types";
 
 let updatedRow: Record<string, unknown> | null;
+// Current role/active of each staff id the route looks up first.
+const people: Record<string, { role: string; active: number }> = {
+  "1": { role: "admin", active: 1 },
+  "2": { role: "manager", active: 1 },
+  "3": { role: "hr", active: 1 },
+  "5": { role: "employee", active: 1 },
+};
 
 jest.mock("@/lib/supabase", () => ({
   __esModule: true,
@@ -13,6 +21,11 @@ jest.mock("@/lib/supabase", () => ({
     from: (table: string) => {
       if (table === "staff") {
         return {
+          select: () => ({
+            eq: (_col: string, id: string) => ({
+              maybeSingle: () => Promise.resolve({ data: people[String(id)] ?? null, error: null }),
+            }),
+          }),
           update: (vals: Record<string, unknown>) => ({
             eq: () => ({
               select: () => ({
@@ -46,7 +59,9 @@ import { PATCH } from "@/app/api/employees/[id]/route";
 import { authedRequest } from "@/app/api/_test-helpers";
 
 const manager: SessionUser = { id: 2, name: "A Manager", role: "manager", businessId: 1 };
-const admin: SessionUser = { id: 1, name: "An Admin", role: "admin", businessId: 1 };
+const admin: SessionUser = { id: 1, name: "Super admin", role: "admin", businessId: 1 };
+const hr: SessionUser = { id: 3, name: "An HR", role: "hr", businessId: 1 };
+const supervisor: SessionUser = { id: 4, name: "A Supervisor", role: "supervisor", businessId: 1 };
 
 async function patch(user: SessionUser | null, targetId: string, body: unknown) {
   const req = await authedRequest(`http://localhost/api/employees/${targetId}`, user, {
@@ -83,7 +98,32 @@ describe("PATCH /api/employees/[id] — privilege-escalation guard", () => {
     expect(updatedRow).toEqual({ phone: "07700900000" });
   });
 
-  it("lets an admin change role", async () => {
+  it("lets a manager save a form that re-sends the unchanged role", async () => {
+    const res = await patch(manager, "5", { role: "employee", phone: "07700900001" });
+    expect(res.status).toBe(200);
+  });
+
+  it("lets HR and a Supervisor change someone's role", async () => {
+    expect((await patch(hr, "5", { role: "kitchen" })).status).toBe(200);
+    expect((await patch(supervisor, "5", { role: "manager" })).status).toBe(200);
+  });
+
+  it("403s HR changing their own role", async () => {
+    expect((await patch(hr, "3", { role: "supervisor" })).status).toBe(403);
+  });
+
+  it("never makes anyone Super admin, not even the Super admin", async () => {
+    expect((await patch(hr, "5", { role: "admin" })).status).toBe(403);
+    expect((await patch(admin, "5", { role: "admin" })).status).toBe(403);
+    expect(updatedRow).toBeNull();
+  });
+
+  it("403s anyone but the Super admin editing the Super admin account", async () => {
+    expect((await patch(supervisor, "1", { phone: "07700900002" })).status).toBe(403);
+    expect(updatedRow).toBeNull();
+  });
+
+  it("lets the Super admin change role", async () => {
     const res = await patch(admin, "5", { role: "hr" });
     expect(res.status).toBe(200);
     expect(updatedRow).toEqual({ role: "hr" });

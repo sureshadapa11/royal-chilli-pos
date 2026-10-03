@@ -1,4 +1,5 @@
 import { bizDb } from "@/lib/business-db";
+import { isManagerRole } from "@/lib/roles";
 import type { StaffRole } from "@/lib/types";
 import { canAccess } from "@/lib/permissions";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
@@ -13,7 +14,7 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
   const d = new Date(today + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() - 1);
   const yesterday = d.toISOString().slice(0, 10);
-  const isManagement = role === "admin" || role === "manager";
+  const isManagement = isManagerRole(role);
 
   const [ingredients, leave, corrections, openDay, platforms, dailyAccounts] = await Promise.all([
     canAccess(role, "inventory") ? db.from("ingredients").select("name, current_stock, reorder_level").eq("active", 1) : null,

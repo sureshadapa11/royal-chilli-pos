@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canGiveRole } from "@/lib/roles";
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
@@ -56,6 +57,9 @@ export async function POST(req: NextRequest) {
     const { name, username, password, role, ...profile } = body;
     if (!name || !username || !password || !role) {
       return NextResponse.json({ error: "Name, username, password, and role are required" }, { status: 400 });
+    }
+    if (!canGiveRole(session.role, role)) {
+      return NextResponse.json({ error: "You can't give that role" }, { status: 403 });
     }
     if (password.length < 6) {
       return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 });

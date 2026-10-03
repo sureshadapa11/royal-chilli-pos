@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canChangeAccess, canGiveRole } from "@/lib/roles";
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
@@ -50,15 +51,26 @@ export async function PATCH(
     if (!(await staffWorksAt(bizDb(session.businessId), id))) return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
     const body = await req.json();
 
-    // Role, active status and password resets are privilege-affecting — a
-    // manager/hr session must not be able to promote themselves (or anyone
-    // else) to admin, deactivate another account, or reset someone else's
-    // password. Only admin may touch these; the rest of EDITABLE_FIELDS
-    // (contact info, pay rate, etc.) stays open to any canManageStaff role.
-    const RESTRICTED_FIELDS = new Set(["role", "active", "password"]);
-    const touchesRestrictedField = Object.keys(body).some((k) => RESTRICTED_FIELDS.has(k));
-    if (touchesRestrictedField && session.role !== "admin") {
-      return NextResponse.json({ error: "Only an admin can change role, active status or reset a password" }, { status: 403 });
+    // Role, active status and password resets are privilege-affecting. Only
+    // Super admin, Supervisor and HR may touch them, never on their own
+    // account (unless Super admin), and only Super admin may edit the Super
+    // admin account. Super admin is never given to anyone. The rest of
+    // EDITABLE_FIELDS (contact info, pay rate, etc.) stays open to any
+    // canManageStaff role.
+    const { data: target } = await supabase.from("staff").select("role, active").eq("id", id).maybeSingle();
+    if (target?.role === "admin" && session.role !== "admin") {
+      return NextResponse.json({ error: "Only the Super admin can change the Super admin account" }, { status: 403 });
+    }
+    // Forms send the whole record — only an actual change counts.
+    const touchesRestrictedField =
+      ("role" in body && body.role !== target?.role) ||
+      ("active" in body && Number(body.active) !== Number(target?.active)) ||
+      (typeof body.password === "string" && body.password !== "");
+    if (touchesRestrictedField && (!canChangeAccess(session.role) || (Number(id) === session.id && session.role !== "admin"))) {
+      return NextResponse.json({ error: "Only the Super admin, a Supervisor or HR can change role, active status or reset a password" }, { status: 403 });
+    }
+    if ("role" in body && body.role !== target?.role && !canGiveRole(session.role, String(body.role))) {
+      return NextResponse.json({ error: "You can't give that role" }, { status: 403 });
     }
 
     const updates: Record<string, unknown> = {};

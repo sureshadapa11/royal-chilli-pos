@@ -41,9 +41,10 @@ export async function PUT(req: NextRequest) {
     ) {
       return NextResponse.json({ error: "Invalid role, tab, or value" }, { status: 400 });
     }
-    // admin always has everything; employee never sees Staff Hub — neither is editable.
-    if (role === "admin" || role === "employee") {
-      return NextResponse.json({ error: `${role} access is fixed` }, { status: 400 });
+    // Super admin always has everything; Front House and Kitchen never see
+    // Staff Hub — none of them is editable.
+    if (role === "admin" || role === "employee" || role === "kitchen") {
+      return NextResponse.json({ error: `${ROLE_LABELS[role as keyof typeof ROLE_LABELS]} access is fixed` }, { status: 400 });
     }
 
     const { error } = await supabase

@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Employees have no Staff Hub, and the till is PIN-only on paired devices.
-    if (payload.role === "employee") throw new Error("employees use the till PIN, not a handoff");
+    if (payload.role === "employee" || payload.role === "kitchen") throw new Error("front-line staff use their PIN, not a handoff");
 
     const user: SessionUser = {
       id: payload.id as number,

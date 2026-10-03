@@ -7,11 +7,16 @@ import type { HubNotice } from "@/lib/hub-notifications";
 import BusinessSwitcher, { type SwitcherOption } from "@/components/staff/BusinessSwitcher";
 import PickBusiness from "@/components/staff/PickBusiness";
 import { initials } from "@/lib/brand-client";
+import { ROLE_LABEL } from "@/lib/roles";
 
 export type NavItem = { href: string; label: string; icon: string; note?: string; external?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
 
-const ROLE_LABEL: Record<string, string> = { admin: "Admin", hr: "HR", manager: "Manager", employee: "Employee", driver: "Driver" };
+// "Dilip · Manager" — just "Super admin" when the name already says it.
+const nameAndRole = (u: { name: string; role: string }) => {
+  const label = ROLE_LABEL[u.role] ?? u.role;
+  return u.name.toLowerCase() === label.toLowerCase() ? u.name : `${u.name} · ${label}`;
+};
 
 // Staff Hub frame: a top menu bar. On a computer each group's list opens when
 // the mouse is over it (CSS, see .hub-mi in globals.css) or on click; on a
@@ -115,7 +120,7 @@ export default function StaffShell({
             <span className="min-w-0">
               <b style={{ fontFamily: "var(--font-cinzel)" }} className="block truncate text-[15px] leading-tight text-foreground">{business.name}</b>
               <small className="hidden truncate text-[11.5px] leading-snug text-muted-foreground lg:block">
-                {business.tagline && <><i style={{ fontFamily: "var(--font-playfair)" }} className="text-[#E34435]">{business.tagline}</i> · </>}{user.name} · {ROLE_LABEL[user.role] ?? user.role}
+                {business.tagline && <><i style={{ fontFamily: "var(--font-playfair)" }} className="text-[#E34435]">{business.tagline}</i> · </>}{nameAndRole(user)}
               </small>
             </span>
           </Link>
@@ -191,7 +196,7 @@ export default function StaffShell({
               : notices.map((n) => itemLink({ href: n.href, label: n.text, icon: n.icon, note: n.sub }, "flex gap-2.5 rounded-[10px] px-2.5 py-3 text-[15px] hover:bg-[#FDECE9]"))
           ) : (
             <>
-              <p className="px-2.5 pb-1 pt-2 text-[12px] text-muted-foreground">{user.name} · {ROLE_LABEL[user.role] ?? user.role}</p>
+              <p className="px-2.5 pb-1 pt-2 text-[12px] text-muted-foreground">{nameAndRole(user)}</p>
               {switcher && <BusinessSwitcher current={business.id} options={switcher} allMode={allMode} className="px-2.5 pb-2" />}
               {dashboard.items.map((item) => itemLink({ ...item, icon: "🏠" }, `flex gap-2.5 rounded-[10px] px-2.5 py-3 text-[15px] ${active(item.href) ? "bg-[#FDECE9]" : "hover:bg-[#FDECE9]"}`))}
               {groups.map((g) => (

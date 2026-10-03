@@ -1,4 +1,5 @@
 import { bizDb, type BizDb } from "@/lib/business-db";
+import { roleLabel } from "@/lib/roles";
 import { staffIdsAt } from "@/lib/business";
 import { getItemSalesInRange } from "@/lib/analytics";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
@@ -350,7 +351,7 @@ export async function getDashboardData(businessId: number, role: string): Promis
     };
   }
 
-  if (role === "manager") {
+  if (role === "manager" || role === "supervisor") {
     const fourWeeksAgo = addDaysStr(today, -27);
     const [orders28, attendance, lowStock, missedOuts, missedIns, reservations, tablesRes, reservationCounts] = await Promise.all([
       paidOrdersInRange(db, fourWeeksAgo, today),
@@ -429,8 +430,7 @@ export async function getDashboardData(businessId: number, role: string): Promis
 
     const byRoleMap = new Map<string, number>();
     for (const r of roleCounts ?? []) byRoleMap.set(r.role, (byRoleMap.get(r.role) ?? 0) + 1);
-    const ROLE_LABEL: Record<string, string> = { admin: "Admin", hr: "HR", manager: "Manager", employee: "Employee" };
-    const byRole: SlicePoint[] = [...byRoleMap.entries()].map(([role, value]) => ({ name: ROLE_LABEL[role] ?? role, value }));
+    const byRole: SlicePoint[] = [...byRoleMap.entries()].map(([role, value]) => ({ name: roleLabel(role), value }));
 
     // Day-to-day late arrivals / missed clock-outs are a manager concern
     // (they already see it on their own dashboard and correct it directly) —

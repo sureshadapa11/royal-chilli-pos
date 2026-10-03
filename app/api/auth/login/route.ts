@@ -53,14 +53,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: BAD_LOGIN }, { status: 401 });
     }
 
-    // Employees only use the till with their PIN, on a paired till — never a
-    // password sign-in here, which would open the POS on any device. Their own
-    // things (clock-in, rota, payslips) are in their business's attendance app.
-    if (staff.role === "employee") {
+    // Front House and Kitchen only use their PIN, on a paired till / kitchen
+    // screen — never a password sign-in here, which would open the POS on any
+    // device. Their own things (clock-in, rota, payslips) are in their
+    // business's attendance app.
+    if (staff.role === "employee" || staff.role === "kitchen") {
       const own = home.businessId != null ? await getBusiness(home.businessId).catch(() => null) : null;
       const attendance = appUrl(own?.domain, "attendance")?.replace(/^https:\/\//, "");
       return NextResponse.json(
-        { error: `This sign-in is for managers. Use your attendance app${attendance ? ` (${attendance})` : ""} for clock-in, rota and payslips, and your PIN on the till.` },
+        { error: `This sign-in is for managers. Use your attendance app${attendance ? ` (${attendance})` : ""} for clock-in, rota and payslips, and your PIN on the ${staff.role === "kitchen" ? "kitchen screen" : "till"}.` },
         { status: 403 }
       );
     }

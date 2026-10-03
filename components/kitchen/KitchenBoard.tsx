@@ -270,7 +270,9 @@ function tabClass(group: OrderWithItems[]): string {
   return "bg-yellow-100 text-yellow-900 border-yellow-400";
 }
 
-export default function KitchenBoard() {
+// kitchenOnly: signed in as Kitchen staff — no way back to the till, just
+// Log out (back to the PIN pad).
+export default function KitchenBoard({ kitchenOnly = false }: { kitchenOnly?: boolean }) {
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
@@ -426,9 +428,22 @@ export default function KitchenBoard() {
       <div className="bg-surface border-b border-border px-3 sm:px-5 py-2 flex-shrink-0">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <Link href="/pos" className="px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border">
-              ← Back
-            </Link>
+            {kitchenOnly ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+                  window.location.replace("/pin");
+                }}
+                className="px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border"
+              >
+                Log out
+              </button>
+            ) : (
+              <Link href="/pos" className="px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border">
+                ← Back
+              </Link>
+            )}
             <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground font-semibold text-base sm:text-xl tracking-[-0.02em]">
               🍳 Kitchen Display
             </h1>

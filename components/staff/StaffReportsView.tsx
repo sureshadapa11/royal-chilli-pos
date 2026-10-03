@@ -1,5 +1,6 @@
 "use client";
 
+import { roleLabel } from "@/lib/roles";
 import { useCallback, useEffect, useState } from "react";
 import { useBrand } from "@/components/pos/useBrand";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
@@ -610,7 +611,7 @@ function StaffLabourReport() {
               {rows.map((r) => (
                 <tr key={r.staff_id} className="bg-background">
                   <td className="px-4 py-3 text-foreground font-medium">{r.name}</td>
-                  <td className="px-4 py-3 text-foreground capitalize">{r.role.replace("_", " ")}</td>
+                  <td className="px-4 py-3 text-foreground capitalize">{roleLabel(r.role)}</td>
                   <td className="px-4 py-3 text-right text-foreground">{r.hours_worked.toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-foreground">{r.late_count}</td>
                   <td className="px-4 py-3 text-right text-foreground">£{r.pay_rate.toFixed(2)}/hr</td>

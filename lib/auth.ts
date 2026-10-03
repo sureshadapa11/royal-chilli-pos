@@ -12,7 +12,7 @@ const JWT_SECRET = new TextEncoder().encode(
 const COOKIE_NAME = "pos_session";
 // "driver" (migration 091) isn't a StaffRole: drivers have no Staff Hub tabs,
 // only /staff/drivers and the /api/drivers/* endpoints.
-const VALID_ROLES = new Set<string>(["employee", "manager", "hr", "admin", "driver"]);
+const VALID_ROLES = new Set<string>(["employee", "kitchen", "manager", "supervisor", "hr", "admin", "driver"]);
 
 export async function createSession(user: SessionUser): Promise<string> {
   const token = await new SignJWT({

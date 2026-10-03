@@ -56,11 +56,19 @@ export function tillCookieOptions() {
 
 /**
  * Orders and payments are only taken on a paired till of the business the
- * person is working in — for everyone, managers included. Anywhere else the
+ * person is working in — for everyone, managers included (and never by
+ * Kitchen staff). Anywhere else the
  * POS still opens (managers can look things up), but this refuses the action.
  * Returns the error response, or null when it's a till.
  */
-export async function tillRequired(req: NextRequest, businessId: number): Promise<NextResponse | null> {
+export async function tillRequired(
+  req: NextRequest,
+  { businessId, role }: { businessId: number; role: string },
+): Promise<NextResponse | null> {
+  // Kitchen staff work the Kitchen Display only — no orders or payments.
+  if (role === "kitchen") {
+    return NextResponse.json({ error: "Kitchen staff can't take orders or payments." }, { status: 403 });
+  }
   const till = await tillFromRequest(req);
   if (till && till.businessId === businessId) return null;
   return NextResponse.json(

@@ -24,8 +24,10 @@ export default function PinPad() {
         body: JSON.stringify({ pin: value }),
       });
       if (res.ok) {
-        // Full load so the till starts fresh as this person.
-        window.location.replace("/pos");
+        // Full load so the till starts fresh as this person. Kitchen staff
+        // go straight to the Kitchen Display — it's all they use.
+        const data = await res.json().catch(() => ({}));
+        window.location.replace(data?.user?.role === "kitchen" ? "/pos/kitchen" : "/pos");
         return;
       }
       const data = await res.json().catch(() => ({}));

@@ -1,14 +1,12 @@
 import type { StaffRole } from "@/lib/types";
 import supabase from "@/lib/supabase";
+import { ROLE_LABEL, isFrontLine, isManagerRole } from "@/lib/roles";
 
-export const ALL_ROLES: StaffRole[] = ["employee", "manager", "hr", "admin"];
+// The roles shown in Settings → Roles & Permissions. Super admin is always on
+// and Front House / Kitchen never have Staff Hub tabs, so they aren't editable.
+export const ALL_ROLES: StaffRole[] = ["admin", "supervisor", "manager", "hr", "employee", "kitchen"];
 
-export const ROLE_LABELS: Record<StaffRole, string> = {
-  employee: "Employee",
-  manager: "Manager",
-  hr: "HR",
-  admin: "Admin",
-};
+export const ROLE_LABELS = Object.fromEntries(ALL_ROLES.map((r) => [r, ROLE_LABEL[r]])) as Record<StaffRole, string>;
 
 // One permission per Staff Hub tab (tab-level access, per the owner's decision),
 // plus approve_stock_takes: posting a counted stock take is a separate sign-off
@@ -49,16 +47,16 @@ export const TAB_LABELS: Record<TabKey, string> = {
 // fail-closed fallback if that table can't be read. admin always has every tab;
 // employee never has Staff Hub.
 const DEFAULTS: Record<TabKey, StaffRole[]> = {
-  attendance: ["manager", "hr", "admin"],
+  attendance: ["supervisor", "manager", "hr", "admin"],
   hr: ["hr", "admin"],
-  menu: ["manager", "admin"],
-  tables: ["manager", "admin"],
-  inventory: ["manager", "admin"],
-  approve_stock_takes: ["manager", "admin"],
-  website: ["manager", "admin"],
-  finance: ["manager", "hr", "admin"],
-  analytics: ["manager", "admin"],
-  reports: ["manager", "hr", "admin"],
+  menu: ["supervisor", "manager", "admin"],
+  tables: ["supervisor", "manager", "admin"],
+  inventory: ["supervisor", "manager", "admin"],
+  approve_stock_takes: ["supervisor", "manager", "admin"],
+  website: ["supervisor", "manager", "admin"],
+  finance: ["supervisor", "manager", "hr", "admin"],
+  analytics: ["supervisor", "manager", "admin"],
+  reports: ["supervisor", "manager", "hr", "admin"],
   audit: ["admin"],
   settings: ["admin"],
 };
@@ -107,7 +105,7 @@ refreshPermissionsCache();
 export function canAccess(role: StaffRole, tab: TabKey): boolean {
   // transition safety net: pre-migration-032 accounts may still be "owner"
   if (role === "admin" || (role as string) === "owner") return true;
-  if (role === "employee") return false;
+  if (isFrontLine(role)) return false;
   const set = cache?.[tab];
   return set ? set.has(role) : DEFAULTS[tab].includes(role);
 }
@@ -127,9 +125,9 @@ export const canManageFinance = (role: StaffRole) => canAccess(role, "finance");
 export const canApproveStockTakes = (role: StaffRole) => canAccess(role, "approve_stock_takes");
 // Drivers (roster + assigning deliveries) and Customers & Loyalty share this
 // admin/manager gate; both are linked from the Staff Hub sidebar.
-export const canViewCrm = (role: StaffRole) => role === "admin" || role === "manager";
-export const canManageCrm = (role: StaffRole) => role === "admin" || role === "manager";
-export const canManageDrivers = (role: StaffRole) => role === "admin" || role === "manager";
+export const canViewCrm = (role: StaffRole) => isManagerRole(role);
+export const canManageCrm = (role: StaffRole) => isManagerRole(role);
+export const canManageDrivers = (role: StaffRole) => isManagerRole(role);
 
 // --- Settings → Roles & Permissions editor --------------------------------
 export async function getPermissionMatrix(): Promise<Record<TabKey, Record<StaffRole, boolean>>> {
@@ -143,10 +141,11 @@ export async function getPermissionMatrix(): Promise<Record<TabKey, Record<Staff
       matrix[key][row.role as StaffRole] = !!row.granted;
     }
   }
-  // admin is always on, employee always off — not editable.
+  // Super admin is always on, Front House / Kitchen always off — not editable.
   for (const k of TAB_KEYS) {
     matrix[k].admin = true;
     matrix[k].employee = false;
+    matrix[k].kitchen = false;
   }
   return matrix;
 }

@@ -1,7 +1,7 @@
-// Roles were consolidated 12 → 4 (migration 032). employee = front line
-// (POS + kitchen, no Staff Hub); manager = operations; hr = people & pay;
-// admin = everything.
-export type StaffRole = "employee" | "manager" | "hr" | "admin";
+// Six roles (lib/roles.ts has the names people see): admin = Super admin
+// (only one, the group owner), supervisor, manager, hr, employee = Front House
+// (till only), kitchen (Kitchen Display only).
+export type StaffRole = "employee" | "kitchen" | "manager" | "supervisor" | "hr" | "admin";
 
 export interface Staff {
   id: number;

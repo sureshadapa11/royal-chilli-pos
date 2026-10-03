@@ -1,5 +1,6 @@
 "use client";
 
+import { roleLabel } from "@/lib/roles";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
@@ -76,7 +77,7 @@ export default function StaffLocationAssignments({ staffId }: { staffId: number 
         <Link href="/staff/hr" className="text-sm text-muted-foreground hover:text-foreground">← Back to staff</Link>
         <h1 className="text-foreground font-bold text-xl mt-2">{employee.name}</h1>
         <p className="text-muted-foreground text-sm capitalize">
-          {employee.employee_number} · {employee.role.replace("_", " ")}
+          {employee.employee_number} · {roleLabel(employee.role)}
         </p>
       </div>
 
