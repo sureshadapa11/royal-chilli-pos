@@ -24,9 +24,9 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
       ? db.from("attendance_corrections").select("id", { count: "exact", head: true }).eq("status", "pending") : null,
     isManagement
       ? db.from("work_periods").select("id", { count: "exact", head: true }).eq("status", "open").lt("opened_at", tradingRangeUtc(today).start) : null,
-    canAccess(role, "finance")
+    canAccess(role, "delivery_platforms")
       ? db.from("platform_sales").select("id", { count: "exact", head: true }).eq("sales_date", yesterday) : null,
-    canAccess(role, "finance")
+    canAccess(role, "daily_accounts")
       ? db.from("daily_accounts").select("status").eq("trading_date", yesterday).maybeSingle() : null,
   ]);
 

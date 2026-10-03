@@ -1,4 +1,11 @@
 import { NextRequest } from "next/server";
+
+// lib/permissions reads role_permissions at import — no DB here, so it uses
+// its built-in defaults (Front House and Manager have the till, HR doesn't).
+jest.mock("@/lib/supabase", () => ({
+  __esModule: true,
+  default: { from: () => ({ select: () => Promise.resolve({ data: null, error: new Error("no db in unit tests") }) }) },
+}));
 import { createTillToken, tillRequired, TILL_COOKIE } from "../till-device";
 
 const req = (cookie?: string) =>
@@ -26,5 +33,12 @@ describe("tillRequired", () => {
     const res = await tillRequired(req(`${TILL_COOKIE}=${token}`), { businessId: 5, role: "kitchen" });
     expect(res?.status).toBe(403);
     expect((await res!.json()).error).toMatch(/Kitchen staff/);
+  });
+
+  it("refuses a role without the Till tick (HR by default)", async () => {
+    const token = await createTillToken(1, 5);
+    const res = await tillRequired(req(`${TILL_COOKIE}=${token}`), { businessId: 5, role: "hr" });
+    expect(res?.status).toBe(403);
+    expect((await res!.json()).error).toMatch(/can't take orders/);
   });
 });

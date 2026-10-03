@@ -43,10 +43,10 @@ export default async function StaffHubLayout({
         ...(see("tables") ? [{ href: "/staff/tables", label: "Tables", icon: "🪑" }] : []),
         ...(see("inventory") ? [{ href: "/staff/inventory", label: "Inventory", icon: "📦" }] : []),
         ...(canManageDrivers(session.role) ? [{ href: "/staff/drivers", label: "Drivers", icon: "🚗" }] : []),
-        ...(see("finance") ? [{ href: "/staff/platforms", label: "Delivery platforms", icon: "🛵", note: "Enter daily totals" }] : []),
-        ...(see("finance") ? [{ href: "/staff/daily-accounts", label: "Daily accounts", icon: "🧮", note: "Day-end sheet" }] : []),
+        ...(see("delivery_platforms") ? [{ href: "/staff/platforms", label: "Delivery platforms", icon: "🛵", note: "Enter daily totals" }] : []),
+        ...(see("daily_accounts") ? [{ href: "/staff/daily-accounts", label: "Daily accounts", icon: "🧮", note: "Day-end sheet" }] : []),
         ...(see("website") ? [{ href: "/staff/website", label: "Website", icon: "🌐" }] : []),
-        { href: "/pos", label: "Till", icon: "💷" },
+        ...(see("till") ? [{ href: "/pos", label: "Till", icon: "💷" }] : []),
       ],
     },
     {

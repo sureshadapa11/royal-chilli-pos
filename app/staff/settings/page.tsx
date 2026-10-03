@@ -12,12 +12,12 @@ import { isManagerRole } from "@/lib/staff-pin";
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 
 // Settings — one page, four tabs: General · Business setup · Roles &
-// Permissions · Businesses (owner only). The top menu's single "Settings"
+// Permissions (Super admin only) · Businesses (owner only). The top menu's single "Settings"
 // link opens it; each tab has its own address (?tab=…) so it can be linked to.
 const TABS = [
   { key: "general", label: "General", icon: "⚙️" },
   { key: "setup", label: "Business setup", icon: "🏢" },
-  { key: "permissions", label: "Roles & Permissions", icon: "🔐" },
+  { key: "permissions", label: "Roles & Permissions", icon: "🔐", superAdminOnly: true },
   { key: "businesses", label: "Businesses", icon: "🗂️", ownerOnly: true },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
@@ -26,7 +26,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   const session = await getSession();
   if (!session || !(session.owner || canAccess(session.role, "settings"))) redirect("/staff");
 
-  const tabs = TABS.filter((t) => !("ownerOnly" in t) || session.owner);
+  const tabs = TABS.filter((t) => (!("ownerOnly" in t) || session.owner) && (!("superAdminOnly" in t) || session.role === "admin"));
   const asked = (await searchParams).tab;
   const tab: TabKey = tabs.find((t) => t.key === asked)?.key ?? "general";
   const business = await getBusiness(session.businessId);

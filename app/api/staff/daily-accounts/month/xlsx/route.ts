@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageFinance } from "@/lib/permissions";
+import { canManageDailyAccounts } from "@/lib/permissions";
 import { getBusiness } from "@/lib/business";
 import { columnTotals, savedDays } from "@/lib/daily-accounts";
 import { DAILY_FIELDS } from "@/lib/daily-accounts-fields";
@@ -15,7 +15,7 @@ const monthName = (m: string) => new Date(m + "-01T12:00:00Z").toLocaleDateStrin
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageFinance(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !canManageDailyAccounts(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const month = req.nextUrl.searchParams.get("month") ?? "";
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return NextResponse.json({ error: "Pick a month" }, { status: 400 });
 

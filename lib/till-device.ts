@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEFAULT_BUSINESS_ID } from "./business-id";
+import type { StaffRole } from "@/lib/types";
 
 // A "paired till": a device a manager has signed in on once with their
 // password and ticked "set up as a till". It gets a long-lived pos_till
@@ -68,6 +69,13 @@ export async function tillRequired(
   // Kitchen staff work the Kitchen Display only — no orders or payments.
   if (role === "kitchen") {
     return NextResponse.json({ error: "Kitchen staff can't take orders or payments." }, { status: 403 });
+  }
+  // The "Till" tick in Settings → Roles & Permissions.
+  // (Loaded here, not at the top: lib/permissions reads the database when
+  // it's first imported.)
+  const { canUseTill } = await import("@/lib/permissions");
+  if (!canUseTill(role as StaffRole)) {
+    return NextResponse.json({ error: "Your role can't take orders or payments on the till." }, { status: 403 });
   }
   const till = await tillFromRequest(req);
   if (till && till.businessId === businessId) return null;

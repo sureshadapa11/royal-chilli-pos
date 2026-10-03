@@ -14,40 +14,39 @@ jest.mock("../supabase", () => ({
 import { canAccess, isStaffManagement, canManageFinance, canManageInventory } from "@/lib/permissions";
 
 describe("canAccess — default matrix", () => {
-  it("admin sees every tab", () => {
-    for (const t of ["attendance", "hr", "menu", "tables", "inventory", "website", "finance", "analytics", "reports", "audit", "settings"] as const) {
+  it("Super admin sees every area", () => {
+    for (const t of ["attendance", "hr", "menu", "tables", "inventory", "website", "finance", "analytics", "reports", "audit", "settings", "till", "drivers", "customers", "daily_accounts", "delivery_platforms"] as const) {
       expect(canAccess("admin", t)).toBe(true);
     }
   });
 
-  it("employee sees no tab", () => {
+  it("Front House has only the till; Kitchen nothing", () => {
+    expect(canAccess("employee", "till")).toBe(true);
     expect(canAccess("employee", "menu")).toBe(false);
     expect(canAccess("employee", "attendance")).toBe(false);
     expect(canAccess("employee", "settings")).toBe(false);
-    expect(canAccess("employee", "website")).toBe(false);
+    expect(canAccess("kitchen", "till")).toBe(false);
+    expect(canAccess("kitchen", "menu")).toBe(false);
   });
 
-  it("manager: operations + attendance/finance/reports, not hr/audit/settings", () => {
-    expect(canAccess("manager", "menu")).toBe(true);
-    expect(canAccess("manager", "tables")).toBe(true);
-    expect(canAccess("manager", "inventory")).toBe(true);
-    expect(canAccess("manager", "website")).toBe(true);
-    expect(canAccess("manager", "attendance")).toBe(true);
-    expect(canAccess("manager", "finance")).toBe(true);
-    expect(canAccess("manager", "reports")).toBe(true);
-    expect(canAccess("manager", "hr")).toBe(false);
-    expect(canAccess("manager", "audit")).toBe(false);
-    expect(canAccess("manager", "settings")).toBe(false);
+  it("Manager and Supervisor: operations, attendance, customers, settings — no HR, no Insights", () => {
+    for (const role of ["manager", "supervisor"] as const) {
+      for (const t of ["menu", "tables", "inventory", "approve_stock_takes", "drivers", "delivery_platforms", "daily_accounts", "website", "till", "attendance", "customers", "settings"] as const) {
+        expect(canAccess(role, t)).toBe(true);
+      }
+      for (const t of ["hr", "analytics", "reports", "finance", "audit"] as const) {
+        expect(canAccess(role, t)).toBe(false);
+      }
+    }
   });
 
-  it("hr: attendance, hr, finance, reports only", () => {
+  it("HR: attendance, HR & Payroll, reports only", () => {
     expect(canAccess("hr", "attendance")).toBe(true);
     expect(canAccess("hr", "hr")).toBe(true);
-    expect(canAccess("hr", "finance")).toBe(true);
     expect(canAccess("hr", "reports")).toBe(true);
+    expect(canAccess("hr", "finance")).toBe(false);
+    expect(canAccess("hr", "till")).toBe(false);
     expect(canAccess("hr", "menu")).toBe(false);
-    expect(canAccess("hr", "inventory")).toBe(false);
-    expect(canAccess("hr", "website")).toBe(false);
     expect(canAccess("hr", "analytics")).toBe(false);
     expect(canAccess("hr", "settings")).toBe(false);
   });
@@ -62,7 +61,8 @@ describe("helpers", () => {
   });
 
   it("legacy shims map to tabs", () => {
-    expect(canManageFinance("hr")).toBe(true);
+    expect(canManageFinance("hr")).toBe(false);
+    expect(canManageFinance("manager")).toBe(false);
     expect(canManageInventory("hr")).toBe(false);
     expect(canManageInventory("manager")).toBe(true);
   });
