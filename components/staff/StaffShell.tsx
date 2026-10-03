@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import type { HubNotice } from "@/lib/hub-notifications";
 import BusinessSwitcher, { type SwitcherOption } from "@/components/staff/BusinessSwitcher";
+import PickBusiness from "@/components/staff/PickBusiness";
 import { initials } from "@/lib/brand-client";
 
 export type NavItem = { href: string; label: string; icon: string; note?: string; external?: boolean };
@@ -20,6 +21,7 @@ export default function StaffShell({
   user,
   business,
   switcher,
+  allMode = false,
   nav,
   notices,
   children,
@@ -29,6 +31,8 @@ export default function StaffShell({
   business: { id: number; name: string; logoUrl: string | null; tagline: string | null };
   /** The group owner's business picker (owner only). */
   switcher?: SwitcherOption[];
+  /** Owner chose "All businesses": the dashboard is every business combined. */
+  allMode?: boolean;
   nav: NavGroup[];
   notices: HubNotice[];
   children: React.ReactNode;
@@ -116,7 +120,7 @@ export default function StaffShell({
             </span>
           </Link>
 
-          {switcher && <BusinessSwitcher current={business.id} options={switcher} className="hidden xl:flex" />}
+          {switcher && <BusinessSwitcher current={business.id} options={switcher} allMode={allMode} className="hidden xl:flex" />}
 
           {/* Wide screen: the menu row. It needs ~1,210px (logo, business
               switcher, five menus, Notifications, Logout); below xl the row
@@ -188,7 +192,7 @@ export default function StaffShell({
           ) : (
             <>
               <p className="px-2.5 pb-1 pt-2 text-[12px] text-muted-foreground">{user.name} · {ROLE_LABEL[user.role] ?? user.role}</p>
-              {switcher && <BusinessSwitcher current={business.id} options={switcher} className="px-2.5 pb-2" />}
+              {switcher && <BusinessSwitcher current={business.id} options={switcher} allMode={allMode} className="px-2.5 pb-2" />}
               {dashboard.items.map((item) => itemLink({ ...item, icon: "🏠" }, `flex gap-2.5 rounded-[10px] px-2.5 py-3 text-[15px] ${active(item.href) ? "bg-[#FDECE9]" : "hover:bg-[#FDECE9]"}`))}
               {groups.map((g) => (
                 <div key={g.label}>
@@ -205,6 +209,8 @@ export default function StaffShell({
       </aside>
 
       <main className="overflow-x-hidden">{children}</main>
+      {/* "All businesses" is for the dashboard; other pages belong to one business. */}
+      {allMode && switcher && pathname !== "/staff" && <PickBusiness options={switcher} />}
     </div>
   );
 }

@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getDashboardData } from "@/lib/staff-dashboard";
-import { getAdminDashboard, RANGES, type RangeKey } from "@/lib/admin-dashboard";
+import { getAdminDashboard, mergeDashboards, RANGES, type RangeKey } from "@/lib/admin-dashboard";
+import { cookies } from "next/headers";
+import { listBusinesses } from "@/lib/business";
+import { ALL_BUSINESSES_COOKIE } from "@/lib/owner-view";
 import StaffDashboard, { KpiCard } from "@/components/staff/StaffDashboard";
 import AdminDashboard from "@/components/staff/AdminDashboard";
 import GroupOverview from "@/components/staff/GroupOverview";
@@ -42,7 +45,11 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
     const { range } = await searchParams;
     // Summary offers whole weeks and months; an old ?range=today link gets this week.
     const key: RangeKey = range && range in RANGES && range !== "today" ? (range as RangeKey) : "this_week";
-    const data = await getAdminDashboard(session!.businessId, key);
+    // Owner with "Working in: All businesses": every business's dashboard combined.
+    const allMode = !!session!.owner && (await cookies()).get(ALL_BUSINESSES_COOKIE)?.value === "1";
+    const data = allMode
+      ? mergeDashboards(await Promise.all((await listBusinesses()).map(async (b) => ({ name: b.name, data: await getAdminDashboard(b.id, key) }))))
+      : await getAdminDashboard(session!.businessId, key);
     // The group owner sees every business first, then the one they're working in.
     const group = session!.owner ? await getGroupOverview(key) : null;
     return (
@@ -50,6 +57,11 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
         <div className="mx-auto max-w-[1240px]">
           {header}
           {group && <GroupOverview data={group} current={session!.businessId} />}
+          {allMode && (
+            <p className="mb-3 mt-1 text-[13px] font-semibold text-[#5B524B]">
+              Showing <span className="text-[#C82D1D]">all businesses combined</span> · pick one under &ldquo;Working in&rdquo; to see just that business
+            </p>
+          )}
           <AdminDashboard data={data} businessName={(await getBrand(session!.businessId)).name} />
         </div>
       </div>
