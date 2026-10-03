@@ -4,6 +4,8 @@ import fs from "fs";
 import path from "path";
 import Reveal from "@/components/site/Reveal";
 import { siteContent } from "@/lib/site-content";
+import { bizDb } from "@/lib/business-db";
+import { DEFAULT_BUSINESS_ID, pageBusinessId } from "@/lib/business";
 
 export const metadata: Metadata = {
   title: "Gallery — The Royal Chilli",
@@ -22,9 +24,13 @@ function captionFromFilename(file: string) {
 // also show up in this page.
 const POPULAR_DISH_FILES = siteContent.popularDishes.images.map((src) => src.replace("/gallery/", ""));
 
-export default function GalleryPage() {
+export default async function GalleryPage() {
+  // Photos uploaded in Staff Hub → Website → Menu & photos come first; the
+  // built-in photos below are The Royal Chilli's own.
+  const businessId = await pageBusinessId();
+  const { data: uploaded } = await bizDb(businessId).from("website_gallery").select("id, image_url, caption").order("position").order("id");
   const galleryDir = path.join(process.cwd(), "public", "gallery");
-  const files = fs.readdirSync(galleryDir).filter((f) => f.endsWith(".webp"));
+  const files = businessId === DEFAULT_BUSINESS_ID ? fs.readdirSync(galleryDir).filter((f) => f.endsWith(".webp")) : [];
 
   // A few dishes were uploaded twice under different filenames — show each dish once.
   const seen = new Set<string>();
@@ -49,6 +55,22 @@ export default function GalleryPage() {
       </Reveal>
 
       <div className="mt-12 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+        {(uploaded ?? []).map((p: { id: number; image_url: string; caption: string | null }, i: number) => (
+          <Reveal key={`u${p.id}`} delay={(i % 8) * 60} className="group relative aspect-square overflow-hidden rounded-xl">
+            <Image
+              src={p.image_url}
+              alt={p.caption || "Gallery photo"}
+              fill
+              sizes="(min-width: 768px) 25vw, (min-width: 640px) 33vw, 50vw"
+              className="object-cover transition group-hover:scale-105"
+            />
+            {p.caption && (
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5 opacity-0 transition group-hover:opacity-100">
+                <p className="text-xs font-medium text-white">{p.caption}</p>
+              </div>
+            )}
+          </Reveal>
+        ))}
         {photos.map(({ file, caption }, i) => (
           <Reveal key={file} delay={(i % 8) * 60} className="group relative aspect-square overflow-hidden rounded-xl">
             <Image

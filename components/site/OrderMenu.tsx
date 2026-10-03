@@ -106,7 +106,11 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
     return (
       <div key={item.id} className="py-3">
         <div className="flex items-center justify-between gap-4">
-          <div>
+          {item.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element -- uploaded dish photo
+            <img src={item.image_url} alt="" loading="lazy" className="h-16 w-16 flex-shrink-0 rounded-lg object-cover" />
+          )}
+          <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span
                 className={`inline-block h-2.5 w-2.5 rounded-full border ${
@@ -159,6 +163,10 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
   function renderNarrowItemRow(item: MenuItem) {
     return (
       <div key={item.id} className="flex items-start justify-between gap-3 py-3.5">
+        {item.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element -- uploaded dish photo
+            <img src={item.image_url} alt="" loading="lazy" className="h-16 w-16 flex-shrink-0 rounded-lg object-cover" />
+          )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <span

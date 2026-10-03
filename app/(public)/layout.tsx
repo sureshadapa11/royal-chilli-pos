@@ -13,6 +13,7 @@ import { headers } from "next/headers";
 import { ogImageUrl } from "@/lib/app-hosts";
 import { SITE_URL } from "@/lib/site-url";
 import { HoursProvider } from "@/components/site/HoursProvider";
+import PageViewTracker from "@/components/site/PageViewTracker";
 
 // Every page under this layout reads staff-editable content (opening hours,
 // hero text, promotions, etc.) straight from Supabase with no revalidate
@@ -73,6 +74,7 @@ export default async function PublicLayout({ children }: { children: React.React
       <main className="flex-1"><HoursProvider hours={openingHours}>{children}</HoursProvider></main>
       <SiteFooter hours={hoursSummary} />
       <CookieConsent />
+      <PageViewTracker />
     </div>
   );
 }

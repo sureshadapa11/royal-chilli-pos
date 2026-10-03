@@ -5,7 +5,7 @@ import { canManageStaff } from "@/lib/permissions";
 
 const EDITABLE_FIELDS = [
   "category_id", "name", "description", "price", "online_price", "is_veg", "active", "display_order",
-  "allergens", "calories", "protein_g", "carbs_g", "fat_g", "pos_available", "online_available",
+  "allergens", "calories", "protein_g", "carbs_g", "fat_g", "pos_available", "online_available", "image_url",
 ];
 const INT_BOOL_FIELDS = ["is_veg", "active", "pos_available", "online_available"];
 
