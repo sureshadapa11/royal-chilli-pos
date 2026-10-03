@@ -36,10 +36,14 @@ const spaceGrotesk = Space_Grotesk({
   variable: "--font-space-grotesk",
 });
 
+// Neutral defaults: this app serves every business and the shared staff
+// sign-in (crewportal), so nothing here names one business. Each business's
+// website (app/(public)/layout.tsx), sign-in and home-screen app
+// (app/manifest.json) add their own name.
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: "The Royal Chilli - POS System",
-  description: "Point of Sale system for The Royal Chilli, Hounslow",
+  title: "Staff sign in",
+  description: "Staff sign-in, till and back office.",
   manifest: "/manifest.json",
 };
 

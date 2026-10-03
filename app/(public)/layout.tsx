@@ -7,7 +7,8 @@ import PromoBanner from "@/components/site/PromoBanner";
 import { buildRestaurantSchema } from "@/lib/schema";
 import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
 import { bizDb } from "@/lib/business-db";
-import { pageBusinessId } from "@/lib/business";
+import type { Metadata } from "next";
+import { getBusiness, pageBusinessId } from "@/lib/business";
 import { SITE_URL } from "@/lib/site-url";
 import { HoursProvider } from "@/components/site/HoursProvider";
 
@@ -17,6 +18,14 @@ import { HoursProvider } from "@/components/site/HoursProvider";
 // a manager's edit in Staff Hub wouldn't appear live until the next deploy.
 // Forcing the whole route dynamic makes every save take effect immediately.
 export const dynamic = "force-dynamic";
+
+// This business's name for any page that doesn't set its own title (the root
+// layout's defaults are neutral, shared by every business).
+export async function generateMetadata(): Promise<Metadata> {
+  const b = await getBusiness(await pageBusinessId()).catch(() => null);
+  if (!b) return {};
+  return { title: b.name, description: `${b.name} — order online, book a table.` };
+}
 
 // Public-site-only body/nav font, styled after tamarindrestaurant.com's light,
 // wide-tracked look. Their actual typeface (Domaine Sans) is a paid font

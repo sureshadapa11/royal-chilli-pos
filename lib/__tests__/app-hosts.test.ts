@@ -1,4 +1,4 @@
-import { appPrefix, appUrl, baseDomain, sessionCookieDomain } from "../app-hosts";
+import { appPrefix, appUrl, baseDomain, isPortalHost, sessionCookieDomain } from "../app-hosts";
 
 describe("app-hosts", () => {
   it("finds the app subdomain", () => {
@@ -32,5 +32,12 @@ describe("app-hosts", () => {
     expect(appUrl("www.theroyalchilli.com", "attendance")).toBeNull();
     expect(appUrl(null, "pos")).toBeNull();
     expect(appUrl("royal-chilli-pos.vercel.app", "pos")).toBeNull();
+  });
+
+  it("knows the shared staff sign-in address", () => {
+    expect(isPortalHost("crewportal.vercel.app")).toBe(true);
+    expect(isPortalHost("CREWPORTAL.vercel.app:443")).toBe(true);
+    expect(isPortalHost("staff.theroyalchilli.com")).toBe(false);
+    expect(isPortalHost(null)).toBe(false);
   });
 });
