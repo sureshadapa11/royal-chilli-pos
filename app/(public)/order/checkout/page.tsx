@@ -8,7 +8,7 @@ import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType,
 import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, type WeekHours } from "@/lib/hours";
 import type { BusyState } from "@/lib/busy-mode";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
-import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-zones";
+import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-fees";
 import { useWeekHours } from "@/components/site/HoursProvider";
 
 type ZoneCheck = { deliverable: boolean };
