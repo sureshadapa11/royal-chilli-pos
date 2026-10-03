@@ -19,7 +19,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "The Royal Chilli — Authentic Indian Cuisine in Hounslow, London",
     description: "Authentic North and South Indian cuisine in the heart of Hounslow, London.",
-    images: [{ url: "/splash.webp", width: 1200, height: 459, alt: "The Royal Chilli" }],
+    images: [{ url: "/splash.jpg", width: 1200, height: 459, alt: "The Royal Chilli" }],
   },
 };
 

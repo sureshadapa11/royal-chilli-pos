@@ -8,7 +8,9 @@ import { buildRestaurantSchema } from "@/lib/schema";
 import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
 import { bizDb } from "@/lib/business-db";
 import type { Metadata } from "next";
-import { getBusiness, pageBusinessId } from "@/lib/business";
+import { DEFAULT_BUSINESS_ID, getBusiness, pageBusinessId } from "@/lib/business";
+import { headers } from "next/headers";
+import { ogImageUrl } from "@/lib/app-hosts";
 import { SITE_URL } from "@/lib/site-url";
 import { HoursProvider } from "@/components/site/HoursProvider";
 
@@ -24,7 +26,15 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const b = await getBusiness(await pageBusinessId()).catch(() => null);
   if (!b) return {};
-  return { title: b.name, description: `${b.name} — order online, book a table.` };
+  // Shared links show The Royal Chilli's restaurant photo (a .jpg — WhatsApp
+  // often skips .webp previews); another business shows its logo card.
+  const image = b.id === DEFAULT_BUSINESS_ID ? "/splash.jpg" : ogImageUrl((await headers()).get("host"));
+  return {
+    title: b.name,
+    description: `${b.name} — order online, book a table.`,
+    openGraph: { siteName: b.name, ...(image ? { images: [{ url: image }] } : {}) },
+    twitter: { card: "summary_large_image" },
+  };
 }
 
 // Public-site-only body/nav font, styled after tamarindrestaurant.com's light,
