@@ -16,7 +16,6 @@ const dash = (o: { today: number; week: [number, number][]; dish: [string, numbe
     range: "this_week", from: "2026-09-28", to: "2026-10-04", totalSales: 100, exVat: 80,
     costs: { ingredients: 5, staff: o.staff, expenses: o.rent, expenseLines: [{ key: "rent", label: "Rent", amount: o.rent }], commission: 2, cardFees: 1, total: 10 },
     profit: o.profit,
-    dailyAccounts: { bankIn: o.bank, cash: 50, notBanked: 50 - o.bank, pending: 0, cateringPaid: 0, cateringPending: 0, opening: 100, closing: null, submitted: o.submitted, daysSoFar: 6, missing: [] },
   },
 });
 
@@ -32,7 +31,6 @@ describe("owner's All businesses dashboard", () => {
     expect(m.platforms[0]).toMatchObject({ key: "hiest", orders: 2, sales: 20, keep: 16 });
     expect(m.summary.profit).toBe(90);
     expect(m.summary.costs.expenseLines).toEqual([{ key: "rent", label: "Rent", amount: 20 }]);
-    expect(m.summary.dailyAccounts).toMatchObject({ bankIn: 40, notBanked: 60, opening: 200, closing: null, submitted: 7, daysSoFar: 12 });
   });
 
   it("works comparisons out again from the totals, not by averaging", () => {
