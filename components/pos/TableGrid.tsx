@@ -90,7 +90,7 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                 }[needsAttention ? "attention" : status];
 
                 // Near the top of the plan, the status menu opens downwards.
-                const menuBelow = table.y - box.y < 8;
+                const menuBelow = table.box.y - box.y < 8;
                 return (
                   <div
                     key={table.id}
@@ -103,6 +103,7 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                       top: `calc(${((table.y - box.y) / box.h) * 100}% + 2px)`,
                       width: `calc(${(table.w / box.w) * 100}% - 4px)`,
                       height: `calc(${(table.h / box.h) * 100}% - 4px)`,
+                      transform: table.rotation ? `rotate(${table.rotation}deg)` : undefined,
                     }}
                     className={cn(
                       "absolute flex flex-col items-center justify-center border cursor-pointer",
@@ -136,6 +137,8 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                       <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-blue-400" />
                     )}
 
+                    {/* Number, status and seats stay upright on a turned table */}
+                    <div className="flex flex-col items-center" style={table.rotation ? { transform: `rotate(${-table.rotation}deg)` } : undefined}>
                     {/* Table number */}
                     <span className={cn(
                       "text-[17px] font-black leading-none tracking-tight",
@@ -156,6 +159,7 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                     <span className={cn("text-[9px] leading-none mt-0.5", needsAttention ? "text-orange-700 font-bold" : "text-muted-foreground")}>
                       {elapsedMins !== null ? `${table.capacity}p · ${tableElapsedLabel(elapsedMins)}` : `${table.capacity}p`}
                     </span>
+                    </div>
 
                     {/* Manual status override — flag a table Occupied/Reserved with no
                         order attached (a table pushed together with another for a big
@@ -175,6 +179,7 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                         <div
                           onClick={(e) => e.stopPropagation()}
                           className={cn("absolute right-0 z-50 w-32 rounded-lg border border-border bg-surface shadow-lg py-1", menuBelow ? "top-full mt-1" : "bottom-full mb-1")}
+                          style={table.rotation ? { transform: `rotate(${-table.rotation}deg)` } : undefined}
                         >
                           {([
                             { value: "available", label: "Mark Available" },

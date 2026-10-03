@@ -170,6 +170,7 @@ export interface RestaurantTable {
   pos_x?: number | null;
   pos_y?: number | null;
   shape?: "square" | "round" | "rect" | null;
+  rotation?: number | null; // degrees, 45° steps
 }
 
 export interface WorkPeriod {

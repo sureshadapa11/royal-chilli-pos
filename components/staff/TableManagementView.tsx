@@ -4,13 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { confirmDelete } from "@/components/ui/confirm";
 import {
-  GRID_H, GRID_W, SHAPES, SHAPE_LABEL, footprint, freeSpot, overlaps, placeTables,
-  type Placed, type Shape,
+  GRID_H, GRID_W, SHAPES, SHAPE_LABEL, effectiveRotation, footprint, freeSpot, keepOnFloor, outline, overlaps,
+  placeTables, round2, type Placed, type Shape,
 } from "@/lib/floor-plan";
 
-// Staff Hub → Tables: the restaurant's floor plan. Drag a table to move it
-// (it snaps to the grid and saves when you let go); tap one to change its
-// number, seats or shape, or delete it. The till's table screen draws the
+// Staff Hub → Tables: the restaurant's floor plan. Drag a table anywhere
+// (it saves when you let go; "Snap to grid" lines tables up in whole
+// cells); tap one to change its number, seats, shape or turn (45° steps), or
+// delete it. The till's table screen draws the
 // same plan. Read-only without full Tables access; on a phone, tables can't
 // be dragged but can still be edited from the panel.
 
@@ -22,6 +23,7 @@ type Table = {
   pos_x: number | null;
   pos_y: number | null;
   shape: Shape | null;
+  rotation: number | null;
 };
 type Spot = Placed<Table>;
 
@@ -41,8 +43,16 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   const [drag, setDrag] = useState<{ id: number; x: number; y: number } | null>(null);
   const [saved, setSaved] = useState(false);
   const [wide, setWide] = useState(true);
+  const [snap, setSnap] = useState(false);
+  useEffect(() => {
+    try { setSnap(localStorage.getItem("floorplan_snap") === "1"); } catch { /* private mode */ }
+  }, []);
+  const toggleSnap = () => setSnap((v) => {
+    try { localStorage.setItem("floorplan_snap", v ? "0" : "1"); } catch { /* private mode */ }
+    return !v;
+  });
   const canvasRef = useRef<HTMLDivElement>(null);
-  const dragStart = useRef<{ id: number; offX: number; offY: number; moved: boolean } | null>(null);
+  const dragStart = useRef<{ id: number; offX: number; offY: number; startX: number; startY: number; moved: boolean } | null>(null);
   const { toast } = useToast();
 
   const load = useCallback(async () => {
@@ -101,29 +111,30 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     if (!canDrag) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const { cx, cy } = cellAt(e.clientX, e.clientY);
-    dragStart.current = { id: t.id, offX: cx - t.x, offY: cy - t.y, moved: false };
+    dragStart.current = { id: t.id, offX: cx - t.x, offY: cy - t.y, startX: cx, startY: cy, moved: false };
   }
 
   function onPointerMove(e: React.PointerEvent, t: Spot) {
     const d = dragStart.current;
     if (!d || d.id !== t.id) return;
     const { cx, cy } = cellAt(e.clientX, e.clientY);
-    const x = Math.max(0, Math.min(GRID_W - t.w, Math.round(cx - d.offX)));
-    const y = Math.max(0, Math.min(GRID_H - t.h, Math.round(cy - d.offY)));
-    if (x !== t.x || y !== t.y || drag) {
-      d.moved = d.moved || x !== placed.find((p) => p.id === t.id)!.x || y !== placed.find((p) => p.id === t.id)!.y;
-      setDrag({ id: t.id, x, y });
-    }
+    // A tap wobbles a little — only a real drag (half a cell or more) moves it.
+    if (!d.moved && Math.hypot(cx - d.startX, cy - d.startY) < 0.5) return;
+    d.moved = true;
+    const rawX = snap ? Math.round(cx - d.offX) : round2(cx - d.offX);
+    const rawY = snap ? Math.round(cy - d.offY) : round2(cy - d.offY);
+    setDrag({ id: t.id, ...keepOnFloor(rawX, rawY, t.w, t.h, t.rotation) });
   }
 
   async function onPointerUp(t: Spot) {
     const d = dragStart.current;
     dragStart.current = null;
     if (!d || !drag || drag.id !== t.id) { setDrag(null); return; }
-    const spot = { x: drag.x, y: drag.y, w: t.w, h: t.h };
+    const spot = { x: drag.x, y: drag.y };
     setDrag(null);
     if (!d.moved) return;
-    if (placed.some((p) => p.id !== t.id && overlaps(spot, p))) {
+    const box = outline(spot.x, spot.y, t.w, t.h, t.rotation);
+    if (placed.some((p) => p.id !== t.id && overlaps(box, p.box))) {
       toast({ variant: "destructive", title: "Tables can't overlap", description: "Drop it in a clear space." });
       return;
     }
@@ -148,7 +159,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     const nums = tables.map((t) => parseInt(t.table_number.replace(/\D/g, ""), 10)).filter(Number.isFinite);
     const number = `T${(nums.length ? Math.max(...nums) : 0) + 1}`;
     const { w, h } = footprint(4, "square");
-    const spot = freeSpot(placed, w, h);
+    const spot = freeSpot(placed.map((p) => p.box), w, h);
     const data = await call("/api/tables", "POST", { table_number: number, capacity: 4, shape: "square", pos_x: spot.x, pos_y: spot.y });
     if (data?.table) {
       setSelected(data.table.id);
@@ -156,19 +167,22 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     }
   }
 
-  async function update(t: Spot, change: Partial<Pick<Table, "table_number" | "capacity" | "shape">>) {
-    // A bigger table or a new shape must still fit where it is.
+  async function update(t: Spot, change: Partial<Pick<Table, "table_number" | "capacity" | "shape" | "rotation">>) {
+    // A bigger, reshaped or turned table must still fit where it is: keep its
+    // centre, stay on the floor, and if it now overlaps a neighbour, move it
+    // to a free space.
     const capacity = change.capacity ?? t.capacity;
     const shape = change.shape ?? t.shape;
+    const rotation = effectiveRotation(shape, change.rotation ?? t.rotation);
     const { w, h } = footprint(capacity, shape);
-    let pos: { pos_x?: number; pos_y?: number } = {};
-    const here = { x: t.x, y: t.y, w, h };
-    if (here.x + w > GRID_W || here.y + h > GRID_H || placed.some((p) => p.id !== t.id && overlaps(here, p))) {
-      const others = placed.filter((p) => p.id !== t.id);
-      const spot = freeSpot(others, w, h);
-      pos = { pos_x: spot.x, pos_y: spot.y };
-      toast({ title: `${t.table_number} moved to fit`, description: "It got bigger — drag it back where you want it." });
+    let at = keepOnFloor(round2(t.x + t.w / 2 - w / 2), round2(t.y + t.h / 2 - h / 2), w, h, rotation);
+    let moved = false;
+    if (placed.some((p) => p.id !== t.id && overlaps(outline(at.x, at.y, w, h, rotation), p.box))) {
+      at = freeSpot(placed.filter((p) => p.id !== t.id).map((p) => p.box), w, h);
+      moved = true;
     }
+    const pos = at.x !== t.x || at.y !== t.y ? { pos_x: at.x, pos_y: at.y } : {};
+    if (moved) toast({ title: `${t.table_number} moved to fit`, description: "It no longer fitted there — drag it back where you want it." });
     await call("/api/tables", "PUT", { id: t.id, ...change, ...pos }, true);
   }
 
@@ -185,11 +199,17 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
             <h1 style={heading} className="text-[26px] font-semibold tracking-[-0.02em] text-foreground">Tables</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {tables.length} table{tables.length === 1 ? "" : "s"} · {totalSeats} seats
-              {canDrag ? " · drag a table to move it, tap it to edit" : canEdit ? " · tap a table to edit it" : ""}
+              {canDrag ? " · drag a table anywhere, tap it to edit" : canEdit ? " · tap a table to edit it" : ""}
             </p>
           </div>
           <div className="flex items-center gap-3">
             {saved && <span className="text-sm font-semibold text-emerald-600">✓ Saved</span>}
+            {canDrag && (
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-foreground">
+                <input type="checkbox" className="h-4 w-4 accent-red-600" checked={snap} onChange={toggleSnap} />
+                Snap to grid
+              </label>
+            )}
             {canEdit && (
               <button onClick={addTable} disabled={busy} className="rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-50">
                 + Add table
@@ -210,8 +230,10 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                 className="relative w-full select-none rounded-xl bg-[#FBF8F1]"
                 style={{
                   aspectRatio: `${GRID_W} / ${GRID_H}`,
-                  backgroundImage: "linear-gradient(#ECE5D6 1px, transparent 1px), linear-gradient(90deg, #ECE5D6 1px, transparent 1px)",
-                  backgroundSize: `${100 / GRID_W}% ${100 / GRID_H}%`,
+                  ...(snap ? {
+                    backgroundImage: "linear-gradient(#ECE5D6 1px, transparent 1px), linear-gradient(90deg, #ECE5D6 1px, transparent 1px)",
+                    backgroundSize: `${100 / GRID_W}% ${100 / GRID_H}%`,
+                  } : {}),
                 }}
               >
                 {shown.map((t) => {
@@ -230,10 +252,16 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                       onPointerCancel={() => { dragStart.current = null; setDrag(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") setSelected(t.id); }}
                       className={`absolute flex flex-col items-center justify-center border-2 ${st.fill} ${isSel ? "border-blue-500 ring-2 ring-blue-400/40" : st.ring} ${t.shape === "round" ? "rounded-full" : "rounded-lg"} ${canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "z-10 opacity-90 shadow-lg" : "shadow-sm"} touch-none transition-[box-shadow]`}
-                      style={{ left: `${(t.x / GRID_W) * 100}%`, top: `${(t.y / GRID_H) * 100}%`, width: `${(t.w / GRID_W) * 100}%`, height: `${(t.h / GRID_H) * 100}%` }}
+                      style={{
+                        left: `${(t.x / GRID_W) * 100}%`, top: `${(t.y / GRID_H) * 100}%`,
+                        width: `${(t.w / GRID_W) * 100}%`, height: `${(t.h / GRID_H) * 100}%`,
+                        transform: t.rotation ? `rotate(${t.rotation}deg)` : undefined,
+                      }}
                     >
-                      <span className="text-[clamp(11px,1.4vw,17px)] font-black leading-none text-foreground">{t.table_number}</span>
-                      <span className="mt-0.5 text-[clamp(9px,0.9vw,11px)] text-muted-foreground">{t.capacity} seats</span>
+                      <span className="flex flex-col items-center" style={t.rotation ? { transform: `rotate(${-t.rotation}deg)` } : undefined}>
+                        <span className="text-[clamp(11px,1.4vw,17px)] font-black leading-none text-foreground">{t.table_number}</span>
+                        <span className="mt-0.5 text-[clamp(9px,0.9vw,11px)] text-muted-foreground">{t.capacity} seats</span>
+                      </span>
                     </div>
                   );
                 })}
@@ -270,7 +298,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
 
 function TablePanel({ t, canEdit, busy, onUpdate, onDelete }: {
   t: Spot; canEdit: boolean; busy: boolean;
-  onUpdate: (c: Partial<Pick<Table, "table_number" | "capacity" | "shape">>) => void; onDelete: () => void;
+  onUpdate: (c: Partial<Pick<Table, "table_number" | "capacity" | "shape" | "rotation">>) => void; onDelete: () => void;
 }) {
   const [number, setNumber] = useState(t.table_number);
   const saveNumber = () => { const n = number.trim(); if (n && n !== t.table_number) onUpdate({ table_number: n }); else setNumber(t.table_number); };
@@ -301,6 +329,22 @@ function TablePanel({ t, canEdit, busy, onUpdate, onDelete }: {
           </button>
         ))}
       </div>
+
+      {t.shape !== "round" && (
+        <>
+          <p className="mt-4 text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Turn</p>
+          <div className="mt-1 flex items-center gap-3">
+            <button type="button" onClick={() => onUpdate({ rotation: t.rotation - 45 })} disabled={!canEdit || busy}
+              aria-label="Turn left 45°" className="h-10 w-10 rounded-full border border-border text-lg hover:bg-surface-hover disabled:opacity-40">↺</button>
+            <span className="min-w-[3ch] text-center text-lg font-bold tabular-nums">{t.rotation}°</span>
+            <button type="button" onClick={() => onUpdate({ rotation: t.rotation + 45 })} disabled={!canEdit || busy}
+              aria-label="Turn right 45°" className="h-10 w-10 rounded-full border border-border text-lg hover:bg-surface-hover disabled:opacity-40">↻</button>
+            {t.rotation !== 0 && (
+              <button type="button" onClick={() => onUpdate({ rotation: 0 })} disabled={!canEdit || busy} className="text-xs font-semibold text-muted-foreground hover:text-foreground">Straighten</button>
+            )}
+          </div>
+        </>
+      )}
 
       {canEdit && (
         <button type="button" onClick={onDelete} disabled={busy} className="mt-5 w-full rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
