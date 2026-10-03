@@ -63,6 +63,9 @@ export default function StaffShell({
   }
 
   const toggle = (key: string) => setOpenMenu((m) => (m === key ? null : key));
+  // Moving the mouse onto another group closes one opened by a click, so only
+  // one list is ever showing (and it doesn't pop back on the way out).
+  const hoverGroup = (key: string) => setOpenMenu((m) => (m && m !== key ? null : m));
   // nav[0] is the unlabelled "Dashboard" entry; the rest are dropdown groups.
   const [dashboard, ...groups] = nav;
 
@@ -134,7 +137,7 @@ export default function StaffShell({
                 {g.label}
               </Link>
             ) : (
-              <div key={g.label} className={`hub-mi relative ${openMenu === g.label ? "open" : ""}`}>
+              <div key={g.label} onMouseEnter={() => hoverGroup(g.label)} className={`hub-mi relative ${openMenu === g.label ? "open" : ""}`}>
                 <button type="button" onClick={() => toggle(g.label)} aria-expanded={openMenu === g.label}
                   className={`${topBtn} ${groupActive(g) ? "text-[#C82D1D]" : "text-[#5B524B]"} hover:bg-[#F6F1E6]`}>
                   {g.label} <span className="text-[10px] opacity-60">▼</span>
@@ -144,7 +147,7 @@ export default function StaffShell({
                 </div>
               </div>
             ))}
-            <div className={`hub-mi relative ${openMenu === "__n" ? "open" : ""}`}>
+            <div onMouseEnter={() => hoverGroup("__n")} className={`hub-mi relative ${openMenu === "__n" ? "open" : ""}`}>
               <button type="button" onClick={() => toggle("__n")} aria-expanded={openMenu === "__n"} className={`${topBtn} text-[#5B524B] hover:bg-[#F6F1E6]`}>
                 Notifications {badge} <span className="text-[10px] opacity-60">▼</span>
               </button>
