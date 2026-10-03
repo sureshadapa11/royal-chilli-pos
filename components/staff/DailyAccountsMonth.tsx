@@ -6,7 +6,7 @@ import type { DailyRow } from "@/lib/daily-accounts";
 
 // Staff Hub → Daily accounts → Month: the paper Daily Accounts Report — every
 // day of the month, each column, and the month total (each field added up on
-// its own). Download for Excel (CSV) or print / save as PDF on A3 landscape.
+// its own). Download as Excel (.xlsx) or print / save as PDF on A3 landscape.
 
 type Month = { month: string; from: string; to: string; rows: DailyRow[]; totals: Record<string, number | null> };
 
@@ -41,37 +41,65 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
   const byDate = new Map((data?.rows ?? []).map((r) => [r.trading_date, r]));
   const days = data ? daysOf(data.from, data.to) : [];
 
-  function downloadCsv() {
-    if (!data) return;
-    const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
-    const head = ["Date", ...DAILY_FIELDS.map((f) => f.label), "Notes", "Status"];
-    const lines = days.map((d) => {
-      const r = byDate.get(d);
-      return [dayName(d), ...DAILY_FIELDS.map((f) => money(r?.[f.key])), r?.notes ?? "", r ? r.status : ""];
-    });
-    lines.push(["MONTH TOTAL", ...DAILY_FIELDS.map((f) => money(data.totals[f.key])), "", ""]);
-    const csv = [head, ...lines].map((l) => l.map((v) => esc(String(v))).join(",")).join("\r\n");
-    const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+  // Excel: a real .xlsx from the server — dates as text (no #####), amounts as
+  // numbers with 2 decimals, columns wide enough to read.
+  function downloadExcel() {
     const a = document.createElement("a");
-    a.href = url;
-    a.download = `Daily accounts ${businessName} ${data.month}.csv`;
+    a.href = `/api/staff/daily-accounts/month/xlsx?month=${month}`;
     a.click();
-    URL.revokeObjectURL(url);
+  }
+
+  // Print / PDF: a clean A3-landscape sheet in its own window, so every column
+  // fits on the page (printing the screen cut off whatever was scrolled away).
+  function printSheet() {
+    if (!data) return;
+    const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    const head = `<tr><th class="l">Date</th>${DAILY_FIELDS.map((f) => `<th>${esc(f.label)}</th>`).join("")}<th class="l notes">Notes</th></tr>`;
+    const body = days.map((d) => {
+      const r = byDate.get(d);
+      return `<tr${r?.status === "draft" ? ' class="draft"' : ""}><td class="l">${dayName(d)}</td>${DAILY_FIELDS.map((f) => `<td>${money(r?.[f.key])}</td>`).join("")}<td class="l notes">${esc(r?.notes ?? "")}</td></tr>`;
+    }).join("");
+    const total = `<tr class="total"><td class="l">MONTH TOTAL</td>${DAILY_FIELDS.map((f) => `<td>${money(data.totals[f.key])}</td>`).join("")}<td></td></tr>`;
+    const title = `${esc(businessName)} — Daily Accounts Report`;
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Daily accounts ${esc(businessName)} ${data.month}</title><style>
+      @page { size: A3 landscape; margin: 8mm; }
+      * { box-sizing: border-box; }
+      body { margin: 0; font-family: Arial, Helvetica, sans-serif; color: #1C1917; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      h1 { font-size: 15px; margin: 0 0 2px; }
+      p { font-size: 10px; margin: 0 0 6px; color: #57534E; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 9px; }
+      th, td { border: 1px solid #D8CFBD; padding: 3px 4px; text-align: right; font-variant-numeric: tabular-nums; overflow: hidden; }
+      th { background: #1F4D3A; color: #fff; border-color: #1F4D3A; font-weight: 600; white-space: normal; }
+      .l { text-align: left; }
+      th.l:first-child, td.l:first-child { width: 74px; white-space: nowrap; }
+      .notes { width: 150px; white-space: normal; word-break: break-word; }
+      tr.draft td { background: #FFF8E1; }
+      tr.total td { background: #EDE7DA; font-weight: 700; }
+      tr { page-break-inside: avoid; }
+      thead { display: table-header-group; }
+    </style></head><body>
+      <h1>${title}</h1>
+      <p>Reporting month: ${monthName(data.month)} · amounts in £ · the total adds up each column on its own</p>
+      <table><thead>${head}</thead><tbody>${body}${total}</tbody></table>
+      <script>window.onload = function () { window.focus(); window.print(); };<\/script>
+    </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return window.print();
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   }
 
   const cell = "border border-[#D8CFBD] px-1.5 py-1 text-right tabular-nums";
   return (
     <div className="da-sheet rounded-[14px] border border-border bg-surface p-4 md:p-5">
-      {/* Print / save as PDF: just the sheet, A3 landscape like the paper one. */}
-      <style>{`@media print { @page { size: A3 landscape; margin: 10mm; } body * { visibility: hidden; } .da-sheet, .da-sheet * { visibility: visible; } .da-sheet { position: absolute; inset: 0; border: 0; } .da-noprint { display: none !important; } }`}</style>
-
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <h2 className="text-[16px] font-semibold">{businessName} — Daily Accounts Report</h2>
         <div className="da-noprint ml-auto flex flex-wrap items-center gap-2">
           <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)}
             className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[14px]" />
-          <button onClick={downloadCsv} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">⬇ Excel (CSV)</button>
-          <button onClick={() => window.print()} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">🖨 Print / PDF</button>
+          <button onClick={downloadExcel} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">⬇ Excel</button>
+          <button onClick={printSheet} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">🖨 Print / PDF</button>
         </div>
       </div>
       <p className="mb-3 text-[12.5px] text-muted-foreground">Reporting month: {monthName(month)} · amounts in £ · the total adds up each column on its own</p>
