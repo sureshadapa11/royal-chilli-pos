@@ -46,7 +46,7 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
     <div className="rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5">
       <h2 className="text-foreground font-bold text-lg">Roles &amp; Permissions</h2>
       <p className="mt-1 text-muted-foreground text-xs">
-        Which roles can open each Staff Hub tab. Super admin always has everything; Front House and Kitchen never see Staff Hub — those aren't editable.
+        Which roles can open each Staff Hub tab. Super admin always has everything, Front House has only the till, and Kitchen only the Kitchen Display — those three aren't editable. Changes apply to every business.
         {!canEdit && " Only an Admin can change this."}
       </p>
 

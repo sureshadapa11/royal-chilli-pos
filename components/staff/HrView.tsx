@@ -794,6 +794,7 @@ type InfoForm = {
   address: string; date_of_birth: string; hire_date: string;
   employment_type: "hourly" | "salaried"; pay_rate: string; pay_frequency: "weekly" | "monthly";
   emergency_contact_name: string; emergency_contact_phone: string;
+  can_deliver: boolean;
 };
 
 function formFromStaff(s: Staff): InfoForm {
@@ -802,6 +803,7 @@ function formFromStaff(s: Staff): InfoForm {
     address: s.address || "", date_of_birth: s.date_of_birth || "", hire_date: s.hire_date || "",
     employment_type: s.employment_type, pay_rate: String(s.pay_rate), pay_frequency: s.pay_frequency,
     emergency_contact_name: s.emergency_contact_name || "", emergency_contact_phone: s.emergency_contact_phone || "",
+    can_deliver: !!s.can_deliver,
   };
 }
 
@@ -868,6 +870,7 @@ function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: St
         address: form.address.trim() || null, date_of_birth: form.date_of_birth || null, hire_date: form.hire_date || null,
         employment_type: form.employment_type, pay_rate: Number(form.pay_rate) || 0, pay_frequency: form.pay_frequency,
         emergency_contact_name: form.emergency_contact_name.trim() || null, emergency_contact_phone: form.emergency_contact_phone.trim() || null,
+        can_deliver: form.can_deliver,
       };
       if (form.password) payload.password = form.password;
 
@@ -903,6 +906,14 @@ function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: St
         <Text label="New password (leave blank to keep)" value={form.password} onChange={(v) => setForm({ ...form, password: v })} placeholder="6+ characters" />
         <Select label="Role" value={form.role} onChange={(v) => setForm({ ...form, role: v })} options={rolesFor(staff.role)} />
       </div>
+      <label className="flex items-start gap-2.5 rounded-lg border border-border px-3 py-2.5 text-sm text-foreground">
+        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-red-600" checked={form.can_deliver}
+          onChange={(e) => setForm({ ...form, can_deliver: e.target.checked })} />
+        <span>
+          <span className="font-semibold">Can deliver</span>
+          <span className="block text-xs text-muted-foreground">Can be given delivery orders, and signs in on their phone to see My deliveries.</span>
+        </span>
+      </label>
       <TillPinField staffId={staff.id} />
 
       <SectionHeading>Employment &amp; Pay</SectionHeading>

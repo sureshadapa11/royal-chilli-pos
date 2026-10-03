@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const { data: drivers, error } = await supabase
     .from("staff")
     .select("id, name, phone, vehicle_type, vehicle_registration, driver_status")
-    .eq("role", "driver")
+    .eq("can_deliver", true)
     .eq("active", 1)
     .in("id", await staffIdsAt(session.businessId));
   if (error) return NextResponse.json({ error: "Failed to fetch drivers" }, { status: 500 });

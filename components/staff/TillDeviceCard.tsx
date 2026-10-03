@@ -32,23 +32,23 @@ export default function TillDeviceCard() {
       ) : state.paired ? (
         <>
           <p className="mt-1 text-sm text-muted-foreground">
-            ✅ This device is a till. Staff sign in on it with their 4-digit PIN, and it can take orders and payments.
+            ✅ This device is a till / kitchen screen. Staff sign in on it with their 4-digit PIN: Front House and managers get the till (orders and payments), Kitchen staff get the Kitchen Display.
           </p>
           <button type="button" disabled={busy} onClick={() => change("DELETE")}
             className="mt-3 rounded-lg border border-border px-4 py-2 text-sm font-semibold text-foreground hover:bg-surface-hover disabled:opacity-60">
-            {busy ? "Saving…" : "Stop using this device as a till"}
+            {busy ? "Saving…" : "Stop using this device as a till / kitchen screen"}
           </button>
         </>
       ) : (
         <>
           <p className="mt-1 text-sm text-muted-foreground">
             {state.otherBusiness
-              ? "This device is a till for another business. Make it a till for this business instead?"
-              : "Use this on the reception tablet: staff will sign in on it with their PIN, and it can take orders and payments."}
+              ? "This device is a till / kitchen screen for another business. Use it for this business instead?"
+              : "Use this on the reception till or the kitchen screen: staff sign in on it with their PIN. Front House and managers get the till, Kitchen staff the Kitchen Display."}
           </p>
           <button type="button" disabled={busy} onClick={() => change("POST")}
             className="mt-3 rounded-lg bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-60">
-            {busy ? "Saving…" : "Make this device a till"}
+            {busy ? "Saving…" : "Make this device a till / kitchen screen"}
           </button>
         </>
       )}

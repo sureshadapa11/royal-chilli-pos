@@ -26,7 +26,7 @@ export default async function StaffHubLayout({
   const session = await getSession();
 
   if (!session) redirect("/login");
-  const isDriver = (session.role as string) === "driver";
+  const isDriver = (session.role as string) === "driver" || !!session.deliver;
   if (!isStaffManagement(session.role) && !isDriver) redirect("/pos");
 
   const see = (tab: Parameters<typeof canAccess>[1]) => canAccess(session.role, tab);

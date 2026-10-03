@@ -8,12 +8,12 @@ import { canManageStaff } from "@/lib/permissions";
 import { staffLocationIds } from "@/lib/locations";
 
 const PROFILE_FIELDS =
-  "id, name, username, role, active, employee_number, email, phone, address, date_of_birth, hire_date, employment_type, pay_rate, pay_frequency, emergency_contact_name, emergency_contact_phone, notes, vehicle_type, vehicle_registration, driver_status, created_at";
+  "id, name, username, role, active, employee_number, email, phone, address, date_of_birth, hire_date, employment_type, pay_rate, pay_frequency, emergency_contact_name, emergency_contact_phone, notes, vehicle_type, vehicle_registration, driver_status, can_deliver, created_at";
 
 const EDITABLE_FIELDS = [
   "name", "username", "role", "email", "phone", "address", "date_of_birth", "hire_date",
   "employment_type", "pay_rate", "pay_frequency", "emergency_contact_name",
-  "emergency_contact_phone", "notes", "active", "vehicle_type", "vehicle_registration", "driver_status",
+  "emergency_contact_phone", "notes", "active", "vehicle_type", "vehicle_registration", "driver_status", "can_deliver",
 ];
 
 export async function GET(

@@ -9,7 +9,7 @@ import { getBusinessSetting } from "@/lib/business-settings";
 import { locationIdsByStaff } from "@/lib/locations";
 
 const PROFILE_FIELDS =
-  "id, name, username, role, active, employee_number, email, phone, address, date_of_birth, hire_date, employment_type, pay_rate, pay_frequency, emergency_contact_name, emergency_contact_phone, notes, vehicle_type, vehicle_registration, driver_status, created_at";
+  "id, name, username, role, active, employee_number, email, phone, address, date_of_birth, hire_date, employment_type, pay_rate, pay_frequency, emergency_contact_name, emergency_contact_phone, notes, vehicle_type, vehicle_registration, driver_status, can_deliver, created_at";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -101,7 +101,8 @@ export async function POST(req: NextRequest) {
         notes: profile.notes || null,
         vehicle_type: profile.vehicle_type || null,
         vehicle_registration: profile.vehicle_registration || null,
-        driver_status: role === "driver" ? (profile.driver_status || "offline") : null,
+        can_deliver: profile.can_deliver === true,
+        driver_status: profile.can_deliver === true ? (profile.driver_status || "offline") : null,
       })
       .select(PROFILE_FIELDS)
       .single();

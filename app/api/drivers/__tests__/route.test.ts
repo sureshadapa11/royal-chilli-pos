@@ -97,11 +97,12 @@ beforeEach(() => {
     role_permissions: [],
     staff: [
       { id: 1, business_id: 1, name: "Mo Manager", role: "manager", active: 1 },
-      { id: 2, business_id: 1, name: "Eve Employee", role: "employee", active: 1 },
-      { id: 10, business_id: 1, name: "Dave", role: "driver", active: 1, phone: "07000", vehicle_type: "car", vehicle_registration: "AB12 CDE", driver_status: "available" },
-      { id: 11, business_id: 1, name: "Dina", role: "driver", active: 1, phone: null, vehicle_type: "bike", vehicle_registration: null, driver_status: "offline" },
-      { id: 12, business_id: 1, name: "Old Driver", role: "driver", active: 0, driver_status: "offline" },
-      { id: 20, business_id: 2, name: "Other Biz Driver", role: "driver", active: 1, driver_status: "available" },
+      { id: 2, business_id: 1, name: "Eve Employee", role: "employee", active: 1, can_deliver: false },
+      { id: 3, business_id: 1, name: "Fred Front House", role: "employee", active: 1, can_deliver: true, driver_status: "offline" },
+      { id: 10, business_id: 1, name: "Dave", role: "driver", active: 1, can_deliver: true, phone: "07000", vehicle_type: "car", vehicle_registration: "AB12 CDE", driver_status: "available" },
+      { id: 11, business_id: 1, name: "Dina", role: "driver", active: 1, can_deliver: true, phone: null, vehicle_type: "bike", vehicle_registration: null, driver_status: "offline" },
+      { id: 12, business_id: 1, name: "Old Driver", role: "driver", active: 0, can_deliver: true, driver_status: "offline" },
+      { id: 20, business_id: 2, name: "Other Biz Driver", role: "driver", active: 1, can_deliver: true, driver_status: "available" },
     ],
     orders: [
       { id: 100, business_id: 1, order_type: "delivery", status: "open", driver_id: null, delivery_status: "unassigned", total: 20 },
@@ -125,11 +126,11 @@ async function get(handler: (req: NextRequest) => Promise<Response>, url: string
 }
 
 describe("GET /api/drivers", () => {
-  it("gives a manager this business's active drivers with their delivery performance", async () => {
+  it("gives a manager this business's active staff who can deliver, with their delivery performance", async () => {
     const res = await get(listDrivers, "http://localhost/api/drivers", manager);
     expect(res.status).toBe(200);
     const { drivers } = await res.json();
-    expect(drivers.map((d: Row) => d.id).sort()).toEqual([10, 11]);
+    expect(drivers.map((d: Row) => d.id).sort((a: number, b: number) => a - b)).toEqual([3, 10, 11]);
     expect(drivers.find((d: Row) => d.id === 10)).toMatchObject({ name: "Dave", driver_status: "available", delivered_count: 1, delivered_value: 25.5 });
     expect(drivers.find((d: Row) => d.id === 11)).toMatchObject({ delivered_count: 1, delivered_value: 10 });
   });
@@ -191,6 +192,13 @@ describe("PATCH /api/drivers/status", () => {
 describe("POST /api/orders/:id/assign-driver", () => {
   const assign = async (user: SessionUser | null, id: number, body: unknown) =>
     assignDriver(await authedRequest(`http://localhost/api/orders/${id}/assign-driver`, user, { method: "POST", body: JSON.stringify(body) }), params(id));
+
+  it("assigns to Front House staff with Can deliver, but not to those without it", async () => {
+    expect((await assign(manager, 100, { driver_id: 2 })).status).toBe(400);
+    const res = await assign(manager, 100, { driver_id: 3 });
+    expect(res.status).toBe(200);
+    expect(order(100)).toMatchObject({ driver_id: 3, delivery_status: "assigned" });
+  });
 
   it("lets a manager assign an unassigned delivery to one of their drivers", async () => {
     const res = await assign(manager, 100, { driver_id: 11 });
