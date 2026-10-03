@@ -6,6 +6,8 @@ import { getBusiness } from "@/lib/business";
 import SettingsView from "@/components/staff/SettingsView";
 import BusinessSetupView from "@/components/staff/BusinessSetupView";
 import BusinessesView from "@/components/staff/BusinessesView";
+import TillDeviceCard from "@/components/staff/TillDeviceCard";
+import { isManagerRole } from "@/lib/staff-pin";
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 
@@ -60,7 +62,12 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         </nav>
 
         <div className="pt-5">
-          {tab === "general" && <SettingsView section="general" canEditPermissions={false} />}
+          {tab === "general" && (
+            <>
+              {(session.owner || isManagerRole(session.role)) && <TillDeviceCard />}
+              <SettingsView section="general" canEditPermissions={false} />
+            </>
+          )}
           {tab === "permissions" && <SettingsView section="permissions" canEditPermissions={session.role === "admin"} />}
           {tab === "setup" && (
             <>

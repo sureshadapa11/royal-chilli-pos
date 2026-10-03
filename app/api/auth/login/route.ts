@@ -2,21 +2,31 @@ import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { createSession, getSessionCookieOptions } from "@/lib/auth";
-import { isManagerRole } from "@/lib/staff-pin";
-import { createTillToken, tillCookieOptions, TILL_COOKIE } from "@/lib/till-device";
 import type { Staff } from "@/lib/types";
-import { businessForHost, loginBusinessId, staffHome } from "@/lib/business";
+import { businessByLoginCode, businessForHost, getBusiness, loginBusinessId, staffHome } from "@/lib/business";
+import { appUrl } from "@/lib/app-hosts";
+
+// One message for an unknown username, a wrong password or the wrong business,
+// so the sign-in never reveals which usernames exist.
+const BAD_LOGIN = "Username or password is incorrect. If you've forgotten your details, contact your manager for account recovery.";
 import { bizDb } from "@/lib/business-db";
 
 export async function POST(req: NextRequest) {
   try {
-    const { username, password, pair_till } = await req.json();
+    const { username, password, business_code } = await req.json();
 
     if (!username || !password) {
       return NextResponse.json(
         { error: "Username and password required" },
         { status: 400 }
       );
+    }
+
+    // The business code typed at the shared sign-in (crewportal): staff must
+    // belong to that business. Without one, the address decides as before.
+    const codeBusiness = business_code ? await businessByLoginCode(String(business_code)) : null;
+    if (business_code && !codeBusiness) {
+      return NextResponse.json({ error: "Business code not found. Check it with your manager." }, { status: 400 });
     }
 
     const { data, error } = await supabase
@@ -27,35 +37,40 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (error || !data || !data.password_hash) {
-      return NextResponse.json(
-        { error: "Invalid username or password" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: BAD_LOGIN }, { status: 401 });
     }
 
     const staff = data as Staff;
     const valid = await bcrypt.compare(password, staff.password_hash!);
     if (!valid) {
-      return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
+      return NextResponse.json({ error: BAD_LOGIN }, { status: 401 });
+    }
+
+    const home = await staffHome(staff.id);
+    const owner = home.isOwner;
+    // Wrong business for the code typed: same message as a wrong password.
+    if (codeBusiness && !owner && home.businessId !== codeBusiness.id) {
+      return NextResponse.json({ error: BAD_LOGIN }, { status: 401 });
     }
 
     // Employees only use the till with their PIN, on a paired till — never a
     // password sign-in here, which would open the POS on any device. Their own
-    // things (clock-in, rota, payslips) are in the attendance app.
+    // things (clock-in, rota, payslips) are in their business's attendance app.
     if (staff.role === "employee") {
+      const own = home.businessId != null ? await getBusiness(home.businessId).catch(() => null) : null;
+      const attendance = appUrl(own?.domain, "attendance")?.replace(/^https:\/\//, "");
       return NextResponse.json(
-        { error: "Staff sign in at the till with your PIN. For clock-in, rota and payslips, use the attendance app." },
+        { error: `This sign-in is for managers. Use your attendance app${attendance ? ` (${attendance})` : ""} for clock-in, rota and payslips, and your PIN on the till.` },
         { status: 403 }
       );
     }
 
     const host = req.headers.get("host");
-    const businessId = await loginBusinessId(staff.id, host);
+    const businessId = owner && codeBusiness ? codeBusiness.id : await loginBusinessId(staff.id, host);
     if (businessId == null) {
       return NextResponse.json({ error: "Your account isn't set up at any business yet — ask a manager." }, { status: 403 });
     }
 
-    const owner = (await staffHome(staff.id)).isOwner;
     const token = await createSession({
       id: staff.id,
       name: staff.name,
@@ -84,11 +99,6 @@ export async function POST(req: NextRequest) {
     });
 
     response.cookies.set(cookieName, token, options);
-    // "Set up this device as a till" — a manager pairs it once, then staff
-    // sign in here with their PIN (lib/till-device.ts).
-    if (pair_till && isManagerRole(staff.role)) {
-      response.cookies.set(TILL_COOKIE, await createTillToken(staff.id, businessId), tillCookieOptions());
-    }
     return response;
   } catch (error) {
     console.error("Login error:", error);

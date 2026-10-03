@@ -30,6 +30,8 @@ export type Business = {
   vat_number: string | null;
   domain: string | null;
   custom_domain: string | null;
+  /** Typed at the shared staff sign-in (crewportal) to pick this business. */
+  login_code: string | null;
   logo_url: string | null;
   brand_colour: string | null;
   address: string | null;
@@ -193,4 +195,11 @@ export async function onlineOrderingEnabled(businessId: number): Promise<boolean
   const { data, error } = await supabase.from("businesses").select("modules").eq("id", businessId).maybeSingle();
   if (error) throw error;
   return (data as { modules?: Partial<BusinessModules> | null } | null)?.modules?.online_ordering === true;
+}
+
+/** The business with this sign-in code (any case), or null. */
+export async function businessByLoginCode(code: string | null | undefined): Promise<Business | null> {
+  const c = (code ?? "").trim().toUpperCase();
+  if (!c) return null;
+  return (await listBusinesses()).find((b) => b.login_code === c) ?? null;
 }

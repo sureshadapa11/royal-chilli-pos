@@ -45,19 +45,24 @@ export const RESERVED_SLUGS = new Set([
 type Result<T> = { ok: true; value: T } | { ok: false; error: string; field?: string };
 
 /** A new business: not open yet, every module on, Royal Chilli's rewards scheme to start from. */
-export async function createBusiness(input: { name: string; orderPrefix: string }): Promise<Result<{ id: number; slug: string }>> {
+export async function createBusiness(input: { name: string; orderPrefix: string; loginCode: string }): Promise<Result<{ id: number; slug: string }>> {
   const name = input.name.trim().replace(/\s+/g, " ");
   if (!name) return { ok: false, error: "Enter the business's trading name", field: "name" };
   const prefix = input.orderPrefix.trim().toUpperCase();
   const prefixErr = checks.prefix(prefix);
   if (prefixErr) return { ok: false, error: prefixErr, field: "order_prefix" };
+  const loginCode = input.loginCode.trim().toUpperCase();
+  const codeErr = checks.loginCode(loginCode);
+  if (codeErr) return { ok: false, error: codeErr, field: "login_code" };
   const slug = slugify(name);
   if (!slug) return { ok: false, error: "Use letters or numbers in the name", field: "name" };
   if (RESERVED_SLUGS.has(slug)) {
     return { ok: false, error: `"${slug}" is a reserved system name. Please choose a different name`, field: "name" };
   }
 
-  const { data: all } = await supabase.from("businesses").select("name, slug, order_prefix");
+  const { data: all } = await supabase.from("businesses").select("name, slug, order_prefix, login_code");
+  const sameCode = (all ?? []).find((b) => b.login_code === loginCode);
+  if (sameCode) return { ok: false, error: `${sameCode.name} already uses ${loginCode}`, field: "login_code" };
   const samePrefix = (all ?? []).find((b) => b.order_prefix === prefix);
   if (samePrefix) return { ok: false, error: `${samePrefix.name} already uses ${prefix}`, field: "order_prefix" };
   const sameName = (all ?? []).find((b) => b.slug === slug || b.name.trim().toLowerCase() === name.toLowerCase());
@@ -65,7 +70,7 @@ export async function createBusiness(input: { name: string; orderPrefix: string 
 
   const { data: last } = await supabase.from("businesses").select("display_order").order("display_order", { ascending: false }).limit(1).maybeSingle();
   const { data: created, error } = await supabase.from("businesses")
-    .insert({ name, slug, order_prefix: prefix, active: false, display_order: (last?.display_order ?? 0) + 1 })
+    .insert({ name, slug, order_prefix: prefix, login_code: loginCode, active: false, display_order: (last?.display_order ?? 0) + 1 })
     .select("id, slug").single();
   if (error || !created) return { ok: false, error: "Couldn't add the business" };
 
