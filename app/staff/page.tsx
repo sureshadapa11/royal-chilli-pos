@@ -40,7 +40,8 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
 
   if (role === "admin") {
     const { range } = await searchParams;
-    const key: RangeKey = range && range in RANGES ? (range as RangeKey) : "this_week";
+    // Summary offers whole weeks and months; an old ?range=today link gets this week.
+    const key: RangeKey = range && range in RANGES && range !== "today" ? (range as RangeKey) : "this_week";
     const data = await getAdminDashboard(session!.businessId, key);
     // The group owner sees every business first, then the one they're working in.
     const group = session!.owner ? await getGroupOverview(key) : null;

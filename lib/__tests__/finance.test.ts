@@ -54,7 +54,10 @@ describe("buildPnl", () => {
   });
 
   it("works out costs and profit ex-VAT", () => {
-    expect(p.costs).toEqual({ ingredients: 50, staff: 40, expenses: 32, commission: 60, card_fees: 1.75, total: 183.75 });
+    expect(p.costs).toMatchObject({ ingredients: 50, staff: 40, expenses: 32, commission: 60, card_fees: 1.75, total: 183.75 });
+    // No category split given: the whole amount shows as "Other expenses", and every line is listed.
+    expect(p.costs.expense_lines.map((l) => l.key)).toEqual(["rent", "utilities", "marketing", "equipment", "professional_fees", "other"]);
+    expect(p.costs.expense_lines.find((l) => l.key === "other")?.amount).toBe(32);
     expect(p.profit).toBe(141.25);
   });
 
@@ -90,5 +93,17 @@ describe("recipeUsage", () => {
     expect(r.cogs).toBeCloseTo(9, 6);
     expect(r.costedRevenue).toBe(36);
     expect(r.itemRevenue).toBe(42);
+  });
+});
+
+describe("buildPnl expense categories", () => {
+  it("lists every category, ex reclaimable VAT, adding up to the expenses total", () => {
+      const split = buildPnl({
+        from: "2026-09-01", to: "2026-09-30", vatRate: 0.2, sales: { orders: [], refunds: [], cardTaken: 0, platforms: [] },
+        ingredients: 50, staff: 40, expenses: { total: 36, vatApplicableTotal: 24, byCategory: { rent: { total: 24, vatApplicableTotal: 24 }, other: { total: 12, vatApplicableTotal: 0 } } }, recipe: { cogs: 30, coveragePct: 75 },
+      });
+    const lines = Object.fromEntries(split.costs.expense_lines.map((l) => [l.key, l.amount]));
+    expect(lines).toEqual({ rent: 20, utilities: 0, marketing: 0, equipment: 0, professional_fees: 0, other: 12 });
+    expect(split.costs.expense_lines.reduce((s, l) => s + l.amount, 0)).toBeCloseTo(split.costs.expenses, 2);
   });
 });
