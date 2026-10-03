@@ -1,6 +1,11 @@
 import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
 import { getBusinessSettings } from "@/lib/business-settings";
 import { getBusiness } from "@/lib/business";
+import { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER, computeDeliveryFee, type DeliveryConfig } from "@/lib/delivery-fees";
+
+// Fees live in lib/delivery-fees (browser-safe: the checkout page imports
+// them); this module reads business settings, so it's server-only.
+export { DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER, computeDeliveryFee, type DeliveryConfig };
 
 // Delivery eligibility: calculated radius from the restaurant, computed
 // by geocoding postcodes via postcodes.io (a free, no-key-required UK postcode API).
@@ -12,18 +17,6 @@ const DEFAULT_LAT = 51.471985;
 const DEFAULT_LNG = -0.355561;
 export const DEFAULT_MAX_DELIVERY_MILES = 5;
 
-export const DELIVERY_FEE = 3.5;
-export const FREE_DELIVERY_THRESHOLD = 25;
-export const MIN_DELIVERY_ORDER = 10;
-
-export type DeliveryConfig = {
-  restaurantLat: number | null;
-  restaurantLng: number | null;
-  maxDeliveryMiles: number;
-  deliveryFee: number;
-  freeDeliveryThreshold: number;
-  minDeliveryOrder: number;
-};
 
 export async function getDeliveryConfig(businessId: number = DEFAULT_BUSINESS_ID): Promise<DeliveryConfig> {
   const rawSettings = await getBusinessSettings(businessId, [
@@ -114,17 +107,4 @@ export async function checkDeliveryEligibility(
   if (!point) return { deliverable: false, config };
   const distanceMiles = haversineMiles(config.restaurantLat, config.restaurantLng, point.lat, point.lng);
   return { deliverable: distanceMiles <= config.maxDeliveryMiles, distanceMiles, config };
-}
-
-// Delivery fee calculation, supporting business config and default thresholds
-export function computeDeliveryFee(
-  subtotal: number,
-  configOrFee?: Partial<DeliveryConfig> | number
-): number {
-  if (typeof configOrFee === "number") {
-    return subtotal >= FREE_DELIVERY_THRESHOLD ? 0 : configOrFee;
-  }
-  const threshold = configOrFee?.freeDeliveryThreshold ?? FREE_DELIVERY_THRESHOLD;
-  const fee = configOrFee?.deliveryFee ?? DELIVERY_FEE;
-  return subtotal >= threshold ? 0 : fee;
 }
