@@ -1,4 +1,4 @@
-import { appPrefix, appUrl, baseDomain, isPortalHost, sessionCookieDomain } from "../app-hosts";
+import { appPrefix, appUrl, baseDomain, isPortalHost, ogImageUrl, sessionCookieDomain } from "../app-hosts";
 
 describe("app-hosts", () => {
   it("finds the app subdomain", () => {
@@ -39,5 +39,12 @@ describe("app-hosts", () => {
     expect(isPortalHost("CREWPORTAL.vercel.app:443")).toBe(true);
     expect(isPortalHost("staff.theroyalchilli.com")).toBe(false);
     expect(isPortalHost(null)).toBe(false);
+  });
+
+  it("points link previews at the picture on the same address", () => {
+    expect(ogImageUrl("staff.melthouse.co.uk")).toBe("https://staff.melthouse.co.uk/og");
+    expect(ogImageUrl("crewportal.vercel.app", "?code=MH")).toBe("https://crewportal.vercel.app/og?code=MH");
+    expect(ogImageUrl("localhost:3000")).toBe("http://localhost:3000/og");
+    expect(ogImageUrl(null)).toBeUndefined();
   });
 });

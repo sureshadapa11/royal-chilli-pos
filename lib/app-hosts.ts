@@ -65,3 +65,14 @@ export function appUrl(businessDomain: string | null | undefined, app: AppName):
   if (APP_PREFIXES.some((p) => d.startsWith(p)) || !isRealDomain(d)) return null;
   return `https://${app}.${d}`;
 }
+
+/**
+ * Absolute address of this host's link-preview picture (app/og), so a shared
+ * staff.melthouse.co.uk link shows Melt House — not the default site's image.
+ */
+export function ogImageUrl(host: string | null | undefined, query = ""): string | undefined {
+  if (!host) return undefined;
+  const h = cleanHost(host);
+  const scheme = h === "localhost" || h.startsWith("127.") ? "http" : "https";
+  return `${scheme}://${host.trim()}/og${query}`;
+}
