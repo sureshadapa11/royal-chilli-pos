@@ -3,12 +3,20 @@
 //   pos.<domain>         the till (this app, /pos)
 //   staff.<domain>       Staff Hub back office (this app, /staff)
 //   attendance.<domain>  royal-chilli-attendance
-// Kept identical in both apps (lib/app-hosts.ts) and free of server imports,
-// so middleware can use it.
+// Kept identical in both apps (lib/app-hosts.ts) — except PORTAL_HOSTS, which
+// only the POS uses — and free of server imports, so middleware can use it.
 
 export type AppName = "pos" | "staff" | "attendance";
 
 const APP_PREFIXES = ["www.", "pos.", "staff.", "attendance."];
+
+/**
+ * The shared staff sign-in for every business (business code first). Its home
+ * page goes straight to the sign-in; nothing on it names one business.
+ */
+export const PORTAL_HOSTS = ["crewportal.vercel.app"];
+
+export const isPortalHost = (host: string | null | undefined) => !!host && PORTAL_HOSTS.includes(cleanHost(host));
 
 /** Lower-case host without the port. */
 export function cleanHost(host: string): string {

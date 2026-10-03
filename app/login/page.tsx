@@ -20,7 +20,11 @@ async function brandFor(searchParams: Props["searchParams"]) {
 
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
   const brand = await brandFor(searchParams);
-  return { title: brand.found ? `Staff sign in — ${brand.name}` : "Staff sign in", robots: { index: false } };
+  return {
+    title: brand.found ? `Staff sign in — ${brand.name}` : "Staff sign in",
+    description: brand.found ? `Staff sign-in for ${brand.name}.` : "Staff sign-in. Enter your business code to continue.",
+    robots: { index: false },
+  };
 }
 
 export default async function LoginPage({ searchParams }: Props) {
