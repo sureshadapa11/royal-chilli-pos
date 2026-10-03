@@ -5,7 +5,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { generateOrderNumber } from "@/lib/orders";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { computeBill } from "@/lib/order-totals";
-import { staffLocationIds } from "@/lib/locations";
+import { primaryLocationId, staffLocationIds } from "@/lib/locations";
 import { awaitingOnlinePayment } from "@/lib/payment-status";
 import { tillRequired } from "@/lib/till-device";
 
@@ -36,11 +36,12 @@ export async function GET(req: NextRequest) {
       `)
       .order("created_at", { ascending: false });
 
-    // Apply location filter: if staff has assigned locations, only show those.
-    // If no restrictions, show all (including orders with NULL location_id for backward compatibility).
+    // Apply location filter: if staff has assigned locations, only show those
+    // (plus any order saved without a location, so nothing goes missing).
+    // If no restrictions, show all.
     const assignedLocationIds = await staffLocationIds(session.id);
     if (assignedLocationIds.length > 0) {
-      query = query.in("location_id", assignedLocationIds);
+      query = query.or(`location_id.in.(${assignedLocationIds.join(",")}),location_id.is.null`);
     }
 
     if (status === "open") {
@@ -176,8 +177,8 @@ export async function POST(req: NextRequest) {
         // Staff is assigned to exactly one location — use it
         location_id = assignedLocationIds[0];
       } else if (assignedLocationIds.length === 0) {
-        // Staff has no restrictions — default to location 1 (business's primary location)
-        location_id = 1;
+        // Staff has no restrictions — default to the business's main location
+        location_id = await primaryLocationId(session.businessId);
       } else {
         // Staff is assigned to multiple locations — they must choose
         return NextResponse.json(
