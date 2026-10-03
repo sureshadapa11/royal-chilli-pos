@@ -42,7 +42,7 @@ function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSele
           <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
             className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-2 text-foreground text-xs">
             <option value="">All roles</option>
-            {["supervisor", "manager", "hr", "employee", "kitchen"].map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
+            {["manager", "hr", "employee", "kitchen"].map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
           </select>
           <select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)}
             className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-2 text-foreground text-xs">

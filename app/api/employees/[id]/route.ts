@@ -52,7 +52,7 @@ export async function PATCH(
     const body = await req.json();
 
     // Role, active status and password resets are privilege-affecting. Only
-    // Super admin, Supervisor and HR may touch them, never on their own
+    // Super admin and HR may touch them, never on their own
     // account (unless Super admin), and only Super admin may edit the Super
     // admin account. Super admin is never given to anyone. The rest of
     // EDITABLE_FIELDS (contact info, pay rate, etc.) stays open to any
@@ -67,7 +67,7 @@ export async function PATCH(
       ("active" in body && Number(body.active) !== Number(target?.active)) ||
       (typeof body.password === "string" && body.password !== "");
     if (touchesRestrictedField && (!canChangeAccess(session.role) || (Number(id) === session.id && session.role !== "admin"))) {
-      return NextResponse.json({ error: "Only the Super admin, a Supervisor or HR can change role, active status or reset a password" }, { status: 403 });
+      return NextResponse.json({ error: "Only a Super admin or HR can change role, active status or reset a password" }, { status: 403 });
     }
     if ("role" in body && body.role !== target?.role && !canGiveRole(session.role, String(body.role))) {
       return NextResponse.json({ error: "You can't give that role" }, { status: 403 });

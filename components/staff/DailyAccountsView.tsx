@@ -69,7 +69,7 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
 
           {locked && (
             <p className="mb-3 rounded-lg bg-[#F6F1E6] px-3 py-2 text-[13px] text-muted-foreground">
-              This day has been submitted. Ask a Supervisor or the Super admin if something needs changing.
+              This day has been submitted. Ask a Super admin if something needs changing.
             </p>
           )}
 

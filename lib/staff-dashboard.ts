@@ -351,7 +351,7 @@ export async function getDashboardData(businessId: number, role: string): Promis
     };
   }
 
-  if (role === "manager" || role === "supervisor") {
+  if (role === "manager") {
     const fourWeeksAgo = addDaysStr(today, -27);
     const [orders28, attendance, lowStock, missedOuts, missedIns, reservations, tablesRes, reservationCounts] = await Promise.all([
       paidOrdersInRange(db, fourWeeksAgo, today),

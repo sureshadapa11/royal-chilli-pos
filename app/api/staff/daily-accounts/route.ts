@@ -12,7 +12,7 @@ import { DAILY_KEYS } from "@/lib/daily-accounts-fields";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const COLUMNS = ["trading_date", ...DAILY_KEYS, "notes", "status", "submitted_at", "updated_at"].join(", ");
 
-const canUnlock = (s: { role: string; owner?: boolean }) => !!s.owner || s.role === "admin" || s.role === "supervisor";
+const canUnlock = (s: { role: string; owner?: boolean }) => !!s.owner || s.role === "admin";
 
 /** GET ?date=YYYY-MM-DD → the saved sheet (or null) and the till's figures to pre-fill it. */
 export async function GET(req: NextRequest) {
@@ -42,7 +42,7 @@ export async function PUT(req: NextRequest) {
   const db = bizDb(session.businessId);
   const { data: existing } = await db.from("daily_accounts").select("status").eq("trading_date", date).maybeSingle();
   if (existing?.status === "submitted" && !canUnlock(session)) {
-    return NextResponse.json({ error: "This day has been submitted. Ask a Supervisor or the Super admin to change it." }, { status: 403 });
+    return NextResponse.json({ error: "This day has been submitted. Ask a Super admin to change it." }, { status: 403 });
   }
 
   const values: Record<string, number | null> = {};

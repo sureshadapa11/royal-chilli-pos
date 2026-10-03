@@ -1,5 +1,5 @@
-// Regression coverage for the privilege-escalation guard: only Super admin,
-// Supervisor and HR may change role/active/password (never on their own
+// Regression coverage for the privilege-escalation guard: only a Super admin
+// and HR may change role/active/password (never on their own
 // account), nobody else can be made Super admin, and only Super admin may
 // edit the Super admin account. Everything else on the profile stays open to
 // any canManageStaff role.
@@ -61,7 +61,7 @@ import { authedRequest } from "@/app/api/_test-helpers";
 const manager: SessionUser = { id: 2, name: "A Manager", role: "manager", businessId: 1 };
 const admin: SessionUser = { id: 1, name: "Super admin", role: "admin", businessId: 1 };
 const hr: SessionUser = { id: 3, name: "An HR", role: "hr", businessId: 1 };
-const supervisor: SessionUser = { id: 4, name: "A Supervisor", role: "supervisor", businessId: 1 };
+const secondSuperAdmin: SessionUser = { id: 4, name: "Suresh", role: "admin", businessId: 1, owner: true };
 
 async function patch(user: SessionUser | null, targetId: string, body: unknown) {
   const req = await authedRequest(`http://localhost/api/employees/${targetId}`, user, {
@@ -103,13 +103,13 @@ describe("PATCH /api/employees/[id] — privilege-escalation guard", () => {
     expect(res.status).toBe(200);
   });
 
-  it("lets HR and a Supervisor change someone's role", async () => {
+  it("lets HR and a Super admin change someone's role", async () => {
     expect((await patch(hr, "5", { role: "kitchen" })).status).toBe(200);
-    expect((await patch(supervisor, "5", { role: "manager" })).status).toBe(200);
+    expect((await patch(secondSuperAdmin, "5", { role: "manager" })).status).toBe(200);
   });
 
   it("403s HR changing their own role", async () => {
-    expect((await patch(hr, "3", { role: "supervisor" })).status).toBe(403);
+    expect((await patch(hr, "3", { role: "manager" })).status).toBe(403);
   });
 
   it("never makes anyone Super admin, not even the Super admin", async () => {
@@ -118,9 +118,13 @@ describe("PATCH /api/employees/[id] — privilege-escalation guard", () => {
     expect(updatedRow).toBeNull();
   });
 
-  it("403s anyone but the Super admin editing the Super admin account", async () => {
-    expect((await patch(supervisor, "1", { phone: "07700900002" })).status).toBe(403);
+  it("403s anyone but a Super admin editing a Super admin account", async () => {
+    expect((await patch(hr, "1", { phone: "07700900002" })).status).toBe(403);
     expect(updatedRow).toBeNull();
+  });
+
+  it("lets one Super admin edit the other", async () => {
+    expect((await patch(secondSuperAdmin, "1", { phone: "07700900003" })).status).toBe(200);
   });
 
   it("lets the Super admin change role", async () => {
