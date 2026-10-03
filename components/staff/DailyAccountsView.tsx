@@ -9,7 +9,6 @@ import { DAILY_FIELDS, type DailyFieldKey, type DailyValues } from "@/lib/daily-
 // catering and notes are typed in. Save as a draft, or Submit — after which
 // only an admin or the owner can change it.
 
-const heading = { fontFamily: "var(--font-space-grotesk)" };
 const niceDate = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 const gbp = (n: number) => `£${n.toFixed(2)}`;
 const toText = (n: number | null | undefined) => (n == null ? "" : String(Number(n)));
@@ -55,14 +54,7 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
   const input = "w-full rounded-lg border border-border bg-background px-2.5 py-2 text-right text-[14px] tabular-nums focus:outline-none focus:ring-2 focus:ring-red-600/30 disabled:opacity-70";
 
   return (
-    <div className="px-4 py-6 md:px-6 md:py-7">
-      <div className="mx-auto max-w-[900px]">
-        <h1 style={heading} className="text-[26px] font-semibold tracking-[-0.02em] text-foreground">Daily accounts</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          The day-end sheet. Till figures are filled in for you — check them, add bank in, catering and any notes, then submit.
-        </p>
-
-        <div className="mt-5 rounded-[14px] border border-border bg-surface p-4 md:p-5">
+        <div className="rounded-[14px] border border-border bg-surface p-4 md:p-5">
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <label className="text-[13px] font-medium text-muted-foreground" htmlFor="da-date">Day</label>
             <input id="da-date" type="date" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)}
@@ -135,7 +127,5 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
             </>
           )}
         </div>
-      </div>
-    </div>
   );
 }

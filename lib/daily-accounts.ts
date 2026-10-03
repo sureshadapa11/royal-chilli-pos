@@ -51,3 +51,70 @@ export async function tillFigures(businessId: number, date: string): Promise<Dai
   if (sales.platforms.length) values.commission = r2(sales.platforms.reduce((s, p) => s + Number(p.commission), 0));
   return values;
 }
+
+// ── The month sheet and the dashboard's Summary ──────────────────────────────
+
+export type DailyRow = Partial<Record<keyof DailyValues, number | string | null>> & {
+  trading_date: string; notes: string | null; status: "draft" | "submitted";
+};
+
+const SHEET_COLUMNS = ["trading_date", ...DAILY_KEYS, "notes", "status"].join(", ");
+
+/** Every saved day (draft or submitted) from `from` to `to`, oldest first. */
+export async function savedDays(businessId: number, from: string, to: string): Promise<DailyRow[]> {
+  const { data, error } = await bizDb(businessId).from("daily_accounts").select(SHEET_COLUMNS)
+    .gte("trading_date", from).lte("trading_date", to).order("trading_date");
+  if (error) throw error;
+  return (data ?? []) as unknown as DailyRow[];
+}
+
+/** Month total row: every field added up on its own, like the paper sheet. */
+export function columnTotals(rows: DailyRow[]): DailyValues {
+  const t = blankValues();
+  for (const k of DAILY_KEYS) {
+    const vals = rows.map((r) => r[k]).filter((v) => v != null && v !== "");
+    t[k] = vals.length ? r2(vals.reduce<number>((s, v) => s + Number(v), 0)) : null;
+  }
+  return t;
+}
+
+export type DailySummary = {
+  bankIn: number;
+  cash: number;
+  notBanked: number;
+  pending: number;
+  cateringPaid: number;
+  cateringPending: number;
+  opening: number | null; // first entered day's opening balance
+  closing: number | null; // last entered day's closing balance
+  submitted: number;      // days submitted…
+  daysSoFar: number;      // …out of the period's days up to today
+  missing: string[];      // days so far with nothing submitted
+};
+
+/** The Summary card's Daily accounts section for a period (pure). */
+export function summarise(rows: DailyRow[], from: string, to: string, today: string): DailySummary {
+  const t = columnTotals(rows);
+  const n = (v: number | null) => v ?? 0;
+  const days: string[] = [];
+  for (let d = from; d <= to && d <= today; ) {
+    days.push(d);
+    const x = new Date(d + "T00:00:00Z"); x.setUTCDate(x.getUTCDate() + 1); d = x.toISOString().slice(0, 10);
+  }
+  const submitted = new Set(rows.filter((r) => r.status === "submitted").map((r) => r.trading_date));
+  const withOpening = rows.filter((r) => r.opening_balance != null && r.opening_balance !== "");
+  const withClosing = rows.filter((r) => r.closing_balance != null && r.closing_balance !== "");
+  return {
+    bankIn: n(t.bank_in),
+    cash: n(t.cash),
+    notBanked: r2(n(t.cash) - n(t.bank_in)),
+    pending: n(t.pending),
+    cateringPaid: n(t.catering_paid),
+    cateringPending: n(t.catering_pending),
+    opening: withOpening.length ? r2(Number(withOpening[0].opening_balance)) : null,
+    closing: withClosing.length ? r2(Number(withClosing[withClosing.length - 1].closing_balance)) : null,
+    submitted: days.filter((d) => submitted.has(d)).length,
+    daysSoFar: days.length,
+    missing: days.filter((d) => !submitted.has(d)),
+  };
+}
