@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
       console.error("Login audit failed:", auditError);
     }
 
-    const { name: cookieName, options } = getSessionCookieOptions();
+    const { name: cookieName, options } = getSessionCookieOptions(req.headers.get("host"));
 
     const response = NextResponse.json({
       success: true,

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
       ...(isOwner ? { owner: true } : {}),
     };
     const sessionToken = await createSession(user);
-    const { name: cookieName, options } = getSessionCookieOptions();
+    const { name: cookieName, options } = getSessionCookieOptions(req.headers.get("host"));
 
     // Employees don't have a Staff Hub — land them on the till instead.
     const destination = user.role === "employee" ? "/pos" : "/staff";

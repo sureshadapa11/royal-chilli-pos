@@ -1,5 +1,6 @@
 import supabase from "@/lib/supabase";
 import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
+import { baseDomain } from "@/lib/app-hosts";
 
 // Several independent businesses (The Royal Chilli, Melt House, …) run on
 // this one system (migrations 076–079). Each staff login and each paired till carries the business
@@ -78,14 +79,17 @@ export async function getBusiness(id: number): Promise<Business | null> {
   return (await listBusinesses()).find((b) => b.id === id) ?? null;
 }
 
-const bareHost = (host: string) => host.toLowerCase().split(":")[0].replace(/^www\./, "");
 
-/** The business whose website is on this domain (www. ignored), or null. */
+/**
+ * The business on this address, or null. www./pos./staff./attendance. are
+ * ignored, so "pos.melthouse.co.uk" finds the business whose domain is
+ * "melthouse.co.uk" (or "www.melthouse.co.uk").
+ */
 export async function businessForHost(host: string | null | undefined): Promise<Business | null> {
   if (!host) return null;
-  const h = bareHost(host);
+  const h = baseDomain(host);
   return (await listBusinesses()).find((b) =>
-    [b.domain, b.custom_domain].some((domain) => domain && bareHost(domain) === h)
+    [b.domain, b.custom_domain].some((domain) => domain && baseDomain(domain) === h)
   ) ?? null;
 }
 

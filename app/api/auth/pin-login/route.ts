@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   // Only this business's staff (and the owner) are found on its till.
   const user = { id: staff.id, name: staff.name, role: staff.role, businessId: till.businessId, ...(staff.owner ? { owner: true } : {}) };
-  const { name, options } = getSessionCookieOptions();
+  const { name, options } = getSessionCookieOptions(req.headers.get("host"));
   const res = NextResponse.json({ user });
   res.cookies.set(name, await createSession(user), options);
   return res;

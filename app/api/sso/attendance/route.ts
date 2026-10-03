@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SignJWT } from "jose";
 import { getSessionFromRequest } from "@/lib/auth";
+import { getBusiness } from "@/lib/business";
+import { appUrl } from "@/lib/app-hosts";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "royal-chilli-pos-fallback-secret-key-2024"
@@ -20,6 +22,11 @@ export async function GET(req: NextRequest) {
     .setExpirationTime("60s")
     .sign(JWT_SECRET);
 
-  const attendanceUrl = process.env.NEXT_PUBLIC_ATTENDANCE_URL || "https://royal-chilli-attendance.vercel.app";
+  // This business's own attendance.<domain> once its subdomains are live,
+  // else the shared attendance address.
+  const business = await getBusiness(session.businessId).catch(() => null);
+  const attendanceUrl =
+    appUrl(business?.domain, "attendance") ??
+    (process.env.NEXT_PUBLIC_ATTENDANCE_URL || "https://royal-chilli-attendance.vercel.app");
   return NextResponse.redirect(`${attendanceUrl}/api/sso/consume?token=${encodeURIComponent(token)}`);
 }
