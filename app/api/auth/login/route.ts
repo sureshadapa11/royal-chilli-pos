@@ -56,8 +56,11 @@ export async function POST(req: NextRequest) {
     // Front House and Kitchen only use their PIN, on a paired till / kitchen
     // screen — never a password sign-in here, which would open the POS on any
     // device. Their own things (clock-in, rota, payslips) are in their
-    // business's attendance app.
-    if (staff.role === "employee" || staff.role === "kitchen") {
+    // business's attendance app. The exception: staff who "Can deliver" sign
+    // in on their phone for My deliveries (and nothing else).
+    const frontLine = staff.role === "employee" || staff.role === "kitchen";
+    const deliverer = (frontLine && staff.can_deliver === true) || (staff.role as string) === "driver";
+    if (frontLine && !deliverer) {
       const own = home.businessId != null ? await getBusiness(home.businessId).catch(() => null) : null;
       const attendance = appUrl(own?.domain, "attendance")?.replace(/^https:\/\//, "");
       return NextResponse.json(
@@ -78,6 +81,7 @@ export async function POST(req: NextRequest) {
       role: staff.role,
       businessId,
       ...(owner ? { owner: true } : {}),
+      ...(deliverer ? { deliver: true } : {}),
     });
 
     // Staff always work for their own business, whatever domain they signed

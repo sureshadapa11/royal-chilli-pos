@@ -6,7 +6,7 @@ export async function PATCH(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if ((session.role as string) !== "driver") return NextResponse.json({ error: "Only drivers have an availability status" }, { status: 403 });
+    if ((session.role as string) !== "driver" && !session.deliver) return NextResponse.json({ error: "Only staff who deliver have an availability status" }, { status: 403 });
 
     const { status } = await req.json();
     if (!["available", "on_delivery", "offline"].includes(status)) {

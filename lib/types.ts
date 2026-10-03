@@ -12,6 +12,8 @@ export interface Staff {
   username: string | null;
   password_hash: string | null;
   role: StaffRole;
+  /** Can be given deliveries (sees My deliveries on their phone). */
+  can_deliver?: boolean;
   active: number;
   employee_number: string | null;
   email: string | null;
@@ -244,6 +246,9 @@ export interface SessionUser {
   businessId: number;
   /** The group owner: can switch into any business (lib/business.ts). */
   owner?: boolean;
+  /** Front House / Kitchen with "Can deliver", signed in on their phone:
+   *  they only see My deliveries in the Staff Hub. */
+  deliver?: boolean;
 }
 
 export interface CartItem {
