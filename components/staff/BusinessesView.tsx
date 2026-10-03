@@ -16,7 +16,7 @@ export default function BusinessesView({ current }: { current: number }) {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", order_prefix: "" });
+  const [form, setForm] = useState({ name: "", order_prefix: "", login_code: "" });
   const [formError, setFormError] = useState<{ field?: string; text: string } | null>(null);
   const [notice, setNotice] = useState("");
 
@@ -66,7 +66,7 @@ export default function BusinessesView({ current }: { current: number }) {
     const d = await res.json().catch(() => ({}));
     setBusy(null);
     if (!res.ok) return setFormError({ field: d.field, text: d.error || "Couldn't add the business" });
-    setForm({ name: "", order_prefix: "" });
+    setForm({ name: "", order_prefix: "", login_code: "" });
     setNotice(`${d.business ? form.name : "Business"} added — not open yet. Set it up next.`);
     load();
   }
@@ -132,7 +132,7 @@ export default function BusinessesView({ current }: { current: number }) {
         <p className="mt-1 text-xs text-muted-foreground">
           It starts closed, with every part switched on and a copy of Royal Chilli&apos;s rewards scheme. Nothing else is shared — it gets its own staff, menu, customers and suppliers.
         </p>
-        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_180px_auto] sm:items-end">
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_150px_150px_auto] sm:items-end">
           <div>
             <label htmlFor="new-business-name" className="mb-1 block text-xs text-muted-foreground">Trading name</label>
             <input id="new-business-name" className={input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Melt House Richmond" />
@@ -143,6 +143,12 @@ export default function BusinessesView({ current }: { current: number }) {
             <input id="new-business-prefix" className={input} value={form.order_prefix} maxLength={4}
               onChange={(e) => setForm({ ...form, order_prefix: e.target.value.toUpperCase().replace(/[^A-Z]/g, "") })} placeholder="e.g. MR" />
             {formError?.field === "order_prefix" && <p className="mt-1 text-xs text-red-600">{formError.text}</p>}
+          </div>
+          <div>
+            <label htmlFor="new-business-code" className="mb-1 block text-xs text-muted-foreground">Business code (staff sign-in)</label>
+            <input id="new-business-code" className={input} value={form.login_code} maxLength={8}
+              onChange={(e) => setForm({ ...form, login_code: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") })} placeholder="e.g. MR" />
+            {formError?.field === "login_code" && <p className="mt-1 text-xs text-red-600">{formError.text}</p>}
           </div>
           <button type="submit" disabled={busy === "add"} className="rounded-lg bg-red-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-60">
             {busy === "add" ? "Adding…" : "Add business"}

@@ -21,11 +21,18 @@ jest.mock("@/lib/supabase", () => ({
 }));
 
 let businessId: number | null = 1;
+let isOwner = false;
+const BUSINESSES = [
+  { id: 1, name: "The Royal Chilli", login_code: "RC", domain: "theroyalchilli.com" },
+  { id: 2, name: "Melt House", login_code: "MH", domain: "melthouse.co.uk" },
+];
 jest.mock("@/lib/business", () => ({
   __esModule: true,
   loginBusinessId: () => Promise.resolve(businessId),
-  staffHome: () => Promise.resolve({ businessId, isOwner: false }),
+  staffHome: () => Promise.resolve({ businessId, isOwner }),
   businessForHost: (host: string | null) => Promise.resolve(host === "melthouse.co.uk" ? { id: 2 } : null),
+  businessByLoginCode: (code: string) => Promise.resolve(BUSINESSES.find((b) => b.login_code === String(code).trim().toUpperCase()) ?? null),
+  getBusiness: (id: number) => Promise.resolve(BUSINESSES.find((b) => b.id === id) ?? null),
 }));
 
 import { POST } from "@/app/api/auth/login/route";
@@ -40,6 +47,7 @@ function jsonRequest(body: unknown, url = "http://localhost/api/auth/login") {
 
 beforeEach(async () => {
   businessId = 1;
+  isOwner = false;
   auditRows.length = 0;
   staffRow = {
     id: 1, name: "Test Manager", role: "manager", active: 1,
@@ -111,5 +119,41 @@ describe("POST /api/auth/login", () => {
         changes: { host: "melthouse.co.uk", domain_business_id: 2, business_id: 1 },
       }),
     ]);
+  });
+
+  describe("shared sign-in with a business code", () => {
+    it("signs a manager into the business of the code they typed", async () => {
+      const res = await POST(jsonRequest({ username: "manager1", password: "correct-horse", business_code: "rc" }));
+      expect(res.status).toBe(200);
+      expect((await res.json()).user.businessId).toBe(1);
+    });
+
+    it("gives the wrong-password message (not 'wrong business') when they don't work there", async () => {
+      const res = await POST(jsonRequest({ username: "manager1", password: "correct-horse", business_code: "MH" }));
+      expect(res.status).toBe(401);
+      expect((await res.json()).error).toMatch(/Username or password is incorrect.*contact your manager for account recovery/);
+      expect(res.cookies.get("pos_session")).toBeFalsy();
+    });
+
+    it("lets the owner into whichever business's code they typed", async () => {
+      isOwner = true;
+      businessId = null;
+      const res = await POST(jsonRequest({ username: "owner", password: "correct-horse", business_code: "MH" }));
+      expect(res.status).toBe(200);
+      expect((await res.json()).user.businessId).toBe(2);
+    });
+
+    it("400s on a business code that doesn't exist", async () => {
+      const res = await POST(jsonRequest({ username: "manager1", password: "correct-horse", business_code: "ZZ" }));
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toMatch(/Business code not found/);
+    });
+
+    it("points an employee to their own attendance app", async () => {
+      staffRow = { id: 3, name: "Eve", role: "employee", active: 1, password_hash: await bcrypt.hash("correct-horse", 10) };
+      const res = await POST(jsonRequest({ username: "eve", password: "correct-horse", business_code: "RC" }));
+      expect(res.status).toBe(403);
+      expect((await res.json()).error).toMatch(/attendance\.theroyalchilli\.com/);
+    });
   });
 });

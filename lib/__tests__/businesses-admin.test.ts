@@ -50,6 +50,7 @@ beforeEach(() => {
       name: "The Royal Chilli",
       slug: "royal-chilli",
       order_prefix: "RC",
+      login_code: "RC",
       active: true,
       display_order: 1,
       trading_address: { line1: "43 Kingsley Road", city: "Hounslow", postcode: "TW3 1PA" },
@@ -58,7 +59,7 @@ beforeEach(() => {
       id: 2,
       name: "Melt House",
       slug: "melt-house",
-      order_prefix: "MH",
+      order_prefix: "MH", login_code: "MH",
       active: false,
       display_order: 2,
       trading_address: { line1: "1 High Street", city: "London", postcode: "SW1A 1AA" },
@@ -94,7 +95,7 @@ describe("copying Royal Chilli's rewards scheme", () => {
 
 describe("adding a business", () => {
   it("starts closed, with its own prefix and a copied rewards scheme", async () => {
-    const r = await createBusiness({ name: "Melt House Richmond", orderPrefix: "mr" });
+    const r = await createBusiness({ name: "Melt House Richmond", orderPrefix: "mr", loginCode: "MR2" });
     expect(r.ok).toBe(true);
     const b = db.businesses.find((x) => x.slug === "melt-house-richmond")!;
     expect(b).toMatchObject({ active: false, order_prefix: "MR" });
@@ -102,15 +103,24 @@ describe("adding a business", () => {
   });
 
   it("refuses a prefix or name already in use", async () => {
-    expect(await createBusiness({ name: "New Place", orderPrefix: "MH" })).toMatchObject({ ok: false, field: "order_prefix" });
-    expect(await createBusiness({ name: "melt house", orderPrefix: "ZZ" })).toMatchObject({ ok: false, field: "name" });
-    expect(await createBusiness({ name: "X", orderPrefix: "12" })).toMatchObject({ ok: false, field: "order_prefix" });
+    expect(await createBusiness({ name: "New Place", orderPrefix: "MH", loginCode: "NP" })).toMatchObject({ ok: false, field: "order_prefix" });
+    expect(await createBusiness({ name: "melt house", orderPrefix: "ZZ", loginCode: "MH2" })).toMatchObject({ ok: false, field: "name" });
+    expect(await createBusiness({ name: "X", orderPrefix: "12", loginCode: "XX" })).toMatchObject({ ok: false, field: "order_prefix" });
+  });
+
+  it("needs a unique business code for the staff sign-in", async () => {
+    expect(await createBusiness({ name: "New Place", orderPrefix: "NP", loginCode: "rc" })).toMatchObject({ ok: false, field: "login_code", error: /Royal Chilli already uses RC/ });
+    expect(await createBusiness({ name: "New Place", orderPrefix: "NP", loginCode: "" })).toMatchObject({ ok: false, field: "login_code" });
+    expect(await createBusiness({ name: "New Place", orderPrefix: "NP", loginCode: "a b" })).toMatchObject({ ok: false, field: "login_code" });
+    const r = await createBusiness({ name: "New Place", orderPrefix: "NP", loginCode: "np1" });
+    expect(r.ok).toBe(true);
+    expect(db.businesses.find((x) => x.slug === "new-place")).toMatchObject({ login_code: "NP1" });
   });
 
   it("refuses reserved slugs", async () => {
-    expect(await createBusiness({ name: "admin", orderPrefix: "AD" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
-    expect(await createBusiness({ name: "api", orderPrefix: "AP" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
-    expect(await createBusiness({ name: "staff", orderPrefix: "ST" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
+    expect(await createBusiness({ name: "admin", orderPrefix: "AD", loginCode: "AD" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
+    expect(await createBusiness({ name: "api", orderPrefix: "AP", loginCode: "AP" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
+    expect(await createBusiness({ name: "staff", orderPrefix: "ST", loginCode: "ST" })).toMatchObject({ ok: false, field: "name", error: /reserved/ });
   });
 
   it("makes a tidy web name", () => {

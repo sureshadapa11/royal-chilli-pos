@@ -51,6 +51,7 @@ export const checks = {
   iban: (v: string) => (/^GB[0-9]{2}[A-Z]{4}[0-9]{14}$/i.test(trimmed(v).replace(/\s/g, "")) ? null : "A UK IBAN: GB, 2 digits, 4 letters, 14 digits"),
   swift: (v: string) => (/^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$/i.test(trimmed(v)) ? null : "8 or 11 characters"),
   prefix: (v: string) => (/^[A-Z]{1,4}$/.test(trimmed(v)) ? null : "1–4 capital letters, e.g. MH"),
+  loginCode: (v: string) => (/^[A-Z0-9]{2,8}$/.test(trimmed(v).toUpperCase()) ? null : "2–8 letters or numbers, e.g. MH"),
   colour: (v: string) => (/^#[0-9a-f]{6}$/i.test(trimmed(v)) ? null : "A colour like #E34435"),
   postcode: (v: string) => (/^[A-Z]{1,2}[0-9][A-Z0-9]? ?[0-9][A-Z]{2}$/i.test(trimmed(v)) ? null : "A UK postcode, e.g. TW3 1PA"),
   rate: (v: string) => {
@@ -98,6 +99,7 @@ export const SECTIONS: SectionDef[] = [
       { key: "phone", label: "Phone", kind: "phone", check: checks.phone },
       { key: "email", label: "Email", kind: "email", check: checks.email },
       { key: "website", label: "Website", kind: "url", check: checks.url },
+      { key: "login_code", label: "Business code (staff sign-in)", kind: "text", required: true, hint: "Managers type this at crewportal.vercel.app/staff, e.g. MH", check: checks.loginCode },
       { key: "custom_domain", label: "Custom domain", kind: "text", hint: "e.g. melthouse.co.uk or www.melthouse.co.uk", check: checks.domain },
       { key: "logo_url", label: "Logo (image address)", kind: "text", hint: "Square image works best. Leave empty to show the business's initials." },
       { key: "brand_colour", label: "Brand colour", kind: "colour", check: checks.colour },

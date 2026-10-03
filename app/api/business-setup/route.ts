@@ -110,7 +110,7 @@ export async function PUT(req: NextRequest) {
           if (s) tidy[part] = part === "postcode" ? s.toUpperCase() : s;
         }
         patch[k] = Object.keys(tidy).length ? tidy : null;
-      } else if (k === "company_number" || k === "vat_number" || k === "utr" || k === "order_prefix" || k === "po_prefix") {
+      } else if (k === "company_number" || k === "vat_number" || k === "utr" || k === "order_prefix" || k === "po_prefix" || k === "login_code") {
         patch[k] = upper(v) || null;
       } else if (k === "custom_domain") {
         patch[k] = typeof v === "string" ? (v.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null) : null;
@@ -128,6 +128,10 @@ export async function PUT(req: NextRequest) {
     if (typeof patch.po_prefix === "string" && patch.po_prefix) {
       const { data: clash } = await supabase.from("businesses").select("name").eq("po_prefix", patch.po_prefix).neq("id", bid).maybeSingle();
       if (clash) return NextResponse.json({ error: "Please check the highlighted fields", fields: { po_prefix: `${clash.name} already uses ${patch.po_prefix}` } }, { status: 400 });
+    }
+    if (typeof patch.login_code === "string" && patch.login_code) {
+      const { data: clash } = await supabase.from("businesses").select("name").eq("login_code", patch.login_code).neq("id", bid).maybeSingle();
+      if (clash) return NextResponse.json({ error: "Please check the highlighted fields", fields: { login_code: `${clash.name} already uses ${patch.login_code}` } }, { status: 400 });
     }
     if (typeof patch.custom_domain === "string" && patch.custom_domain) {
       const { data: clash } = await supabase.from("businesses").select("name").or(`custom_domain.eq.${patch.custom_domain},domain.eq.${patch.custom_domain}`).neq("id", bid).maybeSingle();

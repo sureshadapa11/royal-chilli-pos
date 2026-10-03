@@ -21,9 +21,9 @@ export default async function PinPage() {
           <div className="text-3xl">🔒</div>
           <h1 className="mt-2 text-lg font-bold text-foreground">This device isn&apos;t set up as a till</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            A manager signs in once with their password and ticks &ldquo;Set up this device as a till&rdquo;. After that, staff sign in here with their PIN.
+            A manager signs in on this device, then goes to Staff Hub &rarr; Settings &rarr; &ldquo;Make this device a till&rdquo;. After that, staff sign in here with their PIN.
           </p>
-          <Link href="/login?pair=1" className="mt-4 inline-block rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-400">
+          <Link href="/login" className="mt-4 inline-block rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-red-400">
             Manager sign in
           </Link>
         </div>
