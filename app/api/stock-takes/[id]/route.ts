@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageInventory } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { stockTakeForCaller } from "@/lib/stock-takes";
 
 // The count sheet: every line with system vs counted qty (and variance, since
 // it's a generated column so it's always live even before posting).
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageInventory(session.role)) {
+  if (!session || !areaAllows(session.role, "inventory", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);

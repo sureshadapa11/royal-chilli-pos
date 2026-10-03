@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { confirmDelete } from "@/components/ui/confirm";
 
-type Matrix = Record<string, Record<string, boolean>>;
+type Matrix = Record<string, Record<string, "off" | "view" | "full">>;
+type Level = "off" | "view" | "full";
+const LEVEL_OPTIONS: { value: Level; label: string; on: string }[] = [
+  { value: "off", label: "Off", on: "bg-[#EDE7DA] text-foreground" },
+  { value: "view", label: "View", on: "bg-amber-500 text-white" },
+  { value: "full", label: "Full", on: "bg-red-600 text-white" },
+];
 const FIXED = new Set(["admin", "employee", "kitchen"]); // Super admin always on; Front House and Kitchen always off
 
 function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
@@ -27,14 +33,14 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
 
   useEffect(() => { load(); }, []);
 
-  async function toggle(role: string, tab: string, current: boolean) {
-    if (!canEdit || FIXED.has(role)) return;
+  async function setLevel(role: string, tab: string, current: Level, level: Level) {
+    if (!canEdit || FIXED.has(role) || level === current) return;
     const cellKey = `${role}:${tab}`;
     setSaving(cellKey);
-    setMatrix((m) => (m ? { ...m, [tab]: { ...m[tab], [role]: !current } } : m));
+    setMatrix((m) => (m ? { ...m, [tab]: { ...m[tab], [role]: level } } : m));
     const res = await fetch("/api/permissions", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role, permission: tab, granted: !current }),
+      body: JSON.stringify({ role, permission: tab, level }),
     });
     if (!res.ok) setMatrix((m) => (m ? { ...m, [tab]: { ...m[tab], [role]: current } } : m));
     setSaving(null);
@@ -46,7 +52,7 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
     <div className="rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5">
       <h2 className="text-foreground font-bold text-lg">Roles &amp; Permissions</h2>
       <p className="mt-1 text-muted-foreground text-xs">
-        Which roles can open each Staff Hub tab. Super admin always has everything, Front House has only the till, and Kitchen only the Kitchen Display — those three aren't editable. Changes apply to every business.
+        What each role can do in each area: <b>Off</b> (hidden), <b>View</b> (can look, can&apos;t change anything) or <b>Full</b>. Super admin always has everything, Front House only the till, and Kitchen only the Kitchen Display — those three aren&apos;t editable. Changes apply to every business.
         {!canEdit && " Only an Admin can change this."}
       </p>
 
@@ -67,21 +73,23 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
               <tr key={tab} className="border-t border-border">
                 <td className="p-2 text-foreground sticky left-0 bg-surface max-w-[220px]">{tabLabels[tab] || tab}</td>
                 {roles.map((role) => {
-                  const granted = matrix[tab]?.[role] ?? false;
+                  const level: Level = matrix[tab]?.[role] ?? "off";
                   const fixed = FIXED.has(role);
                   const cellKey = `${role}:${tab}`;
                   return (
                     <td key={role} className="p-2 text-center">
-                      <button
-                        disabled={!canEdit || fixed || saving === cellKey}
-                        onClick={() => toggle(role, tab, granted)}
-                        className={`w-6 h-6 rounded-md border flex items-center justify-center transition-colors ${
-                          granted ? "bg-red-600 border-red-500 text-white" : "bg-surface-hover border-border text-transparent"
-                        } ${!canEdit || fixed ? "opacity-60 cursor-not-allowed" : "hover:border-red-500 cursor-pointer"}`}
+                      <div role="radiogroup" aria-label={`${roleLabels[role] || role} — ${tabLabels[tab] || tab}`}
                         title={fixed ? `${roleLabels[role]} access is fixed` : undefined}
-                      >
-                        {granted ? "✓" : ""}
-                      </button>
+                        className={`inline-flex overflow-hidden rounded-md border border-border ${!canEdit || fixed ? "opacity-60" : ""}`}>
+                        {LEVEL_OPTIONS.map((o) => (
+                          <button key={o.value} type="button" role="radio" aria-checked={level === o.value}
+                            disabled={!canEdit || fixed || saving === cellKey}
+                            onClick={() => setLevel(role, tab, level, o.value)}
+                            className={`px-1.5 py-0.5 text-[10.5px] font-semibold ${level === o.value ? o.on : "bg-surface-hover text-muted-foreground"} ${!canEdit || fixed ? "cursor-not-allowed" : "cursor-pointer hover:brightness-95"}`}>
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
                     </td>
                   );
                 })}
@@ -100,7 +108,7 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
             Save Permissions
           </button>
           {saved && <span className="text-emerald-600 text-sm font-semibold">✓ Saved</span>}
-          <span className="text-muted-foreground text-xs">Each toggle above saves the instant you click it — this just confirms everything's up to date.</span>
+          <span className="text-muted-foreground text-xs">Each choice above saves the instant you click it — this just confirms everything's up to date.</span>
         </div>
       )}
     </div>

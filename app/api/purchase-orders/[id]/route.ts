@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageInventory } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageInventory(session.role)) {
+  if (!session || !areaAllows(session.role, "inventory", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);
@@ -38,7 +38,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageInventory(session.role)) {
+    if (!session || !areaAllows(session.role, "inventory", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);

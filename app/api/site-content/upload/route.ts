@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canAccess } from "@/lib/permissions";
+import { canEdit } from "@/lib/permissions";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 10 * 1024 * 1024; // 10MB
@@ -10,7 +10,7 @@ const ALLOWED_FOLDERS = new Set(["hero", "dishes", "menu", "gallery"]);
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   // Website photos (Website → Menu & photos) and homepage photos (Settings).
-  if (!session || !(canAccess(session.role, "website") || canAccess(session.role, "settings"))) {
+  if (!session || !(canEdit(session.role, "website") || canEdit(session.role, "settings"))) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

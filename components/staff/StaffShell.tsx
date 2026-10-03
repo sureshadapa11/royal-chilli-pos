@@ -29,6 +29,7 @@ export default function StaffShell({
   allMode = false,
   nav,
   notices,
+  viewOnly = [],
   children,
 }: {
   user: { name: string; role: string };
@@ -40,6 +41,8 @@ export default function StaffShell({
   allMode?: boolean;
   nav: NavGroup[];
   notices: HubNotice[];
+  /** Pages this person can look at but not change (Roles & Permissions → View). */
+  viewOnly?: string[];
   children: React.ReactNode;
 }) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
@@ -213,7 +216,14 @@ export default function StaffShell({
         </nav>
       </aside>
 
-      <main className="overflow-x-hidden">{children}</main>
+      <main className="overflow-x-hidden">
+        {viewOnly.some((p) => pathname === p || pathname.startsWith(p + "/")) && (
+          <div role="status" className="border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-[13px] font-medium text-amber-900">
+            👁 View only — you can look at everything here, but changes are made by a Super admin.
+          </div>
+        )}
+        {children}
+      </main>
       {/* "All businesses" is for the dashboard; other pages belong to one business. */}
       {allMode && switcher && pathname !== "/staff" && <PickBusiness options={switcher} />}
     </div>

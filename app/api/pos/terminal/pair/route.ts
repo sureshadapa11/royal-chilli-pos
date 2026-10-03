@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { manageAllows } from "@/lib/permissions";
 import { stripe, TERMINAL_LOCATION_ADDRESS } from "@/lib/stripe";
 import { pairReader } from "@/lib/sumup";
 import { getBusinessSetting, saveBusinessSettings } from "@/lib/business-settings";
@@ -23,7 +23,7 @@ type PairedReader = { id: string; label: string | null; status: string | null };
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageStaff(session.role)) {
+    if (!session || !manageAllows(session.role, "settings", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { manageAllows } from "@/lib/permissions";
 import { getBusinessSettings, saveBusinessSettings } from "@/lib/business-settings";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !manageAllows(session.role, "settings", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   // This business's own settings (Settings → General).
@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageStaff(session.role)) {
+    if (!session || !manageAllows(session.role, "settings", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const updates = await req.json();

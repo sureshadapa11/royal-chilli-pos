@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { tradingRangeUtc } from "@/lib/london-date";
 import { allRows } from "@/lib/finance";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "analytics", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import type { SessionUser } from "@/lib/types";
-import { canAccess } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { clearBusinessCache } from "@/lib/business";
 import { applyWebsiteConfigUpdate, normaliseWebsiteConfig } from "@/lib/website-config";
@@ -30,7 +30,7 @@ const versionOf = (b: BusinessRow) => Number(b.website_config_version ?? 1);
 async function allowed(req: NextRequest): Promise<{ error: NextResponse } | { session: SessionUser }> {
   const session = await getSessionFromRequest(req);
   if (!session) return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  if (!canAccess(session.role, "website")) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
+  if (!areaAllows(session.role, "website", req.method)) return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   return { session };
 }
 

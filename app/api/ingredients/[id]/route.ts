@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { findActiveByName } from "@/lib/unique-entry";
-import { canManageInventory } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 
 // current_stock is deliberately not editable here — it only changes via stock_movements,
 // so there's always an audit trail for why stock went up or down.
@@ -14,7 +14,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageInventory(session.role)) {
+    if (!session || !areaAllows(session.role, "inventory", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);

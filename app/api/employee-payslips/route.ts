@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { computeHoursForPeriod } from "@/lib/payroll";
 
 // GET ?staff_id=123 — one employee's payslip history, latest first.
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);
@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
 // already created that month.
 export async function POST(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const db = bizDb(session.businessId);

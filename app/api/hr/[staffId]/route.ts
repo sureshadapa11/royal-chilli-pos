@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { bizDb, staffWorksAt } from "@/lib/business-db";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { maskHrDetails } from "@/lib/hr";
 
 const EDITABLE_FIELDS = [
@@ -22,7 +22,7 @@ const EDITABLE_FIELDS = [
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ staffId: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
@@ -45,7 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ staffId: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;

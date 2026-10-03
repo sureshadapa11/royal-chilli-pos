@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageInventory } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { stockTakeForCaller } from "@/lib/stock-takes";
 
 // Hands an open count over for approval — no ledger writes yet, just a
@@ -10,7 +10,7 @@ import { stockTakeForCaller } from "@/lib/stock-takes";
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageInventory(session.role)) {
+    if (!session || !areaAllows(session.role, "inventory", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);

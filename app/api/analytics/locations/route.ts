@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { accessibleLocations, getLocationAnalytics, parseDateRange, resolveReportLocation } from "@/lib/location-analytics";
 
 /**
@@ -11,7 +11,7 @@ import { accessibleLocations, getLocationAnalytics, parseDateRange, resolveRepor
  */
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "analytics", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { searchParams } = new URL(req.url);

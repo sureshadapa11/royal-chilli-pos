@@ -12,9 +12,10 @@ import { GET as getEmployee } from "@/app/api/employees/[id]/route";
 import { PATCH, POST } from "@/app/api/staff/[id]/locations/route";
 import { DELETE } from "@/app/api/staff/[id]/locations/[locationId]/route";
 
-// Manager 10 works at Kitchen only; manager 11 isn't tied to any location.
-const kitchenManager: SessionUser = { id: 10, name: "Kitchen Manager", role: "manager", businessId: 1 };
-const floatingManager: SessionUser = { id: 11, name: "Floating Manager", role: "manager", businessId: 1 };
+// Staff 10 works at Kitchen only; 11 isn't tied to any location. Both have
+// HR access (assigning locations is part of HR & Payroll).
+const kitchenManager: SessionUser = { id: 10, name: "Kitchen Manager", role: "hr", businessId: 1 };
+const floatingManager: SessionUser = { id: 11, name: "Floating Manager", role: "hr", businessId: 1 };
 const owner: SessionUser = { id: 12, name: "Owner", role: "admin", businessId: 1, owner: true };
 
 async function patch(user: SessionUser | null, staffId: string, body: unknown) {

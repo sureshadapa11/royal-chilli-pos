@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { bizDb, staffWorksAt } from "@/lib/business-db";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { ONBOARDING_TASKS } from "@/lib/hr";
 
 // Rows are created lazily the first time a staff member's checklist is
@@ -10,7 +10,7 @@ import { ONBOARDING_TASKS } from "@/lib/hr";
 // entries later without a backfill migration for every existing employee.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ staffId: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;
@@ -40,7 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ staf
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ staffId: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;

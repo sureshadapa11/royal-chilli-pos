@@ -2,14 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { bizDb, staffWorksAt } from "@/lib/business-db";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { MASKED_HR_FIELDS, type MaskedHrField } from "@/lib/hr";
 
 // Every reveal of a bank/NI field is audit-logged — this is the one place
 // the full unmasked value ever leaves the server.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ staffId: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const { staffId } = await params;

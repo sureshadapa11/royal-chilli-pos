@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
-import { canAccess, isStaffManagement, canViewCrm, canManageDrivers } from "@/lib/permissions";
+import { canAccess, levelOf, isStaffManagement, canViewCrm, canManageDrivers, type TabKey } from "@/lib/permissions";
 import { getHubNotifications } from "@/lib/hub-notifications";
 import { listBusinesses } from "@/lib/business";
 import { getBrand } from "@/lib/brand";
@@ -74,6 +74,19 @@ export default async function StaffHubLayout({
     },
   ].filter((g, i) => i === 0 || g.items.length > 0);
 
+  // Areas this role can only look at (Roles & Permissions → View): say so in
+  // the menu and on the page.
+  const PAGES: [TabKey, string[]][] = [
+    ["menu", ["/staff/menu"]], ["tables", ["/staff/tables"]], ["inventory", ["/staff/inventory"]],
+    ["drivers", ["/staff/drivers"]], ["delivery_platforms", ["/staff/platforms"]],
+    ["daily_accounts", ["/staff/daily-accounts"]], ["website", ["/staff/website"]],
+    ["hr", ["/staff/hr", "/staff/payroll"]], ["customers", ["/staff/customers"]],
+    ["analytics", ["/staff/analytics"]], ["reports", ["/staff/reports"]], ["finance", ["/staff/finance"]],
+    ["audit", ["/staff/audit-log"]], ["settings", ["/staff/settings"]],
+  ];
+  const viewOnly = isDriver ? [] : PAGES.filter(([tab]) => levelOf(session.role, tab) === "view").flatMap(([, paths]) => paths);
+  for (const g of nav) for (const item of g.items) if (viewOnly.includes(item.href)) item.note = item.note ? `${item.note} · View only` : "View only";
+
   const notices = isDriver ? [] : await getHubNotifications(session.businessId, session.role).catch(() => []);
   const brand = await getBrand(session.businessId);
   // Only the group owner can step into other businesses.
@@ -92,6 +105,7 @@ export default async function StaffHubLayout({
       allMode={allMode}
       nav={nav}
       notices={notices}
+      viewOnly={viewOnly}
     >
       {children}
       {!isDriver && <NewOrderAlerts />}

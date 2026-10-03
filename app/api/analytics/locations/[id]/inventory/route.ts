@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { getLocationInventory, resolveReportLocation } from "@/lib/location-analytics";
 
 /** GET /api/analytics/locations/:id/inventory — ingredients held at one location. */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "analytics", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {

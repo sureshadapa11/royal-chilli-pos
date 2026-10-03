@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { manageAllows } from "@/lib/permissions";
 import { getPosDevice, updatePosDevice, type PosDevicePairingStatus, type PosDeviceStatus } from "@/lib/device-registry";export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,7 +23,7 @@ import { getPosDevice, updatePosDevice, type PosDevicePairingStatus, type PosDev
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !manageAllows(session.role, "settings", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

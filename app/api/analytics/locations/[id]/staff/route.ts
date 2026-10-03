@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { getLocationStaff, parseDateRange, resolveReportLocation } from "@/lib/location-analytics";
 
 /** GET /api/analytics/locations/:id/staff?start_date=&end_date= — staff activity at one location. */
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "analytics", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const range = parseDateRange(new URL(req.url).searchParams);

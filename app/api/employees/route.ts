@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
 import { staffIdsAt } from "@/lib/business";
-import { canManageStaff } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { getBusinessSetting } from "@/lib/business-settings";
 import { locationIdsByStaff } from "@/lib/locations";
 
@@ -13,7 +13,7 @@ const PROFILE_FIELDS =
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageStaff(session.role)) {
+  if (!session || !areaAllows(session.role, "hr", req.method)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
-    if (!session || !canManageStaff(session.role)) {
+    if (!session || !areaAllows(session.role, "hr", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

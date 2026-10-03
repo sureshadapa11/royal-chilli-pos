@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManagePlatformSales } from "@/lib/permissions";
+import { areaAllows } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { PLATFORMS } from "@/lib/platforms";
 
@@ -12,7 +12,7 @@ const KEYS = new Set<string>(PLATFORMS.map((p) => p.key));
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManagePlatformSales(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !areaAllows(session.role, "delivery_platforms", req.method)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = bizDb(session.businessId);
   const from = req.nextUrl.searchParams.get("from") ?? "";
   const to = req.nextUrl.searchParams.get("to") ?? "";
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 // A platform left blank (all zero) for the day is removed.
 export async function PUT(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManagePlatformSales(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !areaAllows(session.role, "delivery_platforms", req.method)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const db = bizDb(session.businessId);
   const body = await req.json().catch(() => null);
   const date = String(body?.date ?? "");
