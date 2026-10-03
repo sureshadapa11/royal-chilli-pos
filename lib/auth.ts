@@ -1,6 +1,7 @@
 import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { sessionCookieDomain } from "./app-hosts";
 import type { SessionUser } from "./types";
 import { DEFAULT_BUSINESS_ID } from "./business-id";
 
@@ -65,7 +66,8 @@ export async function getSessionFromRequest(
   return verify(req.cookies.get(COOKIE_NAME)?.value);
 }
 
-export function getSessionCookieOptions() {
+export function getSessionCookieOptions(host?: string | null) {
+  const domain = sessionCookieDomain(host);
   return {
     name: COOKIE_NAME,
     options: {
@@ -74,10 +76,23 @@ export function getSessionCookieOptions() {
       sameSite: "lax" as const,
       maxAge: 60 * 60 * 12, // 12 hours
       path: "/",
-      // Set COOKIE_DOMAIN=.royalchilli.com in BOTH this app and
-      // royal-chilli-attendance once they're on the subdomains — a manager
-      // login in either then signs them into the other.
-      ...(process.env.COOKIE_DOMAIN ? { domain: process.env.COOKIE_DOMAIN } : {}),
+      // On a business's pos./staff./attendance. subdomains the cookie covers
+      // the whole business domain, so one sign-in works in all three (the
+      // attendance app shares this cookie name and secret) — lib/app-hosts.ts.
+      ...(domain ? { domain } : {}),
     },
   };
+}
+
+/**
+ * Signs the person out on this address: clears the business-wide cookie and
+ * any older one tied to just this host (from before the subdomains), so
+ * neither can keep them signed in.
+ */
+export function clearSessionCookie(res: NextResponse, host?: string | null) {
+  const { name, options } = getSessionCookieOptions(host);
+  res.cookies.set(name, "", { ...options, maxAge: 0 });
+  if (options.domain) {
+    res.headers.append("Set-Cookie", `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${options.secure ? "; Secure" : ""}`);
+  }
 }

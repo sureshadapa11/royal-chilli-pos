@@ -3,6 +3,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { stripe, siteUrl } from "@/lib/stripe";
 import { startReaderCheckout } from "@/lib/sumup";
 import { getTillReader } from "@/lib/till-reader";
+import { tillRequired } from "@/lib/till-device";
 
 // Pushes a real charge to the till's card reader — a SumUp Solo or a Stripe
 // Terminal reader, whichever Settings selects. Returns as soon as the reader
@@ -12,6 +13,8 @@ export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const notTill = await tillRequired(req, session.businessId);
+    if (notTill) return notTill;
 
     const { amount, order_number } = await req.json();
     const amountNum = Number(amount);

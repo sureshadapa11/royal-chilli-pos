@@ -28,6 +28,9 @@ export async function GET(req: NextRequest) {
       throw new Error("staff member is not assigned to this business");
     }
 
+    // Employees have no Staff Hub, and the till is PIN-only on paired devices.
+    if (payload.role === "employee") throw new Error("employees use the till PIN, not a handoff");
+
     const user: SessionUser = {
       id: payload.id as number,
       name: payload.name as string,
@@ -36,11 +39,9 @@ export async function GET(req: NextRequest) {
       ...(isOwner ? { owner: true } : {}),
     };
     const sessionToken = await createSession(user);
-    const { name: cookieName, options } = getSessionCookieOptions();
+    const { name: cookieName, options } = getSessionCookieOptions(req.headers.get("host"));
 
-    // Employees don't have a Staff Hub — land them on the till instead.
-    const destination = user.role === "employee" ? "/pos" : "/staff";
-    const response = NextResponse.redirect(new URL(destination, req.url));
+    const response = NextResponse.redirect(new URL("/staff", req.url));
     response.cookies.set(cookieName, sessionToken, options);
     return response;
   } catch {

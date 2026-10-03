@@ -5,6 +5,7 @@ import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
 import { cancelOrderAndFreeTable } from "@/lib/orders";
+import { tillRequired } from "@/lib/till-device";
 
 export async function GET(
   req: NextRequest,
@@ -60,6 +61,8 @@ export async function POST(
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const notTill = await tillRequired(req, session.businessId);
+    if (notTill) return notTill;
 
     const { id } = await params;
     const { items } = await req.json();

@@ -7,6 +7,7 @@ import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { computeBill } from "@/lib/order-totals";
 import { staffLocationIds } from "@/lib/locations";
 import { awaitingOnlinePayment } from "@/lib/payment-status";
+import { tillRequired } from "@/lib/till-device";
 
 export async function GET(req: NextRequest) {
   try {
@@ -139,6 +140,8 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const notTill = await tillRequired(req, session.businessId);
+    if (notTill) return notTill;
 
     const body = await req.json();
     const {

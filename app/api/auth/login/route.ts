@@ -39,6 +39,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
     }
 
+    // Employees only use the till with their PIN, on a paired till — never a
+    // password sign-in here, which would open the POS on any device. Their own
+    // things (clock-in, rota, payslips) are in the attendance app.
+    if (staff.role === "employee") {
+      return NextResponse.json(
+        { error: "Staff sign in at the till with your PIN. For clock-in, rota and payslips, use the attendance app." },
+        { status: 403 }
+      );
+    }
+
     const host = req.headers.get("host");
     const businessId = await loginBusinessId(staff.id, host);
     if (businessId == null) {
@@ -66,7 +76,7 @@ export async function POST(req: NextRequest) {
       console.error("Login audit failed:", auditError);
     }
 
-    const { name: cookieName, options } = getSessionCookieOptions();
+    const { name: cookieName, options } = getSessionCookieOptions(req.headers.get("host"));
 
     const response = NextResponse.json({
       success: true,

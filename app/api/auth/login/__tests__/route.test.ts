@@ -61,6 +61,21 @@ describe("POST /api/auth/login", () => {
     expect(res.cookies.get("pos_session")).toBeTruthy();
   });
 
+  it("refuses an employee's password sign-in — the till is PIN-only on paired devices", async () => {
+    staffRow = { id: 3, name: "Eve Employee", role: "employee", active: 1, password_hash: await bcrypt.hash("correct-horse", 10) };
+    const res = await POST(jsonRequest({ username: "eve", password: "correct-horse" }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).error).toMatch(/PIN/);
+    expect(res.cookies.get("pos_session")).toBeFalsy();
+  });
+
+  it("shares the session cookie across a business's subdomains, but not on vercel.app", async () => {
+    const sub = await POST(jsonRequest({ username: "manager1", password: "correct-horse" }, "https://staff.melthouse.co.uk/api/auth/login"));
+    expect(sub.headers.get("set-cookie")).toMatch(/Domain=melthouse\.co\.uk/i);
+    const vercel = await POST(jsonRequest({ username: "manager1", password: "correct-horse" }, "https://royal-chilli-pos.vercel.app/api/auth/login"));
+    expect(vercel.headers.get("set-cookie")).not.toMatch(/Domain=/i);
+  });
+
   it("401s on a wrong password", async () => {
     const res = await POST(jsonRequest({ username: "manager1", password: "wrong" }));
     expect(res.status).toBe(401);

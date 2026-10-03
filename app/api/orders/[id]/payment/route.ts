@@ -6,6 +6,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { awardPurchasePoints } from "@/lib/customers";
 import { depleteStockForOrder } from "@/lib/inventory";
 import { sendOrderPaymentReceipt } from "@/lib/orders";
+import { tillRequired } from "@/lib/till-device";
 
 // What the payments table accepts (payments_method_check). Pay Later has its
 // own route and records no payment; loyalty/vouchers are discounts, not tenders.
@@ -30,6 +31,8 @@ export async function POST(
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const notTill = await tillRequired(req, session.businessId);
+    if (notTill) return notTill;
 
     const { id } = await params;
     const { method, amount, tip_amount, change_given, reference, extraOrderIds } = await req.json();

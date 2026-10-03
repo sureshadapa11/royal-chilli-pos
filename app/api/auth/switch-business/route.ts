@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const business = await getBusiness(Number(businessId));
   if (!business) return NextResponse.json({ error: "Business not found" }, { status: 404 });
 
-  const { name, options } = getSessionCookieOptions();
+  const { name, options } = getSessionCookieOptions(req.headers.get("host"));
   const res = NextResponse.json({ business: { id: business.id, name: business.name } });
   res.cookies.set(name, await createSession({ ...session, businessId: business.id }), options);
 
