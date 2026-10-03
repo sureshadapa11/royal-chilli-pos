@@ -4,7 +4,7 @@ import { canManageFinance } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { PLATFORMS } from "@/lib/platforms";
 
-// Daily delivery-platform totals (Just Eat / Uber Eats / Deliveroo), typed in
+// Daily delivery-platform totals (Just Eat / Uber Eats / Deliveroo / Hiest), typed in
 // from each tablet's end-of-day summary. Anyone with the Finance tab.
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
