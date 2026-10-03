@@ -29,8 +29,8 @@ describe("canAccess — default matrix", () => {
     expect(canAccess("kitchen", "menu")).toBe(false);
   });
 
-  it("Manager and Supervisor: operations, attendance, customers, settings — no HR, no Insights", () => {
-    for (const role of ["manager", "supervisor"] as const) {
+  it("Manager: operations, attendance, customers, settings — no HR, no Insights", () => {
+    for (const role of ["manager"] as const) {
       for (const t of ["menu", "tables", "inventory", "approve_stock_takes", "drivers", "delivery_platforms", "daily_accounts", "website", "till", "attendance", "customers", "settings"] as const) {
         expect(canAccess(role, t)).toBe(true);
       }

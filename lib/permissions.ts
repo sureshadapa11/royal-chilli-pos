@@ -4,7 +4,7 @@ import { ROLE_LABEL, isFrontLine } from "@/lib/roles";
 
 // The roles shown in Settings → Roles & Permissions. Super admin is always on
 // and Front House / Kitchen never have Staff Hub tabs, so they aren't editable.
-export const ALL_ROLES: StaffRole[] = ["admin", "supervisor", "manager", "hr", "employee", "kitchen"];
+export const ALL_ROLES: StaffRole[] = ["admin", "manager", "hr", "employee", "kitchen"];
 
 export const ROLE_LABELS = Object.fromEntries(ALL_ROLES.map((r) => [r, ROLE_LABEL[r]])) as Record<StaffRole, string>;
 
@@ -56,11 +56,11 @@ export const TAB_LABELS: Record<TabKey, string> = {
 
 // The agreed defaults — also the seed for role_permissions (migration 102) and
 // the fail-closed fallback if that table can't be read. Super admin always has
-// everything; Front House only the till; Kitchen nothing here. Manager (and
-// Supervisor, until Super admin ticks more): operations, attendance, customers
+// everything; Front House only the till; Kitchen nothing here. Manager:
+// operations, attendance, customers
 // and settings — no HR & Payroll, no Insights (analytics, reports, finance,
 // audit log). HR: attendance, HR & Payroll and reports.
-const MGR: StaffRole[] = ["supervisor", "manager", "admin"];
+const MGR: StaffRole[] = ["manager", "admin"];
 const DEFAULTS: Record<TabKey, StaffRole[]> = {
   menu: MGR,
   tables: MGR,
@@ -71,7 +71,7 @@ const DEFAULTS: Record<TabKey, StaffRole[]> = {
   daily_accounts: MGR,
   website: MGR,
   till: MGR,
-  attendance: ["supervisor", "manager", "hr", "admin"],
+  attendance: ["manager", "hr", "admin"],
   hr: ["hr", "admin"],
   customers: MGR,
   analytics: ["admin"],

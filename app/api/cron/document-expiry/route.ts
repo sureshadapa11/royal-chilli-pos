@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
     .from("staff")
     .select("id")
     .eq("active", 1)
-    .in("role", ["supervisor", "manager", "hr", "admin"]);
+    .in("role", ["manager", "hr", "admin"]);
   const { data: staffRows } = await supabase.from("staff").select("id, name").in(
     "id",
     docs.map((d) => d.staff_id),
