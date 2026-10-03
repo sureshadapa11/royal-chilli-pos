@@ -114,25 +114,31 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     dragStart.current = { id: t.id, offX: cx - t.x, offY: cy - t.y, startX: cx, startY: cy, moved: false };
   }
 
-  function onPointerMove(e: React.PointerEvent, t: Spot) {
+  // Where the table would be with the pointer here, or null if it hasn't
+  // been dragged far enough to count (a tap wobbles a little).
+  function dropSpot(e: React.PointerEvent, t: Spot) {
     const d = dragStart.current;
-    if (!d || d.id !== t.id) return;
+    if (!d || d.id !== t.id) return null;
     const { cx, cy } = cellAt(e.clientX, e.clientY);
-    // A tap wobbles a little — only a real drag (half a cell or more) moves it.
-    if (!d.moved && Math.hypot(cx - d.startX, cy - d.startY) < 0.5) return;
+    if (!d.moved && Math.hypot(cx - d.startX, cy - d.startY) < 0.5) return null;
     d.moved = true;
     const rawX = snap ? Math.round(cx - d.offX) : round2(cx - d.offX);
     const rawY = snap ? Math.round(cy - d.offY) : round2(cy - d.offY);
-    setDrag({ id: t.id, ...keepOnFloor(rawX, rawY, t.w, t.h, t.rotation) });
+    return keepOnFloor(rawX, rawY, t.w, t.h, t.rotation);
   }
 
-  async function onPointerUp(t: Spot) {
-    const d = dragStart.current;
+  function onPointerMove(e: React.PointerEvent, t: Spot) {
+    const spot = dropSpot(e, t);
+    if (spot) setDrag({ id: t.id, ...spot });
+  }
+
+  // The drop is worked out from the pointer itself, not from the last
+  // re-render — a quick flick lets go before the screen has caught up.
+  async function onPointerUp(e: React.PointerEvent, t: Spot) {
+    const spot = dropSpot(e, t);
     dragStart.current = null;
-    if (!d || !drag || drag.id !== t.id) { setDrag(null); return; }
-    const spot = { x: drag.x, y: drag.y };
     setDrag(null);
-    if (!d.moved) return;
+    if (!spot) return;
     const box = outline(spot.x, spot.y, t.w, t.h, t.rotation);
     if (placed.some((p) => p.id !== t.id && overlaps(box, p.box))) {
       toast({ variant: "destructive", title: "Tables can't overlap", description: "Drop it in a clear space." });
@@ -248,7 +254,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                       aria-label={`Table ${t.table_number}, ${t.capacity} seats`}
                       onPointerDown={(e) => onPointerDown(e, t)}
                       onPointerMove={(e) => onPointerMove(e, t)}
-                      onPointerUp={() => onPointerUp(t)}
+                      onPointerUp={(e) => onPointerUp(e, t)}
                       onPointerCancel={() => { dragStart.current = null; setDrag(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") setSelected(t.id); }}
                       className={`absolute flex flex-col items-center justify-center border-2 ${st.fill} ${isSel ? "border-blue-500 ring-2 ring-blue-400/40" : st.ring} ${t.shape === "round" ? "rounded-full" : "rounded-lg"} ${canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "z-10 opacity-90 shadow-lg" : "shadow-sm"} touch-none transition-[box-shadow]`}
