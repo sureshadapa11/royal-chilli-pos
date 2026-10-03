@@ -3,20 +3,27 @@ import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { manageAllows } from "@/lib/permissions";
 import { londonNowDateAndMinutes } from "@/lib/hours";
-import { GRID_H, GRID_W, SHAPES } from "@/lib/floor-plan";
+import { GRID_H, GRID_W, SHAPES, round2 } from "@/lib/floor-plan";
 
-// Floor plan fields (lib/floor-plan.ts): a cell on the grid and a shape.
-function layoutFields(b: { pos_x?: unknown; pos_y?: unknown; shape?: unknown }): Record<string, unknown> | { error: string } {
+// Floor plan fields (lib/floor-plan.ts): where the table sits (anywhere —
+// fractions of a cell are fine; a long table turned 90° can start a little
+// left of the edge), its shape and its turn (45° steps).
+function layoutFields(b: { pos_x?: unknown; pos_y?: unknown; shape?: unknown; rotation?: unknown }): Record<string, unknown> | { error: string } {
   const out: Record<string, unknown> = {};
   for (const [k, max] of [["pos_x", GRID_W], ["pos_y", GRID_H]] as const) {
     if (b[k] === undefined) continue;
-    const v = Math.round(Number(b[k]));
-    if (!Number.isFinite(v) || v < 0 || v >= max) return { error: "That spot is off the floor plan" };
+    const v = round2(Number(b[k]));
+    if (!Number.isFinite(v) || v < -10 || v >= max) return { error: "That spot is off the floor plan" };
     out[k] = v;
   }
   if (b.shape !== undefined) {
     if (!(SHAPES as readonly string[]).includes(String(b.shape))) return { error: "Unknown table shape" };
     out.shape = b.shape;
+  }
+  if (b.rotation !== undefined) {
+    const r = Number(b.rotation);
+    if (!Number.isInteger(r) || r % 45 !== 0) return { error: "Tables turn in 45° steps" };
+    out.rotation = ((r % 360) + 360) % 360;
   }
   return out;
 }
@@ -161,7 +168,7 @@ export async function PUT(req: NextRequest) {
     // Floor staff flip `status` all shift; changing a table's number/capacity/
     // area/spot on the floor plan is a setup action (Tables → Full).
     const editsLayout = capacity !== undefined || location !== undefined || table_number !== undefined ||
-      body.pos_x !== undefined || body.pos_y !== undefined || body.shape !== undefined;
+      body.pos_x !== undefined || body.pos_y !== undefined || body.shape !== undefined || body.rotation !== undefined;
     if (editsLayout && !manageAllows(session.role, "tables", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
