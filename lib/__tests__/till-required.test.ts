@@ -7,17 +7,24 @@ const req = (cookie?: string) =>
 describe("tillRequired", () => {
   it("allows a paired till of the same business", async () => {
     const token = await createTillToken(1, 5);
-    expect(await tillRequired(req(`${TILL_COOKIE}=${token}`), 5)).toBeNull();
+    expect(await tillRequired(req(`${TILL_COOKIE}=${token}`), { businessId: 5, role: "employee" })).toBeNull();
   });
 
   it("refuses a device that isn't a till, even for a manager", async () => {
-    const res = await tillRequired(req(), 1);
+    const res = await tillRequired(req(), { businessId: 1, role: "manager" });
     expect(res?.status).toBe(403);
     expect((await res!.json()).error).toMatch(/paired till/);
   });
 
   it("refuses another business's till", async () => {
     const token = await createTillToken(1, 1);
-    expect((await tillRequired(req(`${TILL_COOKIE}=${token}`), 5))?.status).toBe(403);
+    expect((await tillRequired(req(`${TILL_COOKIE}=${token}`), { businessId: 5, role: "manager" }))?.status).toBe(403);
+  });
+
+  it("refuses Kitchen staff even on the business's own till", async () => {
+    const token = await createTillToken(1, 5);
+    const res = await tillRequired(req(`${TILL_COOKIE}=${token}`), { businessId: 5, role: "kitchen" });
+    expect(res?.status).toBe(403);
+    expect((await res!.json()).error).toMatch(/Kitchen staff/);
   });
 });

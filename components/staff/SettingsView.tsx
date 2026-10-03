@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { confirmDelete } from "@/components/ui/confirm";
 
 type Matrix = Record<string, Record<string, boolean>>;
-const FIXED = new Set(["admin", "employee"]); // admin always on, employee always off
+const FIXED = new Set(["admin", "employee", "kitchen"]); // Super admin always on; Front House and Kitchen always off
 
 function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
   const [matrix, setMatrix] = useState<Matrix | null>(null);
@@ -46,7 +46,7 @@ function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
     <div className="rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5">
       <h2 className="text-foreground font-bold text-lg">Roles &amp; Permissions</h2>
       <p className="mt-1 text-muted-foreground text-xs">
-        Which roles can open each Staff Hub tab. Admin always has everything; employees never see Staff Hub — neither is editable.
+        Which roles can open each Staff Hub tab. Super admin always has everything; Front House and Kitchen never see Staff Hub — those aren't editable.
         {!canEdit && " Only an Admin can change this."}
       </p>
 

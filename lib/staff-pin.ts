@@ -8,8 +8,7 @@ import type { SessionUser } from "@/lib/types";
 // right person. A manager's PIN also approves refunds.
 
 export const PIN_PATTERN = /^\d{4}$/;
-export const MANAGER_ROLES: SessionUser["role"][] = ["admin", "manager"];
-export const isManagerRole = (role: string) => (MANAGER_ROLES as string[]).includes(role);
+export { MANAGER_ROLES, isManagerRole } from "@/lib/roles";
 
 type PinStaff = { id: number; name: string; role: SessionUser["role"]; pin_hash: string | null; is_owner: boolean };
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { roleLabel } from "@/lib/roles";
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { Staff } from "@/lib/types";
@@ -41,10 +42,7 @@ function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSele
           <select value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}
             className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-2 text-foreground text-xs">
             <option value="">All roles</option>
-            <option value="employee">Employee</option>
-            <option value="manager">Manager</option>
-            <option value="hr">HR</option>
-            <option value="admin">Admin</option>
+            {["supervisor", "manager", "hr", "employee", "kitchen"].map((r) => <option key={r} value={r}>{roleLabel(r)}</option>)}
           </select>
           <select value={activeFilter} onChange={(e) => setActiveFilter(e.target.value)}
             className="flex-1 min-w-0 bg-surface-hover border border-border rounded-lg px-2 py-2 text-foreground text-xs">
@@ -59,7 +57,7 @@ function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSele
           <button key={e.id} onClick={() => onSelect(e)}
             className={`w-full text-left px-3 py-2.5 border-b border-border last:border-0 transition-colors ${selected?.id === e.id ? "bg-red-500/10" : "hover:bg-surface-hover"}`}>
             <p className="text-foreground font-medium text-sm truncate">{e.name}</p>
-            <p className="text-muted-foreground text-xs capitalize">{e.employee_number} · {e.role.replace("_", " ")} · £{Number(e.pay_rate).toFixed(2)}/hr</p>
+            <p className="text-muted-foreground text-xs capitalize">{e.employee_number} · {roleLabel(e.role)} · £{Number(e.pay_rate).toFixed(2)}/hr</p>
           </button>
         ))}
         {employees.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No employees found.</p>}

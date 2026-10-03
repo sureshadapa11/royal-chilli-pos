@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { isManagerRole, roleLabel } from "@/lib/roles";
 import { initials, type Brand } from "@/lib/brand-client";
 import { useRouter } from "next/navigation";
 import { formatCurrency, isHappyHour, isBreakfastTime } from "@/lib/utils";
@@ -139,7 +140,7 @@ export default function POSPage() {
 
   const happyHour = isHappyHour();
   const breakfastTime = isBreakfastTime();
-  const isManager = session?.role === "admin" || session?.role === "manager";
+  const isManager = !!session && isManagerRole(session.role);
 
   // Computed totals — exclude voided items. Item prices are VAT-inclusive
   // (see lib/order-totals.ts computeBill) — total is just subtotal minus
@@ -260,6 +261,11 @@ export default function POSPage() {
       const meRes = await fetch("/api/auth/me");
       if (meRes.ok) {
         const meData = await meRes.json();
+        // Kitchen staff only use the Kitchen Display.
+        if (meData.user?.role === "kitchen") {
+          window.location.replace("/pos/kitchen");
+          return;
+        }
         setSession(meData.user);
         setBrand(meData.brand ?? null);
       }
@@ -913,7 +919,7 @@ export default function POSPage() {
             {session && (
               <div className="flex items-center gap-1.5 mr-1 px-2.5 py-1.5 bg-surface-hover/60 border border-border rounded-lg">
                 <span className="text-foreground text-xs font-semibold">{session.name}</span>
-                <span className="text-[10px] text-muted-foreground capitalize bg-elevated px-1.5 py-0.5 rounded">{session.role}</span>
+                <span className="text-[10px] text-muted-foreground bg-elevated px-1.5 py-0.5 rounded">{roleLabel(session.role)}</span>
               </div>
             )}
             {session && session.role !== "employee" && (
@@ -974,7 +980,7 @@ export default function POSPage() {
                   {session && (
                     <div className="px-3 py-2 border-b border-border">
                       <p className="text-foreground text-xs font-semibold">{session.name}</p>
-                      <p className="text-muted-foreground text-[10px] capitalize">{session.role}</p>
+                      <p className="text-muted-foreground text-[10px]">{roleLabel(session.role)}</p>
                     </div>
                   )}
                   {session && session.role !== "employee" && (

@@ -141,7 +141,7 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const notTill = await tillRequired(req, session.businessId);
+    const notTill = await tillRequired(req, session);
     if (notTill) return notTill;
 
     const body = await req.json();

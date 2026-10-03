@@ -1,5 +1,6 @@
 "use client";
 
+import { ROLE_LABEL } from "@/lib/roles";
 import { useEffect, useMemo, useState } from "react";
 
 type LogEntry = {
@@ -13,7 +14,6 @@ type LogEntry = {
   created_at: string;
 };
 
-const ROLE_LABEL: Record<string, string> = { admin: "Admin", hr: "HR", manager: "Manager", employee: "Employee" };
 
 export default function AuditLogView() {
   const [logs, setLogs] = useState<LogEntry[]>([]);

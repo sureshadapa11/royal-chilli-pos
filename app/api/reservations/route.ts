@@ -64,6 +64,10 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    // Kitchen staff work the Kitchen Display only.
+    if (session.role === "kitchen") {
+      return NextResponse.json({ error: "Kitchen staff can't make or change bookings." }, { status: 403 });
+    }
     const db = bizDb(session.businessId);
 
     const body = await req.json();
@@ -139,6 +143,10 @@ export async function PUT(req: NextRequest) {
     const session = await getSessionFromRequest(req);
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    // Kitchen staff work the Kitchen Display only.
+    if (session.role === "kitchen") {
+      return NextResponse.json({ error: "Kitchen staff can't make or change bookings." }, { status: 403 });
     }
     const db = bizDb(session.businessId);
 

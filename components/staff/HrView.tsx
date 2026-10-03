@@ -1,5 +1,6 @@
 "use client";
 
+import { ASSIGNABLE_ROLES, roleLabel } from "@/lib/roles";
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
@@ -673,7 +674,7 @@ function EmployeePicker({
               <p className="text-foreground font-medium text-sm truncate">{e.name}</p>
               {!e.active && <span className="flex-shrink-0 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground">Inactive</span>}
             </div>
-            <p className="text-muted-foreground text-xs capitalize">{e.employee_number} · {e.role.replace("_", " ")}</p>
+            <p className="text-muted-foreground text-xs capitalize">{e.employee_number} · {roleLabel(e.role)}</p>
             {locationLabel(e.location_ids, locationNames) && (
               <p className="text-muted-foreground text-xs truncate">{locationLabel(e.location_ids, locationNames)}</p>
             )}
@@ -686,13 +687,12 @@ function EmployeePicker({
 }
 
 // ── New Employee modal ──────────────────────────────────────────────────────
-const ROLES: { value: string; label: string }[] = [
-  { value: "employee", label: "Employee — POS + kitchen only" },
-  { value: "manager", label: "Manager — operations, no HR/Settings" },
-  { value: "hr", label: "HR — attendance, HR, payroll, finance, reports" },
-  { value: "admin", label: "Admin — full access" },
-  { value: "driver", label: "Driver — own deliveries only" },
-];
+// The five roles anyone can be given (lib/roles.ts) — Super admin never.
+const ROLES: { value: string; label: string }[] = [...ASSIGNABLE_ROLES];
+// Editing someone whose role isn't in the list (the Super admin, an old
+// driver account): keep showing theirs so saving doesn't change it.
+const rolesFor = (current: string) =>
+  ROLES.some((r) => r.value === current) ? ROLES : [{ value: current, label: roleLabel(current) }, ...ROLES];
 
 function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreated: (staff: Staff) => void }) {
   const [form, setForm] = useState({
@@ -901,7 +901,7 @@ function EmployeeInfoTab({ staff, onUpdated }: { staff: Staff; onUpdated: (s: St
         <Text label="Full name" value={form.name} onChange={(v) => setForm({ ...form, name: v })} />
         <Text label="Username" value={form.username} onChange={(v) => setForm({ ...form, username: v })} />
         <Text label="New password (leave blank to keep)" value={form.password} onChange={(v) => setForm({ ...form, password: v })} placeholder="6+ characters" />
-        <Select label="Role" value={form.role} onChange={(v) => setForm({ ...form, role: v })} options={ROLES} />
+        <Select label="Role" value={form.role} onChange={(v) => setForm({ ...form, role: v })} options={rolesFor(staff.role)} />
       </div>
       <TillPinField staffId={staff.id} />
 
@@ -1017,7 +1017,7 @@ function EmployeeSection() {
                 <div>
                   <h2 className="text-foreground font-bold text-lg">{selected.name}</h2>
                   <p className="text-muted-foreground text-sm capitalize">
-                    {selected.employee_number} · {selected.role.replace("_", " ")}
+                    {selected.employee_number} · {roleLabel(selected.role)}
                     {!selected.active && <span className="ml-2 text-xs font-semibold px-1.5 py-0.5 rounded-full bg-surface-hover text-muted-foreground normal-case">Inactive</span>}
                   </p>
                   {locationLabel(selected.location_ids, locationNames) && (
