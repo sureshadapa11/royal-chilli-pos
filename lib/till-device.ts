@@ -1,5 +1,5 @@
 import { SignJWT, jwtVerify } from "jose";
-import type { NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { DEFAULT_BUSINESS_ID } from "./business-id";
 
 // A "paired till": a device a manager has signed in on once with their
@@ -52,4 +52,19 @@ export function tillCookieOptions() {
     maxAge: TILL_MAX_AGE,
     path: "/",
   };
+}
+
+/**
+ * Orders and payments are only taken on a paired till of the business the
+ * person is working in — for everyone, managers included. Anywhere else the
+ * POS still opens (managers can look things up), but this refuses the action.
+ * Returns the error response, or null when it's a till.
+ */
+export async function tillRequired(req: NextRequest, businessId: number): Promise<NextResponse | null> {
+  const till = await tillFromRequest(req);
+  if (till && till.businessId === businessId) return null;
+  return NextResponse.json(
+    { error: "Orders and payments can only be taken on a paired till." },
+    { status: 403 }
+  );
 }

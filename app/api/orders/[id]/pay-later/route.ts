@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { depleteStockForOrder } from "@/lib/inventory";
+import { tillRequired } from "@/lib/till-device";
 
 // Marks an order deferred instead of collecting payment — a card was
 // declined, the customer forgot their wallet, whatever the reason. No
@@ -17,6 +18,8 @@ export async function POST(
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const notTill = await tillRequired(req, session.businessId);
+    if (notTill) return notTill;
 
     const { id } = await params;
     const { note, extraOrderIds } = await req.json().catch(() => ({}));

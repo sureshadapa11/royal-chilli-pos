@@ -6,6 +6,7 @@ import { findStaffByPin, isManagerRole } from "@/lib/staff-pin";
 import { refundTransaction, sumupTransactionFromReference } from "@/lib/sumup";
 import { ORDER_EARN_REASONS } from "@/lib/loyalty";
 import { reverseVisitRewardsForFullRefund } from "@/lib/visits";
+import { tillRequired } from "@/lib/till-device";
 
 // A refund is just another row in `payments`, with a negative amount — same
 // pattern as a normal payment, so the existing trigger that keeps
@@ -24,6 +25,8 @@ export async function POST(
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    const notTill = await tillRequired(req, session.businessId);
+    if (notTill) return notTill;
 
     const { id } = await params;
     const db = bizDb(session.businessId);
