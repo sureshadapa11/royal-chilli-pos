@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { notifyOrderReady } from "@/lib/order-notifications";
 import { waitUntil } from "@vercel/functions";
-import supabase from "@/lib/supabase";
 import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
@@ -18,11 +17,12 @@ export async function GET(
     }
 
     const { id } = await params;
-    if (!(await allOwned(bizDb(session.businessId), "orders", [id]))) {
+    const db = bizDb(session.businessId);
+    if (!(await allOwned(db, "orders", [id]))) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const { data: items, error } = await supabase
+    const { data: items, error } = await db
       .from("order_items")
       .select(`
         *,
@@ -100,7 +100,7 @@ export async function POST(
       notes: item.notes || null,
     }));
 
-    const { data: inserted, error: insertError } = await supabase
+    const { data: inserted, error: insertError } = await db
       .from("order_items")
       .insert(itemRows)
       .select("id");
@@ -110,7 +110,7 @@ export async function POST(
     const insertedIds = (inserted ?? []).map((r: { id: number }) => r.id);
 
     // Recalculate order totals from all active items
-    await recalcTotals(id);
+    await recalcTotals(id, session.businessId);
 
     return NextResponse.json({ success: true, insertedIds });
   } catch (error) {
@@ -131,7 +131,8 @@ export async function PUT(
 
     const { id: orderId } = await params;
     const { itemId, status, action, quantity } = await req.json();
-    if (!(await allOwned(bizDb(session.businessId), "orders", [orderId]))) {
+    const db = bizDb(session.businessId);
+    if (!(await allOwned(db, "orders", [orderId]))) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -139,43 +140,43 @@ export async function PUT(
       // Once an order is paid, voiding an item wouldn't touch the money
       // already taken for it — that's what Refund is for — so it's blocked
       // here rather than left to silently drift out of sync.
-      const { data: orderForVoid } = await supabase.from("orders").select("status, is_paid, table_id").eq("id", orderId).single();
+      const { data: orderForVoid } = await db.from("orders").select("status, is_paid, table_id").eq("id", orderId).single();
       if (orderForVoid?.is_paid) {
         return NextResponse.json({ error: "Cannot void items on a paid order — use Refund from Order History instead." }, { status: 409 });
       }
 
-      const { error } = await supabase
+      const { error } = await db
         .from("order_items")
         .update({ status: "cancelled" })
         .eq("id", itemId)
         .eq("order_id", orderId);
 
       if (error) throw error;
-      await recalcTotals(orderId);
+      await recalcTotals(orderId, session.businessId);
 
       // Voiding the last active item leaves an order with nothing left to
       // send or pay for — close it out the same way an explicit whole-order
       // cancel does, so a dine-in table doesn't stay stuck "occupied" with
       // an empty order (see cancelOrderAndFreeTable's docstring).
-      const { count: remaining } = await supabase
+      const { count: remaining } = await db
         .from("order_items")
         .select("id", { count: "exact", head: true })
         .eq("order_id", orderId)
         .neq("status", "cancelled");
       if (remaining === 0) {
-        await cancelOrderAndFreeTable(Number(orderId), orderForVoid?.table_id ?? null);
+        await cancelOrderAndFreeTable(session.businessId, Number(orderId), orderForVoid?.table_id ?? null);
       }
     } else if (action === "reduce" && quantity > 0) {
-      const { error } = await supabase
+      const { error } = await db
         .from("order_items")
         .update({ quantity })
         .eq("id", itemId)
         .eq("order_id", orderId);
 
       if (error) throw error;
-      await recalcTotals(orderId);
+      await recalcTotals(orderId, session.businessId);
     } else if (status) {
-      const { error } = await supabase
+      const { error } = await db
         .from("order_items")
         .update({ status })
         .eq("id", itemId)
@@ -187,13 +188,13 @@ export async function PUT(
       // bumped, the whole order auto-completes — kitchen doesn't need a
       // separate "mark order ready" tap on top of bumping every item.
       if (status === "ready") {
-        const { count: stillPending } = await supabase
+        const { count: stillPending } = await db
           .from("order_items")
           .select("id", { count: "exact", head: true })
           .eq("order_id", orderId)
           .eq("status", "pending");
         if (stillPending === 0) {
-          await supabase
+          await db
             .from("orders")
             .update({ status: "ready", updated_at: new Date().toISOString() })
             .eq("id", orderId)
@@ -203,7 +204,7 @@ export async function PUT(
       } else if (status === "pending") {
         // Un-bumping an item on an order that had already auto-completed
         // reopens the order — it's no longer actually fully ready.
-        await supabase
+        await db
           .from("orders")
           .update({ status: "sent_to_kitchen", updated_at: new Date().toISOString() })
           .eq("id", orderId)
@@ -217,4 +218,3 @@ export async function PUT(
     return NextResponse.json({ error: "Failed to update item" }, { status: 500 });
   }
 }
-

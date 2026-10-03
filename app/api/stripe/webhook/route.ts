@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 import { stripe } from "@/lib/stripe";
 import { sendOrderConfirmationEmail } from "@/lib/email";
 import { queueKitchenTicketSafely, printAfterFor } from "@/lib/print-queue";
@@ -44,7 +45,7 @@ export async function POST(req: NextRequest) {
         // skips every follow-up below (points, stock, ticket, email).
         const { data: order } = await supabase
           .from("orders")
-          .select("order_number, order_type, subtotal, total, amount_paid, scheduled_for, customer_id, customer_name, customer_email, customer_address, customer_postcode")
+          .select("business_id, order_number, order_type, subtotal, total, amount_paid, scheduled_for, customer_id, customer_name, customer_email, customer_address, customer_postcode")
           .eq("id", order_id).single();
         let recorded = false;
         const amount = (session.amount_total || 0) / 100;
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
           // First real confirmation this order gets — the order-creation
           // route deliberately skipped it for pay-online orders, since
           // "confirmed" wasn't true until this webhook fired.
-          const { data: orderItems } = await supabase
+          const { data: orderItems } = await bizDb(Number(order.business_id))
             .from("order_items").select("item_name, quantity, item_price, notes").eq("order_id", order_id);
           waitUntil(sendOrderConfirmationEmail(order.customer_email, {
             orderNumber: order.order_number,

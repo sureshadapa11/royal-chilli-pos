@@ -15,6 +15,7 @@ type Resp = { data?: unknown; error?: unknown; count?: number };
 let queues: Record<string, Resp[]>;
 let tablesUpdatePayloads: Record<string, unknown>[];
 let ordersUpdatePayloads: Record<string, unknown>[];
+let mockQueries: { table: string; eq: [string, unknown][] }[];
 
 function queue(table: string, resp: Resp) {
   (queues[table] ||= []).push(resp);
@@ -26,10 +27,15 @@ jest.mock("@/lib/supabase", () => ({
     from: (table: string) => {
       const q = queues[table];
       if (!q || q.length === 0) throw new Error(`No queued response for table "${table}"`);
+      const call = { table, eq: [] as [string, unknown][] };
+      mockQueries.push(call);
       const resp = q.shift()!;
       const builder: Record<string, unknown> = {};
       const passthrough = ["select", "eq", "neq", "in", "gte", "lte", "not", "order", "limit", "insert"];
-      for (const m of passthrough) builder[m] = () => builder;
+      for (const m of passthrough) builder[m] = (...args: unknown[]) => {
+        if (m === "eq") call.eq.push(args as [string, unknown]);
+        return builder;
+      };
       builder.update = (vals: Record<string, unknown>) => {
         if (table === "restaurant_tables") tablesUpdatePayloads.push(vals);
         if (table === "orders") ordersUpdatePayloads.push(vals);
@@ -60,6 +66,7 @@ beforeEach(() => {
   queues = {};
   tablesUpdatePayloads = [];
   ordersUpdatePayloads = [];
+  mockQueries = [];
 });
 
 describe("PUT /api/orders/[id]/items — void action closes an emptied-out order", () => {
@@ -112,5 +119,6 @@ describe("PUT /api/orders/[id]/items — void action closes an emptied-out order
     expect(res.status).toBe(404);
     expect(ordersUpdatePayloads).toHaveLength(0);
     expect(tablesUpdatePayloads).toHaveLength(0);
+    expect(mockQueries).toEqual([{ table: "orders", eq: [["business_id", 1]] }]);
   });
 });

@@ -1,4 +1,7 @@
 import { SITE_URL } from "@/lib/site-url";
+import { getBusiness } from "@/lib/business";
+import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
+import { addressOneLine, type Address } from "@/lib/business-setup";
 // Transactional email via Brevo (https://developers.brevo.com/reference/sendtransacemail).
 // Same pattern as lib/stripe.ts: allowed to be unconfigured until BREVO_API_KEY
 // is set, so the rest of the ordering/reservation flow never depends on email
@@ -13,6 +16,44 @@ const RESTAURANT = {
   mapUrl: "https://www.google.com/maps?cid=3983787686224519813",
   logoUrl: `${SITE_URL}/logo.png`,
 };
+
+export type EmailBrand = {
+  name: string;
+  email: string;
+  address: string;
+  phone: string;
+  logoUrl: string;
+  brandColour: string;
+  mapUrl?: string;
+};
+
+export async function getEmailBrand(businessId?: number | null): Promise<EmailBrand> {
+  const fallback: EmailBrand = {
+    name: "The Royal Chilli",
+    email: FROM.email,
+    address: RESTAURANT.address,
+    phone: RESTAURANT.phone,
+    logoUrl: RESTAURANT.logoUrl,
+    brandColour: "#E34234",
+    mapUrl: RESTAURANT.mapUrl,
+  };
+  if (!businessId || businessId === DEFAULT_BUSINESS_ID) {
+    return fallback;
+  }
+  const b = await getBusiness(businessId).catch(() => null);
+  if (!b) return fallback;
+
+  const addr = addressOneLine(b.trading_address as Address) || b.address || RESTAURANT.address;
+  return {
+    name: b.name || fallback.name,
+    email: b.email || b.accounts_email || fallback.email,
+    address: addr,
+    phone: b.phone || fallback.phone,
+    logoUrl: b.logo_url || fallback.logoUrl,
+    brandColour: b.brand_colour || fallback.brandColour,
+    mapUrl: fallback.mapUrl,
+  };
+}
 
 // Colors/fonts match the live site's own theme (app/globals.css, layout.tsx)
 // — Georgia/Arial fallbacks stand in for Playfair Display/Poppins, since
@@ -38,10 +79,18 @@ const SERIF = "Georgia, 'Times New Roman', serif";
 const SANS = "Arial, Helvetica, sans-serif";
 const money = (n: number) => `£${n.toFixed(2)}`;
 
+// Names and codes come from customers — escape before they go into HTML.
+const esc = (v: string) => (v || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
 // `unsubscribeUrl` marks a marketing email: adds the List-Unsubscribe header
 // (Gmail/Outlook show their own "Unsubscribe" button) alongside the footer link.
-async function sendBrevoEmail(to: string, subject: string, html: string, unsubscribeUrl?: string) {
+async function sendBrevoEmail(to: string, subject: string, html: string, unsubscribeUrl?: string, brand?: EmailBrand) {
   if (!BREVO_API_KEY) return;
+  // Always send from the Brevo-verified address (an unverified sender domain is
+  // rejected); the business's own name shows as the sender and replies go to
+  // its own inbox.
+  const sender = { name: brand?.name ?? FROM.name, email: FROM.email };
+  const replyTo = brand?.email && brand.email !== FROM.email ? { email: brand.email, name: brand.name } : undefined;
   try {
     const res = await fetch("https://api.brevo.com/v3/smtp/email", {
       method: "POST",
@@ -51,7 +100,8 @@ async function sendBrevoEmail(to: string, subject: string, html: string, unsubsc
         "api-key": BREVO_API_KEY,
       },
       body: JSON.stringify({
-        sender: FROM,
+        sender,
+        ...(replyTo ? { replyTo } : {}),
         to: [{ email: to }],
         subject,
         htmlContent: html,
@@ -68,25 +118,32 @@ async function sendBrevoEmail(to: string, subject: string, html: string, unsubsc
 
 // Shared card/section chrome so both templates below stay visually identical
 // without repeating the table boilerplate.
-function shell(bodyHtml: string) {
+function shell(bodyHtml: string, brand?: EmailBrand) {
+  const bName = brand?.name ?? "The Royal Chilli";
+  const bLogo = brand?.logoUrl ?? RESTAURANT.logoUrl;
+  const bAccent = brand?.brandColour ?? C.chilli;
+  const bAddress = brand?.address ?? RESTAURANT.address;
+  const bPhone = brand?.phone ?? RESTAURANT.phone;
+  const bEmail = brand?.email ?? FROM.email;
+
   return `
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.page}; padding:32px 12px;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px; background:${C.cream}; border:1px solid ${C.rule}; border-radius:10px; overflow:hidden;">
         <tr><td align="center" style="padding:34px 24px 22px;">
-          <img src="${RESTAURANT.logoUrl}" width="52" height="52" alt="The Royal Chilli" style="display:block; margin:0 auto 10px; border:0;" />
-          <div style="font-family:${SERIF}; font-size:13px; letter-spacing:3px; text-transform:uppercase; color:${C.ink};">The Royal Chilli</div>
+          <img src="${bLogo}" width="52" height="52" alt="${esc(bName)}" style="display:block; margin:0 auto 10px; border:0;" />
+          <div style="font-family:${SERIF}; font-size:13px; letter-spacing:3px; text-transform:uppercase; color:${C.ink};">${esc(bName)}</div>
         </td></tr>
-        <tr><td style="height:3px; background:${C.chilli}; line-height:3px; font-size:0;">&nbsp;</td></tr>
+        <tr><td style="height:3px; background:${bAccent}; line-height:3px; font-size:0;">&nbsp;</td></tr>
         ${bodyHtml}
         <tr><td style="padding:34px 32px 26px; background:${C.rose}; text-align:center;">
           <div style="font-family:${SERIF}; font-style:italic; font-size:16px; color:${C.ink}; margin:0 0 4px;">Thank you for choosing us.</div>
-          <div style="font-family:${SANS}; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:${C.chilliDark}; font-weight:700; margin-bottom:16px;">The Royal Chilli Team</div>
+          <div style="font-family:${SANS}; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:${C.chilliDark}; font-weight:700; margin-bottom:16px;">${esc(bName)} Team</div>
           <div style="font-family:${SANS}; font-size:12.5px; color:${C.roseText}; line-height:2;">
-            ${RESTAURANT.address}<br />
-            <a href="tel:${RESTAURANT.phone.replace(/\s/g, "")}" style="color:${C.roseText}; text-decoration:none;">${RESTAURANT.phone}</a>
+            ${esc(bAddress)}<br />
+            <a href="tel:${bPhone.replace(/\s/g, "")}" style="color:${C.roseText}; text-decoration:none;">${esc(bPhone)}</a>
             &nbsp;&middot;&nbsp;
-            <a href="mailto:${FROM.email}" style="color:${C.roseText}; text-decoration:none;">${FROM.email}</a>
+            <a href="mailto:${esc(bEmail)}" style="color:${C.roseText}; text-decoration:none;">${esc(bEmail)}</a>
           </div>
         </td></tr>
       </table>
@@ -113,10 +170,12 @@ export async function sendOrderConfirmationEmail(
     paymentMethod: string; // e.g. "Card, paid online" | "Cash or card on collection"
     paymentStatus: "paid" | "due";
     items: { name: string; quantity: number; unitPrice: number; notes?: string | null }[];
+    businessId?: number;
   }
 ) {
   if (!to) return;
 
+  const brand = await getEmailBrand(data.businessId);
   const isDelivery = data.orderType === "delivery";
   const eta = data.scheduledFor
     ? new Date(data.scheduledFor).toLocaleString("en-GB", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
@@ -155,8 +214,8 @@ export async function sendOrderConfirmationEmail(
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:12px;">
           <tr><td style="padding:18px 22px 12px;">${cardLabel("Collect From")}</td></tr>
           <tr><td style="padding:0 22px 20px; font-family:${SANS}; font-size:13.5px; color:${C.ink}; line-height:1.6;">
-            ${RESTAURANT.address}<br />
-            <a href="${RESTAURANT.mapUrl}" style="color:${C.chilli}; text-decoration:none; font-size:12.5px;">Get directions →</a>
+            ${esc(brand.address)}<br />
+            ${brand.mapUrl ? `<a href="${brand.mapUrl}" style="color:${brand.brandColour}; text-decoration:none; font-size:12.5px;">Get directions →</a>` : ""}
           </td></tr>
         </table>
       </td>`;
@@ -164,12 +223,12 @@ export async function sendOrderConfirmationEmail(
   const body = `
     <tr><td align="center" style="padding:32px 32px 8px;">
       <div style="font-family:${SANS}; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:${C.gold}; font-weight:700; margin-bottom:14px;">Order Confirmed 🎉</div>
-      <div style="font-family:${SERIF}; font-weight:700; font-size:27px; line-height:1.3; color:${C.ink}; margin:0 0 10px;">Thanks for your order, <em style="color:${C.chilli}; font-style:italic;">${data.customerName}</em>.</div>
+      <div style="font-family:${SERIF}; font-weight:700; font-size:27px; line-height:1.3; color:${C.ink}; margin:0 0 10px;">Thanks for your order, <em style="color:${brand.brandColour}; font-style:italic;">${data.customerName}</em>.</div>
       <div style="font-family:${SANS}; color:${C.muted}; font-size:14px; max-width:420px; margin:0 auto; line-height:1.55;">We've got it, and it's already on its way to the kitchen. Here's everything you need to know.</div>
     </td></tr>
     <tr><td align="center" style="padding:18px 24px 0;">
       <table role="presentation" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:999px;">
-        <tr><td style="padding:8px 18px; font-family:${SERIF}; font-weight:700; font-size:14px; color:${C.ink};">Order <span style="color:${C.chilli};">#${data.orderNumber}</span></td></tr>
+        <tr><td style="padding:8px 18px; font-family:${SERIF}; font-weight:700; font-size:14px; color:${C.ink};">Order <span style="color:${brand.brandColour};">#${data.orderNumber}</span></td></tr>
       </table>
     </td></tr>
 
@@ -210,7 +269,7 @@ export async function sendOrderConfirmationEmail(
             <tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Subtotal</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">${money(data.subtotal)}</td></tr>
             ${data.deliveryFee > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Delivery fee</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">${money(data.deliveryFee)}</td></tr>` : ""}
             ${data.discount > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Discount</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">–${money(data.discount)}</td></tr>` : ""}
-            <tr><td style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.ink};">Total</td><td align="right" style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.chilli};">${money(data.total)}</td></tr>
+            <tr><td style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.ink};">Total</td><td align="right" style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${brand.brandColour};">${money(data.total)}</td></tr>
           </table>
         </td></tr>
       </table>
@@ -224,7 +283,7 @@ export async function sendOrderConfirmationEmail(
             <tr><td style="padding:18px 22px 12px;">${cardLabel("Need Help?")}</td></tr>
             <tr><td style="padding:0 22px 20px; font-family:${SANS}; font-size:13px; color:${C.muted}; line-height:1.6;">
               Call us and quote your order number.<br />
-              <a href="tel:${RESTAURANT.phone.replace(/\s/g, "")}" style="color:${C.ink}; font-weight:700; text-decoration:none;">${RESTAURANT.phone}</a>
+              <a href="tel:${brand.phone.replace(/\s/g, "")}" style="color:${C.ink}; font-weight:700; text-decoration:none;">${esc(brand.phone)}</a>
             </td></tr>
           </table>
         </td>
@@ -235,7 +294,7 @@ export async function sendOrderConfirmationEmail(
       Questions about this order? Just call us — quote <strong style="color:${C.ink};">Order #${data.orderNumber}</strong> and we'll sort it right away.
     </td></tr>`;
 
-  await sendBrevoEmail(to, `Order confirmed — ${data.orderNumber} 🎉`, shell(body));
+  await sendBrevoEmail(to, `Order confirmed — ${data.orderNumber} 🎉`, shell(body, brand), undefined, brand);
 }
 
 export async function sendReservationConfirmationEmail(
@@ -247,9 +306,12 @@ export async function sendReservationConfirmationEmail(
     reservationTime: string;
     waitlisted: boolean;
     depositAmount: number;
+    businessId?: number;
   }
 ) {
   if (!to) return;
+
+  const brand = await getEmailBrand(data.businessId);
 
   const statusLine = data.waitlisted
     ? "You've been added to the waitlist for this time — we'll be in touch if a table frees up."
@@ -287,7 +349,7 @@ export async function sendReservationConfirmationEmail(
               data.depositAmount > 0
                 ? `<tr><td colspan="2" style="padding:14px 0 0; border-top:1px solid ${C.rule}; margin-top:10px; font-family:${SANS};">
                     <div style="font-size:11px; color:${C.muted};">Deposit required to secure this booking</div>
-                    <div style="font-size:17px; font-weight:700; color:${C.chilli};">${money(data.depositAmount)}</div>
+                    <div style="font-size:17px; font-weight:700; color:${brand.brandColour};">${money(data.depositAmount)}</div>
                   </td></tr>`
                 : ""
             }
@@ -297,13 +359,15 @@ export async function sendReservationConfirmationEmail(
     </td></tr>
 
     <tr><td align="center" style="padding:16px 32px 4px; font-family:${SANS}; font-size:12.5px; color:${C.muted}; line-height:1.6;">
-      Need to change or cancel? Just give us a call — <a href="tel:${RESTAURANT.phone.replace(/\s/g, "")}" style="color:${C.ink}; font-weight:700; text-decoration:none;">${RESTAURANT.phone}</a>
+      Need to change or cancel? Just give us a call — <a href="tel:${brand.phone.replace(/\s/g, "")}" style="color:${C.ink}; font-weight:700; text-decoration:none;">${esc(brand.phone)}</a>
     </td></tr>`;
 
   await sendBrevoEmail(
     to,
-    data.waitlisted ? "You're on the waitlist — The Royal Chilli" : "Reservation confirmed — The Royal Chilli",
-    shell(body)
+    data.waitlisted ? `You're on the waitlist — ${brand.name}` : `Reservation confirmed — ${brand.name}`,
+    shell(body, brand),
+    undefined,
+    brand
   );
 }
 
@@ -357,9 +421,12 @@ export async function sendPaymentReceiptEmail(
     paidAt: string; // ISO
     items: { name: string; quantity: number; unitPrice: number; notes?: string | null }[];
     loyalty?: { pointsEarned: number; newBalance: number };
+    businessId?: number;
   }
 ) {
   if (!to) return;
+
+  const brand = await getEmailBrand(data.businessId);
 
   const itemsRows = data.items
     .map(
@@ -380,12 +447,12 @@ export async function sendPaymentReceiptEmail(
   const body = `
     <tr><td align="center" style="padding:32px 32px 8px;">
       <span style="display:inline-block; background:${C.paidBg}; color:${C.paid}; font-size:12px; font-weight:700; letter-spacing:1px; padding:5px 14px; border-radius:999px;">✓ PAID</span>
-      <div style="font-family:${SERIF}; font-weight:700; font-size:27px; line-height:1.3; color:${C.ink}; margin:14px 0 10px;">Thank you, <em style="color:${C.chilli}; font-style:italic;">${data.customerName}</em>.</div>
+      <div style="font-family:${SERIF}; font-weight:700; font-size:27px; line-height:1.3; color:${C.ink}; margin:14px 0 10px;">Thank you, <em style="color:${brand.brandColour}; font-style:italic;">${data.customerName}</em>.</div>
       <div style="font-family:${SANS}; color:${C.muted}; font-size:14px;">Here's your receipt for this visit.</div>
     </td></tr>
     <tr><td align="center" style="padding:18px 24px 0;">
       <table role="presentation" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:999px;">
-        <tr><td style="padding:8px 18px; font-family:${SERIF}; font-weight:700; font-size:14px; color:${C.ink};">Order <span style="color:${C.chilli};">#${data.orderNumber}</span> · ${placeLabel}</td></tr>
+        <tr><td style="padding:8px 18px; font-family:${SERIF}; font-weight:700; font-size:14px; color:${C.ink};">Order <span style="color:${brand.brandColour};">#${data.orderNumber}</span> · ${placeLabel}</td></tr>
       </table>
     </td></tr>
 
@@ -402,7 +469,7 @@ export async function sendPaymentReceiptEmail(
             ${(data.tip ?? 0) > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Tip</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">${money(data.tip ?? 0)}</td></tr>` : ""}
             ${data.discount > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">Discount</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">–${money(data.discount)}</td></tr>` : ""}
             ${(data.loyaltyDiscount ?? 0) > 0 ? `<tr><td style="padding:5px 0; font-size:13.5px; color:${C.muted};">${data.loyaltyLabel || "Loyalty"}</td><td align="right" style="padding:5px 0; font-size:13.5px; color:${C.muted};">–${money(data.loyaltyDiscount ?? 0)}</td></tr>` : ""}
-            <tr><td style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.ink};">Total</td><td align="right" style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.chilli};">${money(data.total + (data.tip ?? 0))}</td></tr>
+            <tr><td style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${C.ink};">Total</td><td align="right" style="padding:12px 0 0; border-top:1px solid ${C.rule}; font-size:17px; font-weight:700; color:${brand.brandColour};">${money(data.total + (data.tip ?? 0))}</td></tr>
             <tr><td colspan="2" style="padding:2px 0 0; font-size:11px; color:${C.muted};">incl. VAT ${money(data.tax)}</td></tr>
           </table>
         </td></tr>
@@ -443,7 +510,7 @@ export async function sendPaymentReceiptEmail(
       Questions about this receipt? Just call us — quote <strong style="color:${C.ink};">Order #${data.orderNumber}</strong> and we'll sort it right away.
     </td></tr>`;
 
-  await sendBrevoEmail(to, `Receipt — ${data.orderNumber} · ${money(data.total)} paid`, shell(body));
+  await sendBrevoEmail(to, `Receipt — ${data.orderNumber} · ${money(data.total)} paid`, shell(body, brand), undefined, brand);
 }
 
 // Sent when an unpaid order is cancelled (whole-order cancel, or voiding the
@@ -456,9 +523,12 @@ export async function sendOrderCancellationEmail(
     orderNumber: string;
     customerName: string;
     items: { name: string; quantity: number }[];
+    businessId?: number;
   }
 ) {
   if (!to) return;
+
+  const brand = await getEmailBrand(data.businessId);
 
   const itemsRows = data.items
     .map(
@@ -478,7 +548,7 @@ export async function sendOrderCancellationEmail(
     </td></tr>
     <tr><td align="center" style="padding:18px 24px 0;">
       <table role="presentation" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:999px;">
-        <tr><td style="padding:8px 18px; font-family:${SERIF}; font-weight:700; font-size:14px; color:${C.ink};">Order <span style="color:${C.chilli};">#${data.orderNumber}</span></td></tr>
+        <tr><td style="padding:8px 18px; font-family:${SERIF}; font-weight:700; font-size:14px; color:${C.ink};">Order <span style="color:${brand.brandColour};">#${data.orderNumber}</span></td></tr>
       </table>
     </td></tr>
 
@@ -495,7 +565,7 @@ export async function sendOrderCancellationEmail(
       If this wasn't expected, just call us — quote <strong style="color:${C.ink};">Order #${data.orderNumber}</strong> and we'll sort it right away.
     </td></tr>`;
 
-  await sendBrevoEmail(to, `Order cancelled — ${data.orderNumber}`, shell(body));
+  await sendBrevoEmail(to, `Order cancelled — ${data.orderNumber}`, shell(body, brand), undefined, brand);
 }
 
 // Win-back offer — only ever sent to a customer with marketing_consent set
@@ -535,9 +605,10 @@ export async function sendWinBackEmail(
 // the kitchen marks the order ready (lib/order-notifications.ts).
 export async function sendOrderReadyEmail(
   to: string | null | undefined,
-  data: { customerName: string; orderNumber: string; orderType: string }
+  data: { customerName: string; orderNumber: string; orderType: string; businessId?: number }
 ) {
   if (!to) return;
+  const brand = await getEmailBrand(data.businessId);
   const collection = data.orderType !== "delivery";
   const body = `
     <tr><td style="padding:28px 32px 28px;">
@@ -545,11 +616,11 @@ export async function sendOrderReadyEmail(
       <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">Your order is ready, ${data.customerName.split(" ")[0]}!</div>
       <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">
         ${collection
-          ? `Order <strong style="color:${C.ink};">${data.orderNumber}</strong> is ready — come and collect it from 43 Kingsley Road, Hounslow TW3 1PA.`
+          ? `Order <strong style="color:${C.ink};">${data.orderNumber}</strong> is ready — come and collect it from ${esc(brand.address)}.`
           : `Order <strong style="color:${C.ink};">${data.orderNumber}</strong> is ready and will be with you shortly.`}
       </div>
     </td></tr>`;
-  await sendBrevoEmail(to, collection ? `Your order ${data.orderNumber} is ready to collect` : `Your order ${data.orderNumber} is on its way soon`, shell(body));
+  await sendBrevoEmail(to, collection ? `Your order ${data.orderNumber} is ready to collect` : `Your order ${data.orderNumber} is on its way soon`, shell(body, brand), undefined, brand);
 }
 
 // "How was your meal?" — the day after, to customers who opted in to hear
@@ -578,8 +649,6 @@ export async function sendReviewRequestEmail(
 
 // ---------- Rewards Club ----------
 
-// Names and codes come from customers — escape before they go into HTML.
-const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const firstName = (name: string) => esc((name || "there").trim().split(" ")[0] || "there");
 const ukDate = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "long" });
 

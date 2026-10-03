@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 }
 
 /**
- * POST /api/staff/[id]/locations — Assign staff to a location.
+ * POST /api/staff/[id]/locations — Assign staff to one more location.
  * Body: { location_id: number }
  */
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -61,40 +61,50 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "Staff member not found" }, { status: 404 });
   }
 
+  let body: { location_id?: unknown };
   try {
-    const body = await req.json();
-    const locationId = Number(body.location_id);
-    if (!Number.isInteger(locationId) || locationId <= 0) {
-      return NextResponse.json({ error: "location_id must be a positive integer" }, { status: 400 });
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+  const locationId = Number(body?.location_id);
+  if (!Number.isInteger(locationId) || locationId <= 0) {
+    return NextResponse.json({ error: "location_id must be a positive integer" }, { status: 400 });
+  }
+
+  try {
+    if (!(await allOwned(db, "locations", [locationId]))) {
+      return NextResponse.json({ error: "Location must belong to this business" }, { status: 400 });
     }
 
-    // Verify location exists and belongs to this business
-    const { data: location, error: locError } = await db
-      .from("locations")
-      .select("id")
-      .eq("id", locationId)
-      .maybeSingle();
-    if (locError) throw locError;
-    if (!location) {
-      return NextResponse.json({ error: "Location not found" }, { status: 404 });
+    // Same rule as PATCH: a manager can only hand out locations they're
+    // assigned to themselves; only the group owner isn't limited.
+    if (!session.owner && !(await staffLocationIds(session.id)).includes(locationId)) {
+      return NextResponse.json({ error: "You can only assign locations you're assigned to" }, { status: 403 });
     }
 
-    // Insert or ignore if already assigned
-    const { error } = await supabase
-      .from("staff_locations")
-      .insert({ staff_id: staffId, location_id: locationId })
-      .select()
-      .single();
-    if (error) {
-      // Ignore duplicate key errors; it means the assignment already exists
-      if (!error.message.includes("duplicate")) throw error;
+    const current = (await staffLocationIds(staffId)).sort((a, b) => a - b);
+    if (current.includes(locationId)) {
+      return NextResponse.json({ error: "Staff member is already assigned to this location" }, { status: 409 });
     }
+
+    const { error } = await supabase.from("staff_locations").insert({ staff_id: staffId, location_id: locationId });
+    if (error) throw error;
+
+    const next = [...current, locationId].sort((a, b) => a - b);
+    const { error: auditError } = await db.from("audit_logs").insert({
+      staff_id: session.id,
+      action: "staff_location_assignment",
+      entity_type: "staff",
+      entity_id: staffId,
+      changes: { from: current, to: next },
+    });
+    if (auditError) console.error("Staff location audit log error:", auditError);
 
     return NextResponse.json({ success: true, staffId, locationId }, { status: 201 });
   } catch (error) {
     console.error("Assign staff location error:", error);
-    const message = error instanceof Error ? error.message : "Failed to assign location";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: "Failed to assign location" }, { status: 500 });
   }
 }
 

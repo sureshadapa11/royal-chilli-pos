@@ -47,7 +47,7 @@ export async function GET(
       staff: { name: string } | null;
     };
 
-    const { data: items, error: itemsError } = await supabase
+    const { data: items, error: itemsError } = await db
       .from("order_items")
       .select("*")
       .eq("order_id", id)
@@ -100,7 +100,7 @@ export async function PUT(
     }
 
     if (status === "cancelled") {
-      const result = await cancelOrderAndFreeTable(Number(id), order.table_id);
+      const result = await cancelOrderAndFreeTable(session.businessId, Number(id), order.table_id);
       if (!result.ok) {
         return NextResponse.json({ error: result.error }, { status: 409 });
       }
@@ -144,6 +144,7 @@ export async function PUT(
           .from("staff")
           .select("id, name")
           .eq("id", Number(discount_given_by_staff_id) || 0)
+          .eq("business_id", session.businessId)
           .eq("active", 1)
           .maybeSingle();
         return giver ? { discount_given_by_staff_id: giver.id as number, discount_given_by: giver.name as string } : null;
@@ -182,7 +183,7 @@ export async function PUT(
         return NextResponse.json({ error: "discount_type must be \"percent\", \"amount\", or null" }, { status: 400 });
       }
 
-      await recalcTotals(id);
+      await recalcTotals(id, session.businessId);
     }
 
     if (notes !== undefined) {
@@ -263,7 +264,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    const result = await cancelOrderAndFreeTable(Number(id), order.table_id);
+    const result = await cancelOrderAndFreeTable(session.businessId, Number(id), order.table_id);
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }

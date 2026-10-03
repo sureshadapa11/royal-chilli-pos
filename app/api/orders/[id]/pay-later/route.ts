@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { depleteStockForOrder } from "@/lib/inventory";
@@ -56,7 +55,7 @@ export async function POST(
     // Free the table immediately — a blocked card can't hold it hostage;
     // the debt travels with the order, not the table.
     if (order.table_id) {
-      await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
+      await db.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", order.table_id);
     }
 
     return NextResponse.json({ success: true });

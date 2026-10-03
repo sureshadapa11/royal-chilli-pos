@@ -1,4 +1,3 @@
-import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { orderNumberPrefix } from "@/lib/business";
 import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
@@ -16,8 +15,9 @@ import { ORDER_EARN_REASONS } from "@/lib/loyalty";
 // money already taken or the loyalty points already awarded for it (only
 // the dedicated Refund flow reverses both of those). Staff need to use
 // Refund instead so those stay in sync.
-export async function cancelOrderAndFreeTable(orderId: number, tableId: number | null): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { data: order } = await supabase
+export async function cancelOrderAndFreeTable(businessId: number, orderId: number, tableId: number | null): Promise<{ ok: true } | { ok: false; error: string }> {
+  const db = bizDb(businessId);
+  const { data: order } = await db
     .from("orders")
     .select("status, total, amount_paid, order_number, customer_name, customer_email, customers(email)")
     .eq("id", orderId)
@@ -31,9 +31,9 @@ export async function cancelOrderAndFreeTable(orderId: number, tableId: number |
     return { ok: false, error: `£${held.toFixed(2)} has been paid on this order — refund it first (Refund in Order History), then cancel.` };
   }
 
-  await supabase.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", orderId);
+  await db.from("orders").update({ status: "cancelled", updated_at: new Date().toISOString() }).eq("id", orderId);
   if (tableId) {
-    await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", tableId);
+    await db.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", tableId);
   }
 
   if (order) {
@@ -41,7 +41,7 @@ export async function cancelOrderAndFreeTable(orderId: number, tableId: number |
       const linkedCustomer = order.customers as unknown as { email: string | null } | null;
       const recipientEmail = order.customer_email || linkedCustomer?.email;
       if (recipientEmail) {
-        const { data: items } = await supabase.from("order_items").select("item_name, quantity").eq("order_id", orderId);
+        const { data: items } = await db.from("order_items").select("item_name, quantity").eq("order_id", orderId);
         if (items && items.length > 0) {
           await sendOrderCancellationEmail(recipientEmail, {
             orderNumber: order.order_number,
@@ -94,9 +94,10 @@ export async function generateOrderNumber(businessId: number): Promise<string> {
 // the only confirmation email in the whole app fired at website checkout,
 // before payment even happened. Best-effort: never let a failed/unconfigured
 // email affect whether the payment itself succeeded.
-export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
+export async function sendOrderPaymentReceipt(businessId: number, orderId: number): Promise<void> {
   try {
-    const { data: order } = await supabase
+    const db = bizDb(businessId);
+    const { data: order } = await db
       .from("orders")
       .select("order_number, customer_id, customer_name, customer_email, order_type, subtotal, discount, loyalty_discount, loyalty_reason, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number), customers(email, loyalty_points)")
       .eq("id", orderId)
@@ -114,7 +115,7 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
     // in the payment route) has already posted the real amount.
     let loyalty: { pointsEarned: number; newBalance: number } | undefined;
     if (order.customer_id && linkedCustomer) {
-      const { data: earnRows } = await supabase
+      const { data: earnRows } = await db
         .from("loyalty_transactions")
         .select("points_delta")
         .eq("reference_type", "order")
@@ -126,14 +127,14 @@ export async function sendOrderPaymentReceipt(orderId: number): Promise<void> {
       }
     }
 
-    const { data: items } = await supabase
+    const { data: items } = await db
       .from("order_items")
       .select("item_name, item_price, quantity, notes")
       .eq("order_id", orderId)
       .neq("status", "cancelled");
     if (!items || items.length === 0) return;
 
-    const { data: payments } = await supabase.from("payments").select("method, amount, tip_amount").eq("order_id", orderId);
+    const { data: payments } = await db.from("payments").select("method, amount, tip_amount").eq("order_id", orderId);
     const methodLabel: Record<string, string> = { cash: "Cash", card: "Card", card_online: "Online" };
     const methods = new Set((payments || []).filter((p) => Number(p.amount) > 0).map((p) => methodLabel[p.method] ?? p.method));
 

@@ -1,4 +1,4 @@
-import supabase from "@/lib/supabase";
+import { bizDb } from "@/lib/business-db";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -66,15 +66,16 @@ export function computeBill(input: BillInput): BillBreakdown {
   return { subtotal, tax, subtotalWithTax: subtotal, discount, loyalty, discounted, serviceChargeAmount, total };
 }
 
-export async function recalcTotals(orderId: string) {
-  const { data: orderData } = await supabase
+export async function recalcTotals(orderId: string, businessId: number) {
+  const db = bizDb(businessId);
+  const { data: orderData } = await db
     .from("orders")
     .select("discount, discount_type, discount_pct, service_charge_pct, loyalty_discount")
     .eq("id", orderId)
     .single();
 
   // Sum only active (non-cancelled) items
-  const { data: activeItems } = await supabase
+  const { data: activeItems } = await db
     .from("order_items")
     .select("item_price, quantity")
     .eq("order_id", orderId)
@@ -109,6 +110,6 @@ export async function recalcTotals(orderId: string) {
     updatePayload.discount = bill.discount;
   }
 
-  await supabase.from("orders").update(updatePayload).eq("id", orderId);
+  await db.from("orders").update(updatePayload).eq("id", orderId);
   return bill;
 }
