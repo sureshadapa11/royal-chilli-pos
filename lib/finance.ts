@@ -3,6 +3,7 @@ import { bizDb } from "@/lib/business-db";
 import { tradingRangeUtc } from "@/lib/london-date";
 import type { PlatformKey } from "@/lib/platforms";
 import { loadRecipeBook, recipeUsage } from "@/lib/recipes";
+import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 
 // The one place money figures are worked out — always for one business
 // (each is its own company, with its own P&L and VAT).
@@ -143,12 +144,20 @@ export async function getLabourCost(businessId: number, from: string, to: string
   return r2([...byDay.values()].reduce((s, n) => s + n, 0));
 }
 
-export async function getOtherExpenses(businessId: number, from: string, to: string): Promise<{ total: number; vatApplicableTotal: number }> {
-  const data = await allRows<{ amount: number; vat_applicable: number }>((a, b) =>
-    bizDb(businessId).from("expenses").select("amount, vat_applicable").gte("expense_date", from).lte("expense_date", to).order("id").range(a, b));
-  const total = r2(data.reduce((s, e) => s + Number(e.amount), 0));
-  const vatApplicableTotal = r2(data.filter((e) => e.vat_applicable).reduce((s, e) => s + Number(e.amount), 0));
-  return { total, vatApplicableTotal };
+export type ExpenseTotals = { total: number; vatApplicableTotal: number };
+
+export async function getOtherExpenses(
+  businessId: number, from: string, to: string
+): Promise<ExpenseTotals & { byCategory: Record<string, ExpenseTotals> }> {
+  const data = await allRows<{ amount: number; vat_applicable: number; category: string }>((a, b) =>
+    bizDb(businessId).from("expenses").select("amount, vat_applicable, category").gte("expense_date", from).lte("expense_date", to).order("id").range(a, b));
+  const totals = (rows: typeof data): ExpenseTotals => ({
+    total: r2(rows.reduce((s, e) => s + Number(e.amount), 0)),
+    vatApplicableTotal: r2(rows.filter((e) => e.vat_applicable).reduce((s, e) => s + Number(e.amount), 0)),
+  });
+  const byCategory: Record<string, ExpenseTotals> = {};
+  for (const c of new Set(data.map((e) => e.category))) byCategory[c] = totals(data.filter((e) => e.category === c));
+  return { ...totals(data), byCategory };
 }
 
 // Real (accrual) cost of goods sold for our own orders: every item sold,
@@ -187,6 +196,8 @@ export type Pnl = {
     ingredients: number;   // purchase orders received
     staff: number;
     expenses: number;      // other expenses, ex reclaimable VAT
+    /** The same, per expense category — every category, £0 included; adds up to `expenses`. */
+    expense_lines: { key: string; label: string; amount: number }[];
     commission: number;    // delivery platform commission
     card_fees: number;     // estimate
     total: number;
@@ -203,9 +214,27 @@ export type PnlInputs = {
   sales: SalesData;
   ingredients: number;
   staff: number;
-  expenses: { total: number; vatApplicableTotal: number };
+  expenses: ExpenseTotals & { byCategory?: Record<string, ExpenseTotals> };
   recipe: { cogs: number; coveragePct: number };
 };
+
+// Each expense category ex reclaimable VAT, the same way as the total. Pennies
+// lost to rounding go on the largest line, so the lines add up to the total.
+function expenseLines(i: PnlInputs, expensesExVat: number): Pnl["costs"]["expense_lines"] {
+  const lines = EXPENSE_CATEGORIES.map((c) => {
+    const t = i.expenses.byCategory?.[c.key];
+    return { key: c.key as string, label: c.label as string, amount: t ? r2(t.total - extractVat(t.vatApplicableTotal, i.vatRate)) : 0 };
+  });
+  const diff = r2(expensesExVat - lines.reduce((s, l) => s + l.amount, 0));
+  if (diff !== 0) {
+    // No split given (or rounding): the remainder goes on the largest line,
+    // or "Other expenses" when every line is £0.
+    const biggest = lines.reduce((m, l) => (Math.abs(l.amount) > Math.abs(m.amount) ? l : m), lines[0]);
+    const target = biggest.amount !== 0 ? biggest : lines.find((l) => l.key === "other")!;
+    target.amount = r2(target.amount + diff);
+  }
+  return lines;
+}
 
 /** Pure: every P&L and VAT figure from the raw inputs. */
 export function buildPnl(i: PnlInputs): Pnl {
@@ -235,7 +264,10 @@ export function buildPnl(i: PnlInputs): Pnl {
       own_gross: r2(ownGross), refunds: r2(refunds), own: r2(own), platforms: r2(platforms), total: r2(total),
       vat_own: r2(vatOwn), vat_platforms: r2(vatPlatforms), vat: outputVat, ex_vat: exVat,
     },
-    costs: { ingredients: r2(i.ingredients), staff: r2(i.staff), expenses: expensesExVat, commission, card_fees: cardFees, total: costTotal },
+    costs: {
+      ingredients: r2(i.ingredients), staff: r2(i.staff), expenses: expensesExVat,
+      expense_lines: expenseLines(i, expensesExVat), commission, card_fees: cardFees, total: costTotal,
+    },
     profit,
     vat: { output: outputVat, vat_applicable_expenses: r2(i.expenses.vatApplicableTotal), input: inputVat, net_due: r2(outputVat - inputVat) },
     // Same bottom line, with recipe cost of what was sold in place of what was bought.

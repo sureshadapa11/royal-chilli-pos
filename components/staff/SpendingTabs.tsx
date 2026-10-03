@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { tradingDayStr } from "@/lib/london-date";
+import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 
 // Inventory → Expenses and Inventory → Supplier Payments: the money going
 // out. (Moved from Finance, which is now read-only analysis.) Only staff with
@@ -41,7 +42,7 @@ export function ExpensesTab() {
     <div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
-          {["rent", "utilities", "marketing", "equipment", "professional_fees", "other"].map((c) => <option key={c} value={c}>{c.replace("_", " ")}</option>)}
+          {EXPENSE_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
         <input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2" />
         <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />

@@ -23,6 +23,8 @@ const AXIS = { fontSize: 11.5, fill: INK_MUTED };
 const RANGE_LABELS: Record<RangeKey, string> = {
   today: "Today", this_week: "This week", last_week: "Last week", this_month: "This month", last_month: "Last month",
 };
+// The Summary card's periods (whole weeks/months; "Today" has its own card).
+const SUMMARY_RANGES: RangeKey[] = ["this_week", "last_week", "this_month", "last_month"];
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 const gbp = (n: number) => `£${n.toLocaleString("en-GB", { maximumFractionDigits: 0 })}`;
@@ -62,7 +64,7 @@ function Legend({ items }: { items: { label: string; colour: string }[] }) {
   );
 }
 
-export default function AdminDashboard({ data, businessName }: { data: Data; businessName: string }) {
+export default function AdminDashboard({ data }: { data: Data; businessName?: string }) {
   const router = useRouter();
   const { summary: sm } = data;
 
@@ -74,10 +76,11 @@ export default function AdminDashboard({ data, businessName }: { data: Data; bus
   const topMax = Math.max(1, ...data.topDishes.map((d) => d.revenue));
   const plat = data.platforms.reduce((t, p) => ({ orders: t.orders + p.orders, sales: t.sales + p.sales, commission: t.commission + p.commission, keep: t.keep + p.keep }), { orders: 0, sales: 0, commission: 0, keep: 0 });
 
+  // Every kind of cost, each expense category on its own line — £0 included.
   const costs: [string, number][] = [
     ["Ingredients & supplies", sm.costs.ingredients],
     ["Staff pay", sm.costs.staff],
-    ["Expenses", sm.costs.expenses],
+    ...sm.costs.expenseLines.map((l): [string, number] => [l.label, l.amount]),
     ["Platform commission", sm.costs.commission],
     ["Card fees (est.)", sm.costs.cardFees],
   ];
@@ -118,12 +121,9 @@ export default function AdminDashboard({ data, businessName }: { data: Data; bus
 
         <Card title="Summary" className="md:col-span-2 xl:col-span-1">
           <div className="mb-3 mt-1 flex flex-wrap gap-2">
-            <select disabled aria-label="Business" className="rounded-[9px] border border-[#ECE5D6] bg-[#FBF8F1] px-2.5 py-1.5 text-[13px] text-[#5B524B]">
-              <option>{businessName}</option>
-            </select>
             <select aria-label="Date range" value={sm.range} onChange={(e) => router.push(`/staff?range=${e.target.value}`, { scroll: false })}
               className="rounded-[9px] border border-[#ECE5D6] bg-[#FBF8F1] px-2.5 py-1.5 text-[13px]">
-              {(Object.keys(RANGE_LABELS) as RangeKey[]).map((k) => <option key={k} value={k}>{RANGE_LABELS[k]}</option>)}
+              {SUMMARY_RANGES.map((k) => <option key={k} value={k}>{RANGE_LABELS[k]}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">

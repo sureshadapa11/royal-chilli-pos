@@ -41,7 +41,7 @@ export type AdminDashboard = {
     to: string;
     totalSales: number;
     exVat: number;
-    costs: { ingredients: number; staff: number; expenses: number; commission: number; cardFees: number; total: number };
+    costs: { ingredients: number; staff: number; expenses: number; expenseLines: { key: string; label: string; amount: number }[]; commission: number; cardFees: number; total: number };
     profit: number;
   };
 };
@@ -198,7 +198,7 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
     summary: {
       range, from: sum.from, to: sum.to, totalSales: summary.sales.total, exVat: summary.sales.ex_vat,
       costs: {
-        ingredients: summary.costs.ingredients, staff: summary.costs.staff, expenses: summary.costs.expenses,
+        ingredients: summary.costs.ingredients, staff: summary.costs.staff, expenses: summary.costs.expenses, expenseLines: summary.costs.expense_lines,
         commission: summary.costs.commission, cardFees: summary.costs.card_fees, total: summary.costs.total,
       },
       profit: summary.profit,
