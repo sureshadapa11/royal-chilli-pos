@@ -16,6 +16,8 @@ export const BUSINESS_TABLES = new Set([
   "fs_delivery_check", "fs_problem", "fs_signoff",
   "shifts", "attendance", "timesheets", "payroll_periods", "employee_payslips", "leave_requests",
   "audit_logs", "loyalty_transactions", "platform_sales", "staff_messages", "attendance_corrections",
+  // 098: day-end accounts sheet
+  "daily_accounts",
   // 079: every business independent
   "suppliers", "customers", "loyalty_tiers", "loyalty_rewards", "loyalty_redemptions", "newsletter_subscribers",
   // 080/084: per-business setup and directly scopeable children.

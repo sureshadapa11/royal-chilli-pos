@@ -15,7 +15,7 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
   const yesterday = d.toISOString().slice(0, 10);
   const isManagement = role === "admin" || role === "manager";
 
-  const [ingredients, leave, corrections, openDay, platforms] = await Promise.all([
+  const [ingredients, leave, corrections, openDay, platforms, dailyAccounts] = await Promise.all([
     canAccess(role, "inventory") ? db.from("ingredients").select("name, current_stock, reorder_level").eq("active", 1) : null,
     canAccess(role, "hr") || canAccess(role, "attendance")
       ? db.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending") : null,
@@ -25,6 +25,8 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
       ? db.from("work_periods").select("id", { count: "exact", head: true }).eq("status", "open").lt("opened_at", tradingRangeUtc(today).start) : null,
     canAccess(role, "finance")
       ? db.from("platform_sales").select("id", { count: "exact", head: true }).eq("sales_date", yesterday) : null,
+    canAccess(role, "finance")
+      ? db.from("daily_accounts").select("status").eq("trading_date", yesterday).maybeSingle() : null,
   ]);
 
   const out: HubNotice[] = [];
@@ -46,6 +48,14 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
   }
   if (platforms && !platforms.error && (platforms.count ?? 0) === 0) {
     out.push({ icon: "🛵", text: "Enter yesterday's platform totals", sub: "Just Eat, Uber Eats, Deliveroo, Hiest", href: "/staff/platforms" });
+  }
+  if (dailyAccounts && !dailyAccounts.error && dailyAccounts.data?.status !== "submitted") {
+    out.push({
+      icon: "🧮",
+      text: dailyAccounts.data ? "Submit yesterday's daily accounts" : "Enter yesterday's daily accounts",
+      sub: dailyAccounts.data ? "Saved as a draft, not submitted" : "The day-end sheet",
+      href: `/staff/daily-accounts?date=${yesterday}`,
+    });
   }
   return out;
 }

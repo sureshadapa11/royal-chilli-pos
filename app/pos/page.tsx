@@ -1523,6 +1523,8 @@ export default function POSPage() {
                   <div className="text-center pt-2">
                     <div className="text-4xl mb-2">✅</div>
                     <p className="text-green-600 font-bold text-lg">Day Closed Successfully</p>
+                    {/* The figures are pre-filled from this Z report (Staff Hub → Daily accounts). */}
+                    <p className="mt-1 text-xs text-muted-foreground">Manager: fill in today&apos;s <b>Daily accounts</b> in the Staff Hub — the till figures are already there.</p>
                   </div>
                   {eodData && <ZReportView report={eodData} />}
                   <button
