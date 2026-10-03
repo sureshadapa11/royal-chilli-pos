@@ -7,7 +7,7 @@ import { Toaster } from "@/components/ui/toaster";
 import NewOrderAlerts from "@/components/pos/NewOrderAlerts";
 import IdleLogout from "@/components/pos/IdleLogout";
 
-export const metadata: Metadata = { robots: { index: false } };
+export const metadata: Metadata = { title: "Till", robots: { index: false } };
 
 export default async function PosLayout({
   children,

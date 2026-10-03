@@ -14,7 +14,8 @@ const ROLE_LABEL: Record<string, string> = { admin: "Admin", hr: "HR", manager: 
 
 // Staff Hub frame: a top menu bar. On a computer each group's list opens when
 // the mouse is over it (CSS, see .hub-mi in globals.css) or on click; on a
-// phone the row is replaced by 🔔 + ☰, which open a drawer from the right.
+// screen narrower than 1280px (phone, tablet, laptop at 125%) the row is
+// replaced by 🔔 + ☰, which open a drawer from the right.
 export default function StaffShell({
   user,
   business,
@@ -109,10 +110,14 @@ export default function StaffShell({
             </span>
           </Link>
 
-          {switcher && <BusinessSwitcher current={business.id} options={switcher} className="hidden md:flex" />}
+          {switcher && <BusinessSwitcher current={business.id} options={switcher} className="hidden xl:flex" />}
 
-          {/* Computer: the menu row */}
-          <nav className="ml-auto hidden items-center gap-0.5 md:flex" aria-label="Staff Hub">
+          {/* Wide screen: the menu row. It needs ~1,210px (logo, business
+              switcher, five menus, Notifications, Logout); below xl the row
+              overflowed and pushed Notifications/Logout off the right edge on
+              laptops at 125% scaling, tablets and zoomed browsers — so those
+              get the bell + ☰ drawer instead, which has everything. */}
+          <nav className="ml-auto hidden items-center gap-0.5 xl:flex" aria-label="Staff Hub">
             {dashboard.items.map((item) => (
               <Link key={item.href} href={item.href}
                 className={`${topBtn} ${active(item.href) ? "bg-[#FDECE9] text-[#C82D1D]" : "text-[#5B524B] hover:bg-[#F6F1E6] hover:text-foreground"}`}>
@@ -149,8 +154,8 @@ export default function StaffShell({
             <button type="button" onClick={handleLogout} className={`${topBtn} text-muted-foreground hover:bg-[#F6F1E6]`}>Logout</button>
           </nav>
 
-          {/* Phone: bell + menu */}
-          <div className="ml-auto flex items-center gap-1.5 md:hidden">
+          {/* Phone, tablet and narrower laptop: bell + menu */}
+          <div className="ml-auto flex items-center gap-1.5 xl:hidden">
             <button type="button" onClick={() => setDrawer("notices")} aria-label="Notifications"
               className="relative grid h-[42px] w-[42px] place-items-center rounded-xl bg-[#F6F1E6] text-[19px]">
               🔔{notices.length > 0 && <span className="absolute -right-1 -top-1">{badge}</span>}
@@ -162,10 +167,10 @@ export default function StaffShell({
       </header>
 
       {/* Phone drawer */}
-      <div className={`fixed inset-0 z-40 bg-[rgba(20,12,8,0.4)] transition-opacity motion-reduce:transition-none md:hidden ${drawer ? "opacity-100" : "pointer-events-none opacity-0"}`}
+      <div className={`fixed inset-0 z-40 bg-[rgba(20,12,8,0.4)] transition-opacity motion-reduce:transition-none xl:hidden ${drawer ? "opacity-100" : "pointer-events-none opacity-0"}`}
         onClick={() => setDrawer(null)} />
       <aside aria-hidden={!drawer}
-        className={`fixed inset-y-0 right-0 z-50 flex w-[min(88vw,360px)] flex-col bg-white transition-transform duration-200 motion-reduce:transition-none md:hidden ${drawer ? "translate-x-0" : "translate-x-full"}`}>
+        className={`fixed inset-y-0 right-0 z-50 flex w-[min(88vw,360px)] flex-col bg-white transition-transform duration-200 motion-reduce:transition-none xl:hidden ${drawer ? "translate-x-0" : "translate-x-full"}`}>
         <div className="flex items-center justify-between border-b border-border px-4 py-3.5">
           <span style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-[17px] font-bold">{drawer === "notices" ? "Notifications" : "Menu"}</span>
           <button type="button" onClick={() => setDrawer(null)} aria-label="Close" className="grid h-9 w-9 place-items-center rounded-lg text-xl">✕</button>

@@ -9,7 +9,7 @@ import StaffShell, { type NavGroup } from "@/components/staff/StaffShell";
 import { Toaster } from "@/components/ui/toaster";
 import NewOrderAlerts from "@/components/pos/NewOrderAlerts";
 
-export const metadata: Metadata = { robots: { index: false } };
+export const metadata: Metadata = { title: "Staff Hub", robots: { index: false } };
 
 // Staff Hub is management-only (manager / hr / admin). Employees work from the
 // POS; clock-in/out is the dedicated attendance app's kiosk. The menu only
