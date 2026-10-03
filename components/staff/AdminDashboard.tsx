@@ -76,11 +76,16 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
   const topMax = Math.max(1, ...data.topDishes.map((d) => d.revenue));
   const plat = data.platforms.reduce((t, p) => ({ orders: t.orders + p.orders, sales: t.sales + p.sales, commission: t.commission + p.commission, keep: t.keep + p.keep }), { orders: 0, sales: 0, commission: 0, keep: 0 });
 
-  // Every kind of cost, each expense category on its own line — £0 included.
+  // The cost lines the owner wants (agreed 2026-10-03), £0 included. Rent,
+  // utilities, equipment and professional fees are counted in "Other
+  // expenses", so the lines still add up to Total costs.
+  const marketing = sm.costs.expenseLines.find((l) => l.key === "marketing")?.amount ?? 0;
+  const otherExpenses = Math.round(sm.costs.expenseLines.filter((l) => l.key !== "marketing").reduce((t, l) => t + l.amount, 0) * 100) / 100;
   const costs: [string, number][] = [
-    ["Ingredients & supplies", sm.costs.ingredients],
     ["Staff pay", sm.costs.staff],
-    ...sm.costs.expenseLines.map((l): [string, number] => [l.label, l.amount]),
+    ["Marketing", marketing],
+    ["Other expenses", otherExpenses],
+    ["Ingredients & supplies", sm.costs.ingredients],
     ["Platform commission", sm.costs.commission],
     ["Card fees (est.)", sm.costs.cardFees],
   ];
@@ -148,34 +153,6 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
           </div>
           <p className="mt-2 text-[12px] text-muted-foreground">Profit = sales ex VAT − costs. Staff pay is from clocked-out shifts × pay rate.</p>
 
-          {/* The managers' day-end sheets for the same period (Operations → Daily accounts). */}
-          {sm.dailyAccounts && (() => {
-            const da = sm.dailyAccounts;
-            const rows: [string, string][] = [
-              ["Bank in", gbp2(da.bankIn)],
-              ["Cash not yet banked", gbp2(da.notBanked)],
-              ["Pending bills (pay later)", gbp2(da.pending)],
-              ["Catering paid / pending", `${gbp2(da.cateringPaid)} / ${gbp2(da.cateringPending)}`],
-              ["Opening → closing balance", `${da.opening == null ? "—" : gbp2(da.opening)} → ${da.closing == null ? "—" : gbp2(da.closing)}`],
-            ];
-            return (
-              <div className="mt-4 border-t border-[#ECE5D6] pt-3">
-                <div className="mb-1.5 flex items-baseline justify-between gap-2">
-                  <h3 style={heading} className="text-[13.5px] font-semibold text-foreground">Daily accounts</h3>
-                  <Link href={`/staff/daily-accounts?month=${sm.from.slice(0, 7)}`} className="text-[12.5px] font-semibold text-[#C82D1D] hover:underline">Open sheet →</Link>
-                </div>
-                <div className="grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[13px] text-[#5B524B]">
-                  {rows.map(([k, v]) => (
-                    <div key={k} className="contents"><span>{k}</span><span className="text-right tabular-nums text-foreground">{v}</span></div>
-                  ))}
-                  <span>Days submitted</span>
-                  <span className={`text-right tabular-nums font-semibold ${da.missing.length ? "text-[#B45309]" : "text-[#1F7A4D]"}`}>
-                    {da.submitted} of {da.daysSoFar}{da.missing.length ? ` · ${da.missing.length} missing` : ""}
-                  </span>
-                </div>
-              </div>
-            );
-          })()}
         </Card>
       </div>
 

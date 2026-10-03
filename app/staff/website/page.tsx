@@ -25,7 +25,7 @@ function TrafficCard({ t }: { t: TrafficSummary | null }) {
   const rate = t.visits ? Math.round((t.orderingVisits / t.visits) * 1000) / 10 : 0;
   const max = Math.max(1, ...t.daily.map((d) => d.visits));
   const tiles = [
-    { label: `Visits (last ${t.days} days)`, value: t.visits.toLocaleString("en-GB"), sub: `${t.pageViews.toLocaleString("en-GB")} pages viewed` },
+    { label: `Visits (last ${t.days} days)`, value: t.visits.toLocaleString("en-GB"), sub: `${t.pageViews.toLocaleString("en-GB")} ${t.pageViews === 1 ? "page" : "pages"} viewed` },
     { label: "Visits that order", value: t.orderingVisits.toLocaleString("en-GB"), sub: `${rate}% of visits` },
     { label: "Today", value: (t.daily[t.daily.length - 1]?.visits ?? 0).toLocaleString("en-GB"), sub: "visits so far" },
   ];
