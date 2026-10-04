@@ -12,8 +12,9 @@ import {
 // (it saves when you let go; "Snap to grid" lines tables up in whole
 // cells); tap one to change its number, seats, shape or turn (45° steps), or
 // delete it. The till's table screen draws the
-// same plan. Read-only without full Tables access; on a phone, tables can't
-// be dragged but can still be edited from the panel.
+// same plan. Read-only without full Tables access. On a phone, "Move tables"
+// switches dragging on (otherwise a finger scrolls the page), the plan can be
+// zoomed, and a tapped table opens in a sheet from the bottom.
 
 type Table = {
   id: number;
@@ -43,6 +44,10 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   const [drag, setDrag] = useState<{ id: number; x: number; y: number } | null>(null);
   const [saved, setSaved] = useState(false);
   const [wide, setWide] = useState(true);
+  // Phones: sliding a finger scrolls the page, so moving tables is a switch;
+  // the plan can be zoomed to place small tables precisely.
+  const [moveMode, setMoveMode] = useState(false);
+  const [zoom, setZoom] = useState(1);
   const [snap, setSnap] = useState(false);
   useEffect(() => {
     try { setSnap(localStorage.getItem("floorplan_snap") === "1"); } catch { /* private mode */ }
@@ -71,7 +76,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     m.addEventListener("change", on);
     return () => m.removeEventListener("change", on);
   }, []);
-  const canDrag = canEdit && wide;
+  const canDrag = canEdit && (wide || moveMode);
 
   const placed = useMemo(() => placeTables(tables), [tables]);
   const shown: Spot[] = placed.map((p) => (drag && drag.id === p.id ? { ...p, x: drag.x, y: drag.y } : p));
@@ -107,32 +112,42 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   }
 
   function onPointerDown(e: React.PointerEvent, t: Spot) {
-    setSelected(t.id);
-    if (!canDrag) return;
+    // A plain tap selects (see onPointerUp); with dragging off, select now.
+    if (!canDrag) { setSelected(t.id); return; }
     e.currentTarget.setPointerCapture(e.pointerId);
     const { cx, cy } = cellAt(e.clientX, e.clientY);
     dragStart.current = { id: t.id, offX: cx - t.x, offY: cy - t.y, startX: cx, startY: cy, moved: false };
   }
 
-  function onPointerMove(e: React.PointerEvent, t: Spot) {
+  // Where the table would be with the pointer here, or null if it hasn't
+  // been dragged far enough to count (a tap wobbles a little).
+  function dropSpot(e: React.PointerEvent, t: Spot) {
     const d = dragStart.current;
-    if (!d || d.id !== t.id) return;
+    if (!d || d.id !== t.id) return null;
     const { cx, cy } = cellAt(e.clientX, e.clientY);
-    // A tap wobbles a little — only a real drag (half a cell or more) moves it.
-    if (!d.moved && Math.hypot(cx - d.startX, cy - d.startY) < 0.5) return;
+    if (!d.moved && Math.hypot(cx - d.startX, cy - d.startY) < 0.5) return null;
     d.moved = true;
     const rawX = snap ? Math.round(cx - d.offX) : round2(cx - d.offX);
     const rawY = snap ? Math.round(cy - d.offY) : round2(cy - d.offY);
-    setDrag({ id: t.id, ...keepOnFloor(rawX, rawY, t.w, t.h, t.rotation) });
+    return keepOnFloor(rawX, rawY, t.w, t.h, t.rotation);
   }
 
-  async function onPointerUp(t: Spot) {
-    const d = dragStart.current;
+  function onPointerMove(e: React.PointerEvent, t: Spot) {
+    const spot = dropSpot(e, t);
+    if (spot) setDrag({ id: t.id, ...spot });
+  }
+
+  // The drop is worked out from the pointer itself, not from the last
+  // re-render — a quick flick lets go before the screen has caught up.
+  async function onPointerUp(e: React.PointerEvent, t: Spot) {
+    const wasDrag = !!dragStart.current;
+    const spot = dropSpot(e, t);
     dragStart.current = null;
-    if (!d || !drag || drag.id !== t.id) { setDrag(null); return; }
-    const spot = { x: drag.x, y: drag.y };
     setDrag(null);
-    if (!d.moved) return;
+    // A tap opens the table; after a drag on a phone, the sheet stays shut
+    // so you can carry on moving tables.
+    if (wasDrag && (!spot || wide)) setSelected(t.id);
+    if (!spot) return;
     const box = outline(spot.x, spot.y, t.w, t.h, t.rotation);
     if (placed.some((p) => p.id !== t.id && overlaps(box, p.box))) {
       toast({ variant: "destructive", title: "Tables can't overlap", description: "Drop it in a clear space." });
@@ -199,7 +214,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
             <h1 style={heading} className="text-[26px] font-semibold tracking-[-0.02em] text-foreground">Tables</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {tables.length} table{tables.length === 1 ? "" : "s"} · {totalSeats} seats
-              {canDrag ? " · drag a table anywhere, tap it to edit" : canEdit ? " · tap a table to edit it" : ""}
+              {canDrag ? " · drag a table anywhere, tap it to edit" : canEdit ? " · tap a table to edit it, or turn on Move tables" : ""}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -221,14 +236,30 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
         <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_280px]">
           {/* The floor */}
           <div className="rounded-2xl border border-border bg-surface p-3">
+            {!wide && canEdit && !loading && (
+              <div className="mb-3 flex items-center gap-3">
+                <button type="button" onClick={() => setMoveMode((m) => !m)} aria-pressed={moveMode}
+                  className={`flex-1 rounded-lg px-3 py-2.5 text-sm font-bold ${moveMode ? "bg-red-600 text-white" : "border border-border text-foreground"}`}>
+                  {moveMode ? "✋ Moving tables — tap to finish" : "✋ Move tables"}
+                </button>
+                <div className="flex items-center overflow-hidden rounded-lg border border-border">
+                  <button type="button" onClick={() => setZoom((z) => Math.max(1, z - 0.5))} disabled={zoom <= 1} aria-label="Zoom out" className="h-10 w-10 text-lg font-bold disabled:opacity-30">−</button>
+                  <span className="w-10 text-center text-xs font-semibold tabular-nums">{zoom * 100}%</span>
+                  <button type="button" onClick={() => setZoom((z) => Math.min(2.5, z + 0.5))} disabled={zoom >= 2.5} aria-label="Zoom in" className="h-10 w-10 text-lg font-bold disabled:opacity-30">+</button>
+                </div>
+              </div>
+            )}
+            {!wide && moveMode && <p className="mb-2 text-xs text-muted-foreground">Slide a table to move it. Slide the empty floor to look around.</p>}
             {loading ? (
               <p className="py-20 text-center text-sm text-muted-foreground">Loading…</p>
             ) : (
+              <div className={!wide && zoom > 1 ? "overflow-auto rounded-xl" : ""}>
               <div
                 ref={canvasRef}
                 onPointerDown={(e) => { if (e.target === e.currentTarget) setSelected(null); }}
-                className="relative w-full select-none rounded-xl bg-[#FBF8F1]"
+                className="relative select-none rounded-xl bg-[#FBF8F1]"
                 style={{
+                  width: !wide ? `${zoom * 100}%` : "100%",
                   aspectRatio: `${GRID_W} / ${GRID_H}`,
                   ...(snap ? {
                     backgroundImage: "linear-gradient(#ECE5D6 1px, transparent 1px), linear-gradient(90deg, #ECE5D6 1px, transparent 1px)",
@@ -248,10 +279,10 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                       aria-label={`Table ${t.table_number}, ${t.capacity} seats`}
                       onPointerDown={(e) => onPointerDown(e, t)}
                       onPointerMove={(e) => onPointerMove(e, t)}
-                      onPointerUp={() => onPointerUp(t)}
+                      onPointerUp={(e) => onPointerUp(e, t)}
                       onPointerCancel={() => { dragStart.current = null; setDrag(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") setSelected(t.id); }}
-                      className={`absolute flex flex-col items-center justify-center border-2 ${st.fill} ${isSel ? "border-blue-500 ring-2 ring-blue-400/40" : st.ring} ${t.shape === "round" ? "rounded-full" : "rounded-lg"} ${canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "z-10 opacity-90 shadow-lg" : "shadow-sm"} touch-none transition-[box-shadow]`}
+                      className={`absolute flex flex-col items-center justify-center border-2 ${st.fill} ${isSel ? "border-blue-500 ring-2 ring-blue-400/40" : st.ring} ${t.shape === "round" ? "rounded-full" : "rounded-lg"} ${canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "z-10 opacity-90 shadow-lg" : "shadow-sm"} ${canDrag ? "touch-none" : "touch-manipulation"} transition-[box-shadow]`}
                       style={{
                         left: `${(t.x / GRID_W) * 100}%`, top: `${(t.y / GRID_H) * 100}%`,
                         width: `${(t.w / GRID_W) * 100}%`, height: `${(t.h / GRID_H) * 100}%`,
@@ -266,6 +297,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                   );
                 })}
               </div>
+              </div>
             )}
             <div className="mt-2 flex flex-wrap gap-3 text-[11.5px] text-muted-foreground">
               {(Object.keys(STATUS) as Table["status"][]).map((k) => (
@@ -275,8 +307,20 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
             </div>
           </div>
 
-          {/* The selected table */}
-          <div className="rounded-2xl border border-border bg-surface p-4 self-start">
+          {/* The selected table: beside the plan, or a sheet from the bottom on a phone */}
+          {!wide && sel ? (
+            <>
+              <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setSelected(null)} />
+              <div className="fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-4 pb-8 shadow-2xl">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="mx-auto h-1 w-10 rounded-full bg-border" />
+                  <button type="button" onClick={() => setSelected(null)} aria-label="Close" className="absolute right-3 top-3 h-9 w-9 rounded-full text-lg text-muted-foreground hover:bg-surface-hover">✕</button>
+                </div>
+                <TablePanel key={sel.id} t={sel} canEdit={canEdit} busy={busy} onUpdate={(c) => update(sel, c)} onDelete={() => remove(sel)} />
+              </div>
+            </>
+          ) : null}
+          <div className={`rounded-2xl border border-border bg-surface p-4 self-start ${!wide && sel ? "hidden" : ""}`}>
             {!sel ? (
               <p className="text-sm text-muted-foreground">
                 {canEdit ? "Tap a table to change its number, seats or shape." : "Tap a table to see its details."}
