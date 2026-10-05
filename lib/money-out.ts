@@ -16,7 +16,7 @@ export type MoneyOutRow = {
   paidTo: string;
   details: string;
   amount: number;
-  photos: { id: number; filePath: string; fileName: string; aiTotal: number | null; mismatch: boolean; aiStatus: string }[];
+  photos: { id: number; filePath: string; fileName: string }[];
 };
 
 const TYPE_LABEL: Record<ReceiptEntity, string> = { expense: "Expense", supplier_payment: "Supplier payment", purchase_order: "Stock delivery" };
@@ -59,13 +59,13 @@ export async function moneyOutForMonth(db: BizDb, month: string): Promise<MoneyO
   ];
   rows.sort((a, b) => a.date.localeCompare(b.date) || a.type.localeCompare(b.type) || a.entityId - b.entityId);
 
-  type Photo = { id: number; entity_type: ReceiptEntity; entity_id: number; file_path: string; ai_total: number | null; amount_mismatch: boolean; ai_status: string };
+  type Photo = { id: number; entity_type: ReceiptEntity; entity_id: number; file_path: string };
   const byKey = new Map(rows.map((r) => [`${r.entity}:${r.entityId}`, r]));
   for (const entity of ["expense", "supplier_payment", "purchase_order"] as const) {
     const ids = rows.filter((r) => r.entity === entity).map((r) => r.entityId);
     const photos = await chunked<Photo>(ids, async (part) => {
       const { data } = await db.from("receipt_photos")
-        .select("id, entity_type, entity_id, file_path, ai_total, amount_mismatch, ai_status")
+        .select("id, entity_type, entity_id, file_path")
         .eq("entity_type", entity).in("entity_id", part).order("id");
       return (data ?? []) as Photo[];
     });
@@ -75,7 +75,7 @@ export async function moneyOutForMonth(db: BizDb, month: string): Promise<MoneyO
       const ext = p.file_path.split(".").pop() || "jpg";
       const n = row.photos.length + 1;
       row.photos.push({
-        id: p.id, filePath: p.file_path, aiTotal: p.ai_total === null ? null : Number(p.ai_total), mismatch: p.amount_mismatch, aiStatus: p.ai_status,
+        id: p.id, filePath: p.file_path,
         fileName: `${row.date}_${SHORT[row.entity]}-${row.entityId}${n > 1 ? `_page${n}` : ""}.${ext}`,
       });
     }

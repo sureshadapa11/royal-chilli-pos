@@ -2,9 +2,9 @@
 --
 -- 1. receipt_photos — every supplier delivery (purchase order received),
 --    supplier payment and expense needs at least one photo of its invoice /
---    receipt. A photo is uploaded first (checked for blur on the phone, then
---    read by AI), then attached to the entry when it's saved. Old entries
---    without photos are left as they are.
+--    receipt. A photo is uploaded first (checked on the phone for blur,
+--    darkness and size), then attached to the entry when it's saved. Old
+--    entries without photos are left as they are.
 --    Files live in the private "receipts" bucket under <business_id>/…, only
 --    ever served out by short-lived signed URLs.
 --
@@ -25,12 +25,6 @@ CREATE TABLE IF NOT EXISTS receipt_photos (
   entity_id      INT,
   file_path      TEXT NOT NULL,
   sharpness      NUMERIC(10,2),                 -- phone's blur score (higher = sharper)
-  ai_status      TEXT NOT NULL DEFAULT 'unchecked' CHECK (ai_status IN ('passed', 'failed', 'unchecked')),
-  ai_supplier    TEXT,
-  ai_date        DATE,
-  ai_total       NUMERIC(10,2),
-  ai_reason      TEXT,
-  amount_mismatch BOOLEAN NOT NULL DEFAULT false, -- saved although the typed amount ≠ the receipt's total
   uploaded_by    INT REFERENCES staff(id) ON DELETE SET NULL,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   attached_at    TIMESTAMPTZ

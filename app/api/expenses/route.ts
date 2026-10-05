@@ -31,15 +31,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
-    const { category, description, amount, vat_applicable, expense_date, receipt_reference, allow_duplicate, receipt_ids, confirm_amount } = await req.json();
+    const { category, description, amount, vat_applicable, expense_date, receipt_reference, allow_duplicate, receipt_ids } = await req.json();
     if (!category || !description || !amount) {
       return NextResponse.json({ error: "category, description and amount are required" }, { status: 400 });
     }
     if (!(Number(amount) > 0)) return NextResponse.json({ error: "Amount must be more than £0" }, { status: 400 });
 
     // Every payment out needs photo proof (migration 110).
-    const receipts = await checkReceiptsForSave(db, receipt_ids, Math.round(Number(amount) * 100) / 100, confirm_amount === true);
-    if (!receipts.ok) return NextResponse.json({ error: receipts.error, mismatch: receipts.mismatch }, { status: receipts.status });
+    const receipts = await checkReceiptsForSave(db, receipt_ids);
+    if (!receipts.ok) return NextResponse.json({ error: receipts.error }, { status: receipts.status });
 
     // Same expense typed twice would be counted twice in the P&L — ask first.
     if (!allow_duplicate) {
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
     if (error) throw error;
-    await attachReceipts(db, receipts.ids, "expense", data.id, receipts.mismatch);
+    await attachReceipts(db, receipts.ids, "expense", data.id);
 
     return NextResponse.json({ success: true, expense: data }, { status: 201 });
   } catch (error) {

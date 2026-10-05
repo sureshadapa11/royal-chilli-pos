@@ -3,23 +3,16 @@
 import { useRef, useState } from "react";
 
 // Photo proof for money going out (migration 110). Each photo is checked on
-// the device first — too blurry or too dark is refused straight away — then
-// uploaded, where AI reads it (supplier, date, total) and refuses anything that
-// isn't a readable receipt. The form can't save without at least one photo.
+// the device before it's uploaded — too blurry, too dark or too small is
+// refused straight away, with what to do. The form can't save without at least
+// one photo. (No glare check: screenshots of bank payments are mostly white.)
 
-export type Receipt = {
-  id: number;
-  ai_status: "passed" | "unchecked";
-  ai_supplier: string | null;
-  ai_date: string | null;
-  ai_total: number | null;
-  ai_reason: string | null;
-  preview: string;
-};
+export type Receipt = { id: number; preview: string };
 type Entity = "expense" | "supplier_payment" | "purchase_order";
 
-const MAX_SIDE = 1568; // what the AI reads at full detail
-const SHARP_MIN = 40;  // blur score below this = too blurry to read (calibrated: sharp ≈ 1000+, readable-soft ≈ 60, unreadable < 20)
+const MAX_SIDE = 1600; // stored size: plenty to read a receipt, small to keep
+const MIN_SIDE = 600;  // smaller than this can't show a receipt's small print
+const SHARP_MIN = 40;  // blur score below this = too blurry to read (calibrated: sharp ≈ 1000+, readable-soft ≈ 60, unreadable < 20); same in app/api/receipts
 const DARK_MAX = 55;   // average brightness below this = too dark
 
 function loadImage(file: File): Promise<HTMLImageElement> {
@@ -84,12 +77,10 @@ function toJpeg(img: HTMLImageElement): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't read the photo"))), "image/jpeg", 0.85));
 }
 
-export default function ReceiptPhotos({ entity, value, onChange, onRead, label = "Receipt / invoice photo" }: {
+export default function ReceiptPhotos({ entity, value, onChange, label = "Receipt / invoice photo" }: {
   entity: Entity;
   value: Receipt[];
   onChange: (next: Receipt[]) => void;
-  /** Called with each photo the AI read, to fill in empty fields. */
-  onRead?: (r: Receipt) => void;
   label?: string;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
@@ -103,12 +94,13 @@ export default function ReceiptPhotos({ entity, value, onChange, onRead, label =
     try {
       setBusy("Checking the photo…");
       const img = await loadImage(file);
+      if (Math.max(img.naturalWidth, img.naturalHeight) < MIN_SIDE) { setProblem("The photo is too small to read. Take it with the camera, close enough that the receipt fills the screen."); return; }
       const q = photoQuality(img);
       if (q.brightness < DARK_MAX) { setProblem("The photo is too dark. Turn on a light or move to a brighter spot and retake it."); return; }
       if (q.sharpness < SHARP_MIN) { setProblem("The photo is blurry. Hold the phone steady, tap the screen to focus on the receipt, and retake it."); return; }
 
       const jpeg = await toJpeg(img);
-      setBusy("Reading the receipt…");
+      setBusy("Uploading…");
       const form = new FormData();
       form.append("file", jpeg, "receipt.jpg");
       form.append("entity", entity);
@@ -116,9 +108,7 @@ export default function ReceiptPhotos({ entity, value, onChange, onRead, label =
       const res = await fetch("/api/receipts", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setProblem(data.error || "Couldn't add the photo. Please try again."); return; }
-      const r: Receipt = { ...data.receipt, ai_total: data.receipt.ai_total === null ? null : Number(data.receipt.ai_total), preview: URL.createObjectURL(jpeg) };
-      onChange([...value, r]);
-      if (r.ai_status === "passed") onRead?.(r);
+      onChange([...value, { id: data.receipt.id, preview: URL.createObjectURL(jpeg) }]);
     } catch {
       setProblem("That file couldn't be opened as a photo.");
     } finally {
@@ -145,16 +135,7 @@ export default function ReceiptPhotos({ entity, value, onChange, onRead, label =
             <div key={r.id} className="flex items-center gap-2 rounded-lg border border-border bg-surface p-1.5 pr-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={r.preview} alt="Receipt" className="h-12 w-12 rounded object-cover" />
-              <div className="text-xs leading-tight">
-                {r.ai_status === "passed" ? (
-                  <>
-                    <p className="text-green-700 font-semibold">✓ Readable</p>
-                    <p className="text-muted-foreground">{[r.ai_total !== null ? `£${r.ai_total.toFixed(2)}` : null, r.ai_supplier].filter(Boolean).join(" · ")}</p>
-                  </>
-                ) : (
-                  <p className="text-amber-700 font-semibold">Saved, not AI-checked</p>
-                )}
-              </div>
+              <a href={r.preview} target="_blank" rel="noopener noreferrer" className="text-xs leading-tight text-green-700 font-semibold">✓ Clear photo<br /><span className="font-normal text-muted-foreground">Tap to check it</span></a>
               <button type="button" onClick={() => onChange(value.filter((x) => x.id !== r.id))} className="ml-1 text-muted-foreground hover:text-red-600 text-sm" aria-label="Remove photo">✕</button>
             </div>
           ))}
@@ -165,7 +146,7 @@ export default function ReceiptPhotos({ entity, value, onChange, onRead, label =
 }
 
 /** Links to an entry's photos in a list; flags old entries with none. */
-export function ReceiptLinks({ photos }: { photos: { id: number; amount_mismatch: boolean }[] | undefined }) {
+export function ReceiptLinks({ photos }: { photos: { id: number }[] | undefined }) {
   if (!photos || photos.length === 0) return <span className="text-muted-foreground text-xs">No photo</span>;
   return (
     <span className="inline-flex items-center gap-1.5">
@@ -174,7 +155,6 @@ export function ReceiptLinks({ photos }: { photos: { id: number; amount_mismatch
           📎{photos.length > 1 ? ` ${i + 1}` : " Receipt"}
         </a>
       ))}
-      {photos.some((p) => p.amount_mismatch) && <span className="text-xs font-semibold text-amber-700" title="Saved although the amount differs from the receipt">⚠ differs</span>}
     </span>
   );
 }

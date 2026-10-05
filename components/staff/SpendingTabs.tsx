@@ -10,7 +10,7 @@ import ReceiptPhotos, { ReceiptLinks, type Receipt } from "@/components/staff/Re
 // Finance access can record these — the APIs check canManageFinance. Every
 // entry needs a photo of its receipt / invoice / payment confirmation.
 
-type PhotoMap = Record<string, { id: number; amount_mismatch: boolean }[]>;
+type PhotoMap = Record<string, { id: number }[]>;
 async function loadPhotos(entity: string, ids: number[]): Promise<PhotoMap> {
   if (ids.length === 0) return {};
   const res = await fetch(`/api/receipts?entity=${entity}&ids=${ids.slice(0, 500).join(",")}`);
@@ -26,7 +26,6 @@ export function ExpensesTab() {
   const [error, setError] = useState("");
   const [dupe, setDupe] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [mismatch, setMismatch] = useState(false);
   const [photos, setPhotos] = useState<PhotoMap>({});
 
   const load = useCallback(async () => {
@@ -46,24 +45,14 @@ export function ExpensesTab() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         ...form, amount: Number(form.amount), vat_applicable: form.vat_applicable ? 1 : 0, allow_duplicate: dupe,
-        receipt_ids: receipts.map((r) => r.id), confirm_amount: mismatch,
+        receipt_ids: receipts.map((r) => r.id),
       }),
     });
     const data = await res.json();
-    if (!res.ok) { setError(data.error || "Couldn't save"); setDupe(!!data.duplicate); setMismatch(!!data.mismatch); return; }
-    setDupe(false); setMismatch(false); setReceipts([]);
+    if (!res.ok) { setError(data.error || "Couldn't save"); setDupe(!!data.duplicate); return; }
+    setDupe(false); setReceipts([]);
     setForm({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
     load();
-  }
-
-  // Fill in what the AI read from the receipt, without overwriting anything typed.
-  function fillFrom(r: Receipt) {
-    setForm((f) => ({
-      ...f,
-      amount: f.amount || (r.ai_total !== null ? r.ai_total.toFixed(2) : ""),
-      description: f.description || r.ai_supplier || "",
-      expense_date: r.ai_date && r.ai_date <= today() ? r.ai_date : f.expense_date,
-    }));
   }
 
   return (
@@ -73,11 +62,11 @@ export function ExpensesTab() {
           {EXPENSE_CATEGORIES.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
         </select>
         <input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2" />
-        <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => { setForm({ ...form, amount: e.target.value }); setMismatch(false); }} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-        <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">{mismatch ? "Save anyway" : dupe ? "Add anyway" : "+ Add"}</button>
+        <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">{dupe ? "Add anyway" : "+ Add"}</button>
       </div>
       <div className="mt-2">
-        <ReceiptPhotos entity="expense" value={receipts} onChange={(next) => { setReceipts(next); setMismatch(false); }} onRead={fillFrom} />
+        <ReceiptPhotos entity="expense" value={receipts} onChange={setReceipts} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
         <label className="flex items-center gap-2">
@@ -87,7 +76,7 @@ export function ExpensesTab() {
           <input type="checkbox" checked={form.vat_applicable} onChange={(e) => setForm({ ...form, vat_applicable: e.target.checked })} /> VAT applicable (amount includes VAT)
         </label>
       </div>
-      {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Add anyway if it really is a second one."}{mismatch && " Check the amount, or press Save anyway if it's right."}</p>}
+      {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Add anyway if it really is a second one."}</p>}
       <p className="mt-2 text-muted-foreground text-xs">
         Not for food/stock invoices — those are counted from Inventory → Purchase Orders when received. Not for staff pay (from attendance), card fees or delivery-platform commission (all worked out automatically).
       </p>
@@ -111,7 +100,6 @@ export function SupplierPaymentsTab() {
   const [error, setError] = useState("");
   const [dupe, setDupe] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [mismatch, setMismatch] = useState(false);
   const [photos, setPhotos] = useState<PhotoMap>({});
 
   const loadSuppliers = useCallback(async () => {
@@ -135,12 +123,12 @@ export function SupplierPaymentsTab() {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         supplier_id: Number(form.supplier_id), amount: Number(form.amount), method: form.method, allow_duplicate: dupe,
-        receipt_ids: receipts.map((r) => r.id), confirm_amount: mismatch,
+        receipt_ids: receipts.map((r) => r.id),
       }),
     });
     const data = await res.json();
-    if (!res.ok) { setError(data.error || "Couldn't record payment"); setDupe(!!data.duplicate); setMismatch(!!data.mismatch); return; }
-    setDupe(false); setMismatch(false); setReceipts([]);
+    if (!res.ok) { setError(data.error || "Couldn't record payment"); setDupe(!!data.duplicate); return; }
+    setDupe(false); setReceipts([]);
     setForm({ supplier_id: "", amount: "", method: "bank_transfer" });
     load();
   }
@@ -152,17 +140,13 @@ export function SupplierPaymentsTab() {
           <option value="">Select supplier…</option>
           {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => { setForm({ ...form, amount: e.target.value }); setDupe(false); setMismatch(false); }} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-        <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">{mismatch || dupe ? "Record anyway" : "+ Record"}</button>
+        <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => { setForm({ ...form, amount: e.target.value }); setDupe(false); }} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">{dupe ? "Record anyway" : "+ Record"}</button>
       </div>
       <div className="mt-2">
-        <ReceiptPhotos
-          entity="supplier_payment" label="Invoice / payment confirmation photo" value={receipts}
-          onChange={(next) => { setReceipts(next); setMismatch(false); }}
-          onRead={(r) => setForm((f) => ({ ...f, amount: f.amount || (r.ai_total !== null ? r.ai_total.toFixed(2) : "") }))}
-        />
+        <ReceiptPhotos entity="supplier_payment" label="Invoice / payment confirmation photo" value={receipts} onChange={setReceipts} />
       </div>
-      {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Record anyway if it really is a second payment."}{mismatch && " Check the amount, or press Record anyway if it's right."}</p>}
+      {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Record anyway if it really is a second payment."}</p>}
       <p className="mt-2 text-muted-foreground text-xs">
         A record of money paid to suppliers — it isn&apos;t a cost in Profit &amp; Loss (the cost is counted once, when the purchase order is received). Suppliers are added in the Suppliers tab.
       </p>

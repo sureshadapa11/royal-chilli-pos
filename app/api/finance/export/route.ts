@@ -112,9 +112,7 @@ export async function GET(req: NextRequest) {
 
   const moneyOutRows = moneyOut.map((r) => ({
     Date: r.date, Type: r.type, "Paid to": r.paidTo, Details: r.details, Amount: r2(r.amount),
-    "Receipt total (read by AI)": r.photos.length && r.photos.some((p) => p.aiTotal !== null)
-      ? r2(r.photos.reduce((a, p) => a + (p.aiTotal ?? 0), 0)) : "",
-    Check: r.photos.length === 0 ? "No photo" : r.photos.some((p) => p.mismatch) ? "Amount differs from receipt" : "",
+    Check: r.photos.length === 0 ? "No photo" : "",
     "Receipt photos (in receipts zip)": r.photos.map((p) => p.fileName).join(", "),
   }));
 

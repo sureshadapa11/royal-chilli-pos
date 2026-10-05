@@ -22,7 +22,7 @@ export async function POST(
     const location = await resolveInventoryLocation(session.businessId, session.id, null, session.owner);
     if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
     const { id } = await params;
-    const { items, receipt_ids, confirm_amount } = await req.json(); // items: [{ item_id, received_quantity, expiry_date }]
+    const { items, receipt_ids } = await req.json(); // items: [{ item_id, received_quantity, expiry_date }]
 
     const { data: po, error: poErr } = await db.from("purchase_orders").select("*").eq("id", id).single();
     if (poErr || !po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
@@ -42,8 +42,8 @@ export async function POST(
     const receivedCost = Math.round((poItems || []).reduce((sum, item) => sum + qtyOf(item) * Number(item.unit_cost), 0) * 100) / 100;
 
     // Checked before anything moves, so a missing photo leaves the PO untouched.
-    const receipts = await checkReceiptsForSave(db, receipt_ids, receivedCost, confirm_amount === true);
-    if (!receipts.ok) return NextResponse.json({ error: receipts.error, mismatch: receipts.mismatch }, { status: receipts.status });
+    const receipts = await checkReceiptsForSave(db, receipt_ids);
+    if (!receipts.ok) return NextResponse.json({ error: receipts.error }, { status: receipts.status });
 
     for (const item of poItems || []) {
       const override = overrides.get(item.id) as Override;
@@ -76,7 +76,7 @@ export async function POST(
       .select()
       .single();
     if (updateErr) throw updateErr;
-    await attachReceipts(db, receipts.ids, "purchase_order", po.id, receipts.mismatch);
+    await attachReceipts(db, receipts.ids, "purchase_order", po.id);
 
     return NextResponse.json({ success: true, purchaseOrder: updatedPo });
   } catch (error) {

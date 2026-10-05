@@ -14,7 +14,6 @@
     "restore": "node scripts/restore.js"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.131.0",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-label": "^2.1.7",
     "@radix-ui/react-scroll-area": "^1.2.9",
