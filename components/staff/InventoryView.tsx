@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import { tradingDayStr } from "@/lib/london-date";
 import FoodCostReport from "@/components/staff/FoodCostReport";
 import { ExpensesTab, SupplierPaymentsTab } from "@/components/staff/SpendingTabs";
+import ReceiptPhotos, { ReceiptLinks, type Receipt } from "@/components/staff/ReceiptPhotos";
 
 type Ingredient = {
   id: number; name: string; unit: string; current_stock: number; reorder_level: number;
@@ -281,22 +282,30 @@ function NewPoModal({ suppliers, ingredients, onClose, onSaved }: { suppliers: S
 
 function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () => void; onSaved: () => void }) {
   const { toast } = useToast();
-  const [items, setItems] = useState<{ id: number; ingredient_name: string; unit: string; quantity: number; received_quantity: number; expiry_date: string }[]>([]);
+  const [items, setItems] = useState<{ id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number; received_quantity: number; expiry_date: string }[]>([]);
   const [orderNumber, setOrderNumber] = useState("");
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [mismatch, setMismatch] = useState("");
+  const total = Math.round(items.reduce((sum, i) => sum + Math.max(0, Number(i.received_quantity) || 0) * Number(i.unit_cost || 0), 0) * 100) / 100;
 
   useEffect(() => {
     fetch(`/api/purchase-orders/${poId}`).then((r) => r.json()).then((d) => {
       setOrderNumber(d.purchaseOrder.order_number);
-      setItems((d.items || []).map((i: { id: number; ingredient_name: string; unit: string; quantity: number }) => ({ ...i, received_quantity: i.quantity, expiry_date: "" })));
+      setItems((d.items || []).map((i: { id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number }) => ({ ...i, received_quantity: i.quantity, expiry_date: "" })));
     });
   }, [poId]);
 
   async function confirm() {
+    if (receipts.length === 0) return toast({ variant: "destructive", title: "Photo needed", description: "Take a photo of the supplier's invoice first." });
     const res = await fetch(`/api/purchase-orders/${poId}/receive`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: items.map((i) => ({ item_id: i.id, received_quantity: i.received_quantity, expiry_date: i.expiry_date || undefined })) }),
+      body: JSON.stringify({
+        items: items.map((i) => ({ item_id: i.id, received_quantity: i.received_quantity, expiry_date: i.expiry_date || undefined })),
+        receipt_ids: receipts.map((r) => r.id), confirm_amount: !!mismatch,
+      }),
     });
     const data = await res.json();
+    if (res.status === 409 && data.mismatch) return setMismatch(data.error);
     if (!res.ok) return toast({ variant: "destructive", title: "Couldn't receive order", description: data.error });
     toast({ variant: "success", title: "Delivery received", description: `Cost counted in Finance: £${Number(data.purchaseOrder?.total_cost ?? 0).toFixed(2)}` });
     onSaved(); onClose();
@@ -311,14 +320,23 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
           {items.map((item, i) => (
             <div key={item.id} className="grid grid-cols-[1fr_90px_120px] gap-2 items-center">
               <span className="text-foreground text-sm">{item.ingredient_name}</span>
-              <input type="number" step="0.01" value={item.received_quantity} onChange={(e) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, received_quantity: Number(e.target.value) } : it))} className="bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm" />
+              <input type="number" step="0.01" value={item.received_quantity} onChange={(e) => { setMismatch(""); setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, received_quantity: Number(e.target.value) } : it)); }} className="bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm" />
               <input type="date" value={item.expiry_date} onChange={(e) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, expiry_date: e.target.value } : it))} className="bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm" />
             </div>
           ))}
         </div>
+        <p className="mt-3 text-right text-foreground text-sm font-semibold">Delivery total: {fmtMoney(total)}</p>
+        <div className="mt-3">
+          <ReceiptPhotos entity="purchase_order" label="Supplier invoice photo" value={receipts} onChange={(next) => { setReceipts(next); setMismatch(""); }} />
+        </div>
+        {mismatch && (
+          <p className="mt-2 text-amber-700 text-xs font-medium">
+            {mismatch} Check the quantities, or press Received anyway if the invoice is right (e.g. it includes delivery).
+          </p>
+        )}
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
-          <button onClick={confirm} className="flex-1 h-10 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded-xl">Mark Received</button>
+          <button onClick={confirm} disabled={receipts.length === 0} className="flex-1 h-10 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl">{mismatch ? "Received anyway" : "Mark Received"}</button>
         </div>
       </div>
     </div>
@@ -329,11 +347,18 @@ function PurchaseOrdersTab({ suppliers, ingredients }: { suppliers: Supplier[]; 
   const [pos, setPos] = useState<PO[]>([]);
   const [modal, setModal] = useState(false);
   const [receiving, setReceiving] = useState<number | null>(null);
+  const [photos, setPhotos] = useState<Record<string, { id: number; amount_mismatch: boolean }[]>>({});
 
   const load = useCallback(async () => {
     const res = await fetch("/api/purchase-orders");
     const data = await res.json();
-    setPos(data.purchaseOrders || []);
+    const list: PO[] = data.purchaseOrders || [];
+    setPos(list);
+    const received = list.filter((po) => po.status === "received").map((po) => po.id).slice(0, 500);
+    if (received.length) {
+      const r = await fetch(`/api/receipts?entity=purchase_order&ids=${received.join(",")}`);
+      if (r.ok) setPhotos((await r.json()).receipts || {});
+    }
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -348,6 +373,7 @@ function PurchaseOrdersTab({ suppliers, ingredients }: { suppliers: Supplier[]; 
               <p className="text-muted-foreground text-sm">{po.order_date} · {fmtMoney(po.total_cost)}</p>
             </div>
             <div className="flex items-center gap-2">
+              {po.status === "received" && <ReceiptLinks photos={photos[po.id]} />}
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${po.status === "received" ? "bg-green-100 text-green-700" : po.status === "cancelled" ? "bg-surface-hover text-muted-foreground" : "bg-amber-100 text-amber-700"}`}>{po.status}</span>
               {po.status === "ordered" && <button onClick={() => setReceiving(po.id)} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg">Receive</button>}
             </div>
