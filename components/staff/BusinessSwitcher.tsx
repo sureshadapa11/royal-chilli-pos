@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { freshStart } from "@/lib/auth-sync";
 
 export type SwitcherOption = { id: number; name: string; active: boolean };
 
@@ -10,7 +10,6 @@ export type SwitcherOption = { id: number; name: string; active: boolean };
 export default function BusinessSwitcher({ current, options, allMode = false, className = "" }: {
   current: number; options: SwitcherOption[]; allMode?: boolean; className?: string;
 }) {
-  const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -27,8 +26,7 @@ export default function BusinessSwitcher({ current, options, allMode = false, cl
       setError((await res.json().catch(() => ({}))).error || "Couldn't switch");
       return;
     }
-    router.push("/staff");
-    router.refresh();
+    freshStart("/staff");
   }
 
   return (

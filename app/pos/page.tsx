@@ -27,6 +27,7 @@ import type {
   WorkPeriod,
 } from "@/lib/types";
 import { confirmDialog } from "@/components/ui/confirm";
+import { freshStart } from "@/lib/auth-sync";
 
 type OrderType = "dine_in" | "takeaway" | "delivery" | "online";
 type MobileTab = "floor" | "menu" | "order";
@@ -254,7 +255,7 @@ export default function POSPage() {
     try {
       const res = await fetch("/api/orders?status=open");
       if (!res.ok) {
-        router.push("/login");
+        window.location.replace("/login");
         return;
       }
       // Fetch session user details
@@ -270,7 +271,7 @@ export default function POSPage() {
         setBrand(meData.brand ?? null);
       }
     } catch {
-      router.push("/login");
+      window.location.replace("/login");
     }
   };
 
@@ -652,7 +653,7 @@ export default function POSPage() {
   // A paired till goes back to the PIN pad; any other device to the password login.
   const handleLogout = async () => {
     const data = await fetch("/api/auth/logout", { method: "POST" }).then((r) => r.json()).catch(() => ({}));
-    window.location.replace(data.till ? "/pin" : "/login");
+    freshStart(data.till ? "/pin" : "/login");
   };
 
   const handleCashOut = async () => {

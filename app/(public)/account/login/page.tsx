@@ -3,11 +3,11 @@
 import { Suspense, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { normalizeUkMobile } from "@/lib/phone";
+import { freshStart } from "@/lib/auth-sync";
 
 function AuthForm() {
-  const router = useRouter();
   const params = useSearchParams();
   // Bring a Friend (?ref=) and "claim your points" (?next=/claim…) arrive here
   const referralCode = (params.get("ref") || "").trim();
@@ -50,8 +50,7 @@ function AuthForm() {
         return;
       }
       // A new account lands on Loyalty, where its welcome voucher is waiting.
-      router.push(safeNext || (mode === "signup" ? "/account/loyalty" : "/account"));
-      router.refresh();
+      freshStart(safeNext || (mode === "signup" ? "/account/loyalty" : "/account"), "customer");
     } finally {
       setSaving(false);
     }

@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import type { BusinessSummary } from "@/lib/businesses-admin";
+import { freshStart } from "@/lib/auth-sync";
 
 const card = "rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-5";
 const input = "w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm";
@@ -11,7 +11,6 @@ const btn = "rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibo
 // The group owner's Businesses screen: every business, add one, open / close
 // it, jump in to work or set it up.
 export default function BusinessesView({ current }: { current: number }) {
-  const router = useRouter();
   const [list, setList] = useState<BusinessSummary[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -33,8 +32,7 @@ export default function BusinessesView({ current }: { current: number }) {
     const res = await fetch("/api/auth/switch-business", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessId: id }) });
     setBusy(null);
     if (!res.ok) return setError("Couldn't switch business");
-    router.push(then);
-    router.refresh();
+    freshStart(then);
   }
 
   async function setOpen(id: number, active: boolean) {

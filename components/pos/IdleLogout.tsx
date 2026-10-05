@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
+import { freshStart } from "@/lib/auth-sync";
 
 // On a paired till (lib/till-device.ts), signs the person out after 5
 // minutes of no use, back to the PIN screen — so the next person's orders
@@ -34,7 +35,7 @@ export default function IdleLogout() {
           if (Date.now() - last < IDLE_MS) return;
           clearInterval(timer);
           await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-          window.location.replace("/pin");
+          freshStart("/pin");
         }, 15_000);
       })
       .catch(() => {});

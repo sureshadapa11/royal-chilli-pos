@@ -2,14 +2,13 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import type { SwitcherOption } from "@/components/staff/BusinessSwitcher";
+import { freshStart } from "@/lib/auth-sync";
 
 // Shown over any Staff Hub page except the dashboard while the owner has
 // "Working in: All businesses" on: pages like Menu, Inventory or HR change one
 // business's data, so the owner picks which business first.
 export default function PickBusiness({ options }: { options: SwitcherOption[] }) {
-  const router = useRouter();
   const [busy, setBusy] = useState<number | null>(null);
   const [error, setError] = useState("");
 
@@ -21,7 +20,7 @@ export default function PickBusiness({ options }: { options: SwitcherOption[] })
     });
     setBusy(null);
     if (!res.ok) return setError((await res.json().catch(() => ({}))).error || "Couldn't switch");
-    router.refresh();
+    freshStart(window.location.pathname + window.location.search);
   }
 
   return (

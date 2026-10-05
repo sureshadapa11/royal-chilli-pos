@@ -6,6 +6,7 @@ import type { Order, OrderItem } from "@/lib/types";
 import { boxesPerScreen, boxWidth, BOX_GAP, screenCount, screenOf, tabLabel } from "@/lib/kitchen-pages";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
 import PrintButton from "@/components/pos/PrintButton";
+import { freshStart } from "@/lib/auth-sync";
 
 // Kitchen Display. Each table or order is one box, side by side, oldest on
 // the left, only as tall as its items need — a long one scrolls inside its
@@ -433,7 +434,7 @@ export default function KitchenBoard({ kitchenOnly = false }: { kitchenOnly?: bo
                 type="button"
                 onClick={async () => {
                   await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
-                  window.location.replace("/pin");
+                  freshStart("/pin");
                 }}
                 className="px-2.5 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs sm:text-sm font-semibold rounded-lg border border-border"
               >

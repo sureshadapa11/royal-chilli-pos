@@ -1,13 +1,11 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { freshStart } from "@/lib/auth-sync";
 
 export default function LogoutButton({ className }: { className?: string }) {
-  const router = useRouter();
-
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    freshStart("/login");
   }
 
   return (

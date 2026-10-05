@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import type { HubNotice } from "@/lib/hub-notifications";
 import BusinessSwitcher, { type SwitcherOption } from "@/components/staff/BusinessSwitcher";
 import PickBusiness from "@/components/staff/PickBusiness";
 import { initials } from "@/lib/brand-client";
 import { ROLE_LABEL } from "@/lib/roles";
+import { freshStart } from "@/lib/auth-sync";
 
 export type NavItem = { href: string; label: string; icon: string; note?: string; external?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
@@ -49,7 +50,6 @@ export default function StaffShell({
   const [drawer, setDrawer] = useState<null | "menu" | "notices">(null);
   const barRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
-  const router = useRouter();
 
   const active = (href: string) =>
     href === "/staff" ? pathname === href : pathname === href || pathname.startsWith(href + "/");
@@ -70,8 +70,8 @@ export default function StaffShell({
   }, [drawer]);
 
   async function handleLogout() {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/login");
+    await fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    freshStart("/login");
   }
 
   const toggle = (key: string) => setOpenMenu((m) => (m === key ? null : key));

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { initials } from "@/lib/brand-client";
 import type { LoginBrand } from "@/lib/login-brand";
 import { BUSINESS_COOKIE } from "@/lib/staff-business-code";
+import { freshStart } from "@/lib/auth-sync";
 
 const YEAR = 60 * 60 * 24 * 365;
 
@@ -97,7 +98,7 @@ function SignIn({ brand }: { brand: Extract<LoginBrand, { found: true }> }) {
       const data = await res.json();
       if (res.ok) {
         if (brand.viaCode) rememberCode(brand.code);
-        router.push("/staff");
+        freshStart("/staff");
       } else {
         setError(data.error || "Username or password is incorrect. Contact your manager for account recovery.");
         setPassword("");
