@@ -3,10 +3,19 @@
 import { useCallback, useEffect, useState } from "react";
 import { tradingDayStr } from "@/lib/london-date";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
+import ReceiptPhotos, { ReceiptLinks, type Receipt } from "@/components/staff/ReceiptPhotos";
 
 // Inventory → Expenses and Inventory → Supplier Payments: the money going
 // out. (Moved from Finance, which is now read-only analysis.) Only staff with
-// Finance access can record these — the APIs check canManageFinance.
+// Finance access can record these — the APIs check canManageFinance. Every
+// entry needs a photo of its receipt / invoice / payment confirmation.
+
+type PhotoMap = Record<string, { id: number }[]>;
+async function loadPhotos(entity: string, ids: number[]): Promise<PhotoMap> {
+  if (ids.length === 0) return {};
+  const res = await fetch(`/api/receipts?entity=${entity}&ids=${ids.slice(0, 500).join(",")}`);
+  return res.ok ? (await res.json()).receipts || {} : {};
+}
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 function today() { return tradingDayStr(); }
@@ -16,10 +25,14 @@ export function ExpensesTab() {
   const [form, setForm] = useState({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
   const [error, setError] = useState("");
   const [dupe, setDupe] = useState(false);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [photos, setPhotos] = useState<PhotoMap>({});
 
   const load = useCallback(async () => {
     const res = await fetch("/api/expenses");
-    setExpenses((await res.json()).expenses || []);
+    const list = (await res.json()).expenses || [];
+    setExpenses(list);
+    setPhotos(await loadPhotos("expense", list.map((e: { id: number }) => e.id)));
   }, []);
   useEffect(() => { load(); }, [load]);
 
@@ -27,13 +40,17 @@ export function ExpensesTab() {
     setError("");
     if (!form.description.trim()) return setError("Add a description.");
     if (!(Number(form.amount) > 0)) return setError("Amount must be more than £0.");
+    if (receipts.length === 0) return setError("Add a photo of the receipt or invoice.");
     const res = await fetch("/api/expenses", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, amount: Number(form.amount), vat_applicable: form.vat_applicable ? 1 : 0, allow_duplicate: dupe }),
+      body: JSON.stringify({
+        ...form, amount: Number(form.amount), vat_applicable: form.vat_applicable ? 1 : 0, allow_duplicate: dupe,
+        receipt_ids: receipts.map((r) => r.id),
+      }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error || "Couldn't save"); setDupe(!!data.duplicate); return; }
-    setDupe(false);
+    setDupe(false); setReceipts([]);
     setForm({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
     load();
   }
@@ -47,6 +64,9 @@ export function ExpensesTab() {
         <input placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm col-span-2" />
         <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">{dupe ? "Add anyway" : "+ Add"}</button>
+      </div>
+      <div className="mt-2">
+        <ReceiptPhotos entity="expense" value={receipts} onChange={setReceipts} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
         <label className="flex items-center gap-2">
@@ -63,8 +83,8 @@ export function ExpensesTab() {
       <div className="mt-4 space-y-1.5">
         {expenses.map((e) => (
           <div key={e.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2">
-            <span className="text-foreground capitalize">{e.category.replace("_", " ")} · {e.description} <span className="text-muted-foreground">({e.expense_date})</span></span>
-            <span className="text-foreground">{fmtMoney(e.amount)}</span>
+            <span className="text-foreground"><span className="capitalize">{e.category.replace("_", " ")}</span> · {e.description} <span className="text-muted-foreground">({e.expense_date})</span></span>
+            <span className="flex items-center gap-3"><ReceiptLinks photos={photos[e.id]} /><span className="text-foreground">{fmtMoney(e.amount)}</span></span>
           </div>
         ))}
         {expenses.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No expenses recorded yet.</p>}
@@ -79,6 +99,8 @@ export function SupplierPaymentsTab() {
   const [form, setForm] = useState({ supplier_id: "", amount: "", method: "bank_transfer" });
   const [error, setError] = useState("");
   const [dupe, setDupe] = useState(false);
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [photos, setPhotos] = useState<PhotoMap>({});
 
   const loadSuppliers = useCallback(async () => {
     const res = await fetch("/api/suppliers");
@@ -86,7 +108,9 @@ export function SupplierPaymentsTab() {
   }, []);
   const load = useCallback(async () => {
     const res = await fetch("/api/supplier-payments");
-    setPayments((await res.json()).payments || []);
+    const list = (await res.json()).payments || [];
+    setPayments(list);
+    setPhotos(await loadPhotos("supplier_payment", list.map((p: { id: number }) => p.id)));
   }, []);
   useEffect(() => { load(); loadSuppliers(); }, [load, loadSuppliers]);
 
@@ -94,13 +118,17 @@ export function SupplierPaymentsTab() {
     setError("");
     if (!form.supplier_id) return setError("Pick a supplier.");
     if (!(Number(form.amount) > 0)) return setError("Amount must be more than £0.");
+    if (receipts.length === 0) return setError("Add a photo of the invoice or the payment confirmation.");
     const res = await fetch("/api/supplier-payments", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ supplier_id: Number(form.supplier_id), amount: Number(form.amount), method: form.method, allow_duplicate: dupe }),
+      body: JSON.stringify({
+        supplier_id: Number(form.supplier_id), amount: Number(form.amount), method: form.method, allow_duplicate: dupe,
+        receipt_ids: receipts.map((r) => r.id),
+      }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error || "Couldn't record payment"); setDupe(!!data.duplicate); return; }
-    setDupe(false);
+    setDupe(false); setReceipts([]);
     setForm({ supplier_id: "", amount: "", method: "bank_transfer" });
     load();
   }
@@ -115,6 +143,9 @@ export function SupplierPaymentsTab() {
         <input type="number" step="0.01" placeholder="Amount" value={form.amount} onChange={(e) => { setForm({ ...form, amount: e.target.value }); setDupe(false); }} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         <button onClick={save} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">{dupe ? "Record anyway" : "+ Record"}</button>
       </div>
+      <div className="mt-2">
+        <ReceiptPhotos entity="supplier_payment" label="Invoice / payment confirmation photo" value={receipts} onChange={setReceipts} />
+      </div>
       {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Record anyway if it really is a second payment."}</p>}
       <p className="mt-2 text-muted-foreground text-xs">
         A record of money paid to suppliers — it isn&apos;t a cost in Profit &amp; Loss (the cost is counted once, when the purchase order is received). Suppliers are added in the Suppliers tab.
@@ -123,7 +154,7 @@ export function SupplierPaymentsTab() {
         {payments.map((p) => (
           <div key={p.id} className="flex justify-between text-sm rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-2">
             <span className="text-foreground">{p.supplier_name} {p.method && `· ${p.method.replace("_", " ")}`} <span className="text-muted-foreground">({new Date(p.paid_at).toLocaleDateString("en-GB")})</span></span>
-            <span className="text-foreground">{fmtMoney(p.amount)}</span>
+            <span className="flex items-center gap-3"><ReceiptLinks photos={photos[p.id]} /><span className="text-foreground">{fmtMoney(p.amount)}</span></span>
           </div>
         ))}
         {payments.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No supplier payments recorded yet.</p>}

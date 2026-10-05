@@ -4,9 +4,11 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
 import { londonDateStr } from "@/lib/london-date";
 import { resolveInventoryLocation } from "@/lib/locations";
+import { attachReceipts, checkReceiptsForSave } from "@/lib/receipts";
 
 // Marks a PO received, moves stock via stock_movements (so it's audit-tracked like everything
 // else), updates each ingredient's last-known cost, and records batch expiry dates.
+// The supplier's invoice must be photographed first (migration 110).
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -20,7 +22,7 @@ export async function POST(
     const location = await resolveInventoryLocation(session.businessId, session.id, null, session.owner);
     if ("error" in location) return NextResponse.json({ error: location.error }, { status: location.status });
     const { id } = await params;
-    const { items } = await req.json(); // [{ item_id, received_quantity, expiry_date }]
+    const { items, receipt_ids } = await req.json(); // items: [{ item_id, received_quantity, expiry_date }]
 
     const { data: po, error: poErr } = await db.from("purchase_orders").select("*").eq("id", id).single();
     if (poErr || !po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
@@ -34,11 +36,18 @@ export async function POST(
 
     // What the delivery actually cost — this is the ingredient cost in the P&L,
     // so a short delivery mustn't still count at the ordered total.
-    let receivedCost = 0;
+    type Override = { received_quantity?: number; expiry_date?: string } | undefined;
+    const qtyOf = (item: { id: number; quantity: number }) =>
+      Math.max(0, Number((overrides.get(item.id) as Override)?.received_quantity ?? item.quantity));
+    const receivedCost = Math.round((poItems || []).reduce((sum, item) => sum + qtyOf(item) * Number(item.unit_cost), 0) * 100) / 100;
+
+    // Checked before anything moves, so a missing photo leaves the PO untouched.
+    const receipts = await checkReceiptsForSave(db, receipt_ids);
+    if (!receipts.ok) return NextResponse.json({ error: receipts.error }, { status: receipts.status });
+
     for (const item of poItems || []) {
-      const override = overrides.get(item.id) as { received_quantity?: number; expiry_date?: string } | undefined;
-      const receivedQty = Math.max(0, Number(override?.received_quantity ?? item.quantity));
-      receivedCost += receivedQty * Number(item.unit_cost);
+      const override = overrides.get(item.id) as Override;
+      const receivedQty = qtyOf(item);
 
       await db.from("purchase_order_items").update({
         received_quantity: receivedQty,
@@ -62,11 +71,12 @@ export async function POST(
 
     const { data: updatedPo, error: updateErr } = await db
       .from("purchase_orders")
-      .update({ status: "received", received_date: londonDateStr(), total_cost: Math.round(receivedCost * 100) / 100 })
+      .update({ status: "received", received_date: londonDateStr(), total_cost: receivedCost })
       .eq("id", id)
       .select()
       .single();
     if (updateErr) throw updateErr;
+    await attachReceipts(db, receipts.ids, "purchase_order", po.id);
 
     return NextResponse.json({ success: true, purchaseOrder: updatedPo });
   } catch (error) {

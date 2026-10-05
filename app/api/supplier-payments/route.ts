@@ -3,6 +3,7 @@ import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
 import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
+import { attachReceipts, checkReceiptsForSave } from "@/lib/receipts";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -30,10 +31,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
-    const { supplier_id, purchase_order_id, amount, method, notes, allow_duplicate } = await req.json();
+    const { supplier_id, purchase_order_id, amount, method, notes, allow_duplicate, receipt_ids } = await req.json();
     if (!supplier_id || !amount) return NextResponse.json({ error: "supplier_id and amount are required" }, { status: 400 });
     if (!(await allOwned(db, "suppliers", [supplier_id]))) return NextResponse.json({ error: "That supplier isn't this business's" }, { status: 400 });
     if (!(Number(amount) > 0)) return NextResponse.json({ error: "Amount must be more than £0" }, { status: 400 });
+
+    // Every payment out needs photo proof (migration 110).
+    const receipts = await checkReceiptsForSave(db, receipt_ids);
+    if (!receipts.ok) return NextResponse.json({ error: receipts.error }, { status: receipts.status });
 
     // Same payment to the same supplier on the same day is almost always a double entry — ask first.
     if (!allow_duplicate) {
@@ -52,6 +57,7 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
     if (error) throw error;
+    await attachReceipts(db, receipts.ids, "supplier_payment", data.id);
 
     return NextResponse.json({ success: true, payment: data }, { status: 201 });
   } catch (error) {

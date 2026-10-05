@@ -203,14 +203,50 @@ function ZReportsTab() {
 }
 
 // One Excel file per month for the accountant (app/api/finance/export):
-// daily trading-day summary, payments, refunds and Z reports.
+// daily trading-day summary, payments, refunds, Z reports and money out —
+// plus a zip of the month's receipt photos, named as in the Money out sheet.
+// The zip is built here in the browser from short-lived links: a month of
+// photos is far bigger than a server response may be.
 function AccountantExportTab() {
   const [month, setMonth] = useState(() => tradingDayStr().slice(0, 7));
+  const [zipping, setZipping] = useState("");
+  const [zipError, setZipError] = useState("");
+
+  async function downloadReceipts() {
+    setZipError("");
+    setZipping("Preparing…");
+    try {
+      const res = await fetch(`/api/receipts/month?month=${month}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't get the photos");
+      const files = data.files as { name: string; url: string }[];
+      if (files.length === 0) { setZipError(`No receipt photos for ${month}.`); return; }
+      const { zipSync } = await import("fflate");
+      const entries: Record<string, [Uint8Array, { level: 0 }]> = {};
+      for (let i = 0; i < files.length; i++) {
+        setZipping(`Downloading ${i + 1} of ${files.length}…`);
+        const r = await fetch(files[i].url);
+        if (!r.ok) throw new Error(`Couldn't download ${files[i].name}`);
+        entries[files[i].name] = [new Uint8Array(await r.arrayBuffer()), { level: 0 }]; // photos are already compressed
+      }
+      const zip = zipSync(entries);
+      const url = URL.createObjectURL(new Blob([zip as BlobPart], { type: "application/zip" }));
+      const a = document.createElement("a");
+      a.href = url; a.download = `receipts-${month}.zip`; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      if (data.missing > 0) setZipError(`${data.missing} older ${data.missing === 1 ? "entry has" : "entries have"} no photo (from before photos were required).`);
+    } catch (e) {
+      setZipError(e instanceof Error ? e.message : "Couldn't make the zip");
+    } finally {
+      setZipping("");
+    }
+  }
+
   return (
     <div className="rounded-lg border border-border bg-surface px-4 py-4 space-y-3">
       <p className="text-foreground font-semibold">Monthly accounts export (Excel)</p>
       <p className="text-muted-foreground text-sm">
-        Sheets: Daily summary (trading days, 5am–5am: sales taken, card/cash/online, tips, refunds, VAT, discounts), Payments, Refunds and Z reports.
+        Sheets: Daily summary (trading days, 5am–5am: sales taken, card/cash/online, tips, refunds, VAT, discounts), Payments, Refunds, Z reports and Money out (expenses, supplier payments and deliveries, with their receipt photo names).
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -220,7 +256,15 @@ function AccountantExportTab() {
         >
           ⬇ Download {month}
         </a>
+        <button
+          onClick={downloadReceipts}
+          disabled={!!zipping}
+          className="px-4 py-2 rounded-lg border border-border bg-surface hover:bg-surface-hover text-foreground text-sm font-semibold disabled:opacity-60"
+        >
+          {zipping || `📎 Receipt photos (.zip)`}
+        </button>
       </div>
+      {zipError && <p className="text-amber-700 text-xs">{zipError}</p>}
     </div>
   );
 }

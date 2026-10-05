@@ -4,11 +4,13 @@ import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { canManageFinance } from "@/lib/permissions";
 import { allRows } from "@/lib/finance";
+import { moneyOutForMonth } from "@/lib/money-out";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import type { ZReport } from "@/lib/z-report";
 
 // GET /api/finance/export?month=YYYY-MM — one Excel file for the accountant:
-// Daily summary (trading days, 5am-5am UK), Payments, Refunds, Z reports.
+// Daily summary (trading days, 5am-5am UK), Payments, Refunds, Z reports, and
+// Money out (with the file names of its receipt photos in the receipts zip).
 // Money is counted when it was taken (payments), matching the Z report.
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -25,12 +27,13 @@ export async function GET(req: NextRequest) {
 
   type PayRow = { order_id: number; method: string; amount: number; tip_amount: number | null; reference: string | null; created_at: string; orders: unknown };
   type OrderRow = { id: number; created_at: string; tax: number; discount: number | null; loyalty_discount: number | null };
-  const [payments, orders, { data: periods }] = await Promise.all([
+  const [payments, orders, { data: periods }, moneyOut] = await Promise.all([
     allRows<PayRow>((a, b) => db.from("payments").select("order_id, method, amount, tip_amount, reference, created_at, orders(order_number, total, tax)")
       .gte("created_at", start).lte("created_at", end).order("created_at").order("id").range(a, b)),
     allRows<OrderRow>((a, b) => db.from("orders").select("id, created_at, tax, discount, loyalty_discount").eq("is_paid", true)
       .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
     db.from("work_periods").select("id, opened_at, closed_at, close_note, z_report").eq("status", "closed").gte("closed_at", start).lte("closed_at", end).order("closed_at"),
+    moneyOutForMonth(db, month),
   ]);
 
   const r2 = (n: number) => Math.round(n * 100) / 100;
@@ -107,11 +110,18 @@ export async function GET(req: NextRequest) {
     };
   });
 
+  const moneyOutRows = moneyOut.map((r) => ({
+    Date: r.date, Type: r.type, "Paid to": r.paidTo, Details: r.details, Amount: r2(r.amount),
+    Check: r.photos.length === 0 ? "No photo" : "",
+    "Receipt photos (in receipts zip)": r.photos.map((p) => p.fileName).join(", "),
+  }));
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(daily), "Daily summary");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paymentRows.length ? paymentRows : [{ Note: "No payments this month" }]), "Payments");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(refundRows.length ? refundRows : [{ Note: "No refunds this month" }]), "Refunds");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(zRows.length ? zRows : [{ Note: "No closed till shifts this month" }]), "Z reports");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moneyOutRows.length ? moneyOutRows : [{ Note: "Nothing paid out this month" }]), "Money out");
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 
   return new NextResponse(new Uint8Array(buf), {
