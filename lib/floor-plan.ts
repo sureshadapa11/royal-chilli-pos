@@ -1,7 +1,8 @@
 // The restaurant floor plan (Staff Hub → Tables, and the till's table
 // screen): one floor of equal table slots in neat rows and columns, measured
 // in grid cells. Every table is the same size and sits in one slot — pos_x /
-// pos_y is the top-left of its slot. Seats are shown as a number, not by
+// pos_y is the top-left of its slot. Slots go across in half steps, so a row
+// of 3 can sit centred over a row of 4. Seats are shown as a number, not by
 // size. Safe to import in the browser.
 
 export const SHAPES = ["square", "round", "rect"] as const;
@@ -11,7 +12,7 @@ export type Shape = (typeof SHAPES)[number];
 export const SLOT = 8;
 export const TABLE_SIZE = 7;
 /** The floor, in slots. */
-export const COLS = 6;
+export const COLS = 5;
 export const ROWS = 5;
 /** The floor, in cells (a cell of margin round the edge). */
 export const GRID_W = COLS * SLOT + 1;
@@ -44,20 +45,24 @@ export const round2 = (n: number) => Math.round(n * 100) / 100;
 
 const clamp =(n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-/** The slot nearest to a table whose top-left is at (x, y). */
-export function nearestSlot(x: number, y: number): { col: number; row: number } {
+export type Slot = { col: number; row: number };
+
+/** The slot nearest to a table whose top-left is at (x, y): whole rows,
+ *  columns in half steps. */
+export function nearestSlot(x: number, y: number): Slot {
   return {
-    col: clamp(Math.round((x - 1) / SLOT), 0, COLS - 1),
+    col: clamp(Math.round(((x - 1) / SLOT) * 2) / 2, 0, COLS - 1),
     row: clamp(Math.round((y - 1) / SLOT), 0, ROWS - 1),
   };
 }
 
-const key = (col: number, row: number) => `${col},${row}`;
+/** Two tables in these slots would overlap. */
+export const clashes = (a: Slot, b: Slot) => a.row === b.row && Math.abs(a.col - b.col) < 0.99;
 
-/** The first empty slot, row by row. */
-export function freeSlot(taken: Set<string>): { col: number; row: number } {
+/** The first empty whole slot, row by row. */
+export function freeSlot(taken: Slot[]): Slot {
   for (let row = 0; row < ROWS; row++) {
-    for (let col = 0; col < COLS; col++) if (!taken.has(key(col, row))) return { col, row };
+    for (let col = 0; col < COLS; col++) if (!taken.some((t) => clashes(t, { col, row }))) return { col, row };
   }
   return { col: 0, row: ROWS }; // the floor is full: below it
 }
@@ -65,10 +70,10 @@ export function freeSlot(taken: Set<string>): { col: number; row: number } {
 const tableNo = (t: PlanTable) => parseInt(t.table_number.replace(/\D/g, ""), 10) || 0;
 
 /** The till's old layout, by table-number order: the first 9 as a 3×3 block
- *  read column by column (T3 T6 T9 / T2 T5 T8 / T1 T4 T7), the rest in rows
- *  of 4 underneath. */
-export function legacySlot(index: number): { col: number; row: number } {
-  if (index < 9) return { col: Math.floor(index / 3), row: 2 - (index % 3) };
+ *  read column by column (T3 T6 T9 / T2 T5 T8 / T1 T4 T7), centred over the
+ *  rest in rows of 4 underneath. */
+export function legacySlot(index: number): Slot {
+  if (index < 9) return { col: 0.5 + Math.floor(index / 3), row: 2 - (index % 3) };
   const i = index - 9;
   return { col: i % 4, row: 3 + Math.floor(i / 4) };
 }
@@ -78,11 +83,11 @@ export function legacySlot(index: number): { col: number; row: number } {
  *  later one (by number) moves to the first empty slot. */
 export function placeTables<T extends PlanTable>(tables: T[]): Placed<T>[] {
   const sorted = [...tables].sort((a, b) => tableNo(a) - tableNo(b));
-  const taken = new Set<string>();
+  const taken: Slot[] = [];
   const out: Placed<T>[] = [];
-  const put = (t: T, s: { col: number; row: number }) => {
-    if (taken.has(key(s.col, s.row)) || s.row >= ROWS) s = freeSlot(taken);
-    taken.add(key(s.col, s.row));
+  const put = (t: T, s: Slot) => {
+    if (s.row >= ROWS || s.col > COLS - 1 || taken.some((q) => clashes(q, s))) s = freeSlot(taken);
+    taken.push(s);
     const { x, y } = slotXY(s.col, s.row);
     out.push({ ...t, ...s, x, y, w: TABLE_SIZE, h: TABLE_SIZE, box: { x, y, w: TABLE_SIZE, h: TABLE_SIZE } });
   };
@@ -165,18 +170,19 @@ export function planJoin<T extends PlanTable>(
     ? [across.right, across.left, down.below, down.above]
     : r0 === r1 ? [across.right, across.left] : [down.below, down.above];
 
+  const inTheWay = (s: Slot) => placed.filter((p) => p.id !== tableId && clashes(p, s));
   const usable = candidates.filter((s) => {
-    if (s.col < 0 || s.col >= COLS || s.row < 0 || s.row >= ROWS) return false;
-    const there = placed.find((p) => p.col === s.col && p.row === s.row);
-    // Only a table on its own can be swapped out of the way.
-    return !there || there.id === tableId || groups.find((g) => g.members.some((m) => m.id === there.id))!.members.length === 1;
+    if (s.col < 0 || s.col > COLS - 1 || s.row < 0 || s.row >= ROWS) return false;
+    const there = inTheWay(s);
+    // Only one table on its own can be swapped out of the way.
+    return there.length === 0 || (there.length === 1 && groups.find((g) => g.members.some((m) => m.id === there[0].id))!.members.length === 1);
   });
   if (usable.length === 0) return { error: "There's no room beside those tables — move them, then join" };
   // Already in place? Nothing moves.
   const to = usable.find((s) => s.col === joining.col && s.row === joining.row) ?? usable[0];
   if (to.col === joining.col && to.row === joining.row) return { moves: [] };
   const moves = [{ id: tableId, ...slotXY(to.col, to.row) }];
-  const there = placed.find((p) => p.col === to.col && p.row === to.row);
+  const [there] = inTheWay(to);
   if (there) moves.push({ id: there.id, ...slotXY(joining.col, joining.row) });
   return { moves };
 }

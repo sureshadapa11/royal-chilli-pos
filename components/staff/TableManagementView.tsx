@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { confirmDelete } from "@/components/ui/confirm";
 import {
-  COLS, GRID_H, GRID_W, ROWS, TABLE_SIZE, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, slotXY,
+  COLS, GRID_H, GRID_W, ROWS, TABLE_SIZE, clashes, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, slotXY,
   type Group, type Placed,
 } from "@/lib/floor-plan";
 
@@ -81,7 +81,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   const groupOf = (id: number) => groups.find((g) => g.members.some((m) => m.id === id))!;
   const isJoined = (id: number) => groupOf(id).members.length > 1;
   const target = drag ? nearestSlot(drag.x, drag.y) : null;
-  const taken = new Set(placed.map((p) => `${p.col},${p.row}`));
+  const taken = placed.map((p) => ({ col: p.col, row: p.row }));
   const selGroup = selected != null ? groups.find((g) => g.lead.id === selected) ?? null : null;
   const totalSeats = tables.reduce((s, t) => s + t.capacity, 0);
 
@@ -153,7 +153,12 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     if (!spot) return;
     const to = nearestSlot(spot.x, spot.y);
     if (to.col === t.col && to.row === t.row) return;
-    const there = placed.find((p) => p.col === to.col && p.row === to.row);
+    const inTheWay = placed.filter((p) => p.id !== t.id && clashes(p, to));
+    if (inTheWay.length > 1) {
+      toast({ variant: "destructive", title: "No room there", description: "Drop it in a free spot, or onto one table to swap them." });
+      return;
+    }
+    const [there] = inTheWay;
     if (there && isJoined(there.id)) {
       toast({ variant: "destructive", title: `${joinLabel(groupOf(there.id).members)} are joined`, description: "Drop it in a free spot, or unjoin those tables first." });
       return;
@@ -308,15 +313,16 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                   aspectRatio: `${GRID_W} / ${GRID_H}`,
                 }}
               >
-                {/* Empty slots while tables can be moved; the one a dragged table would land in is lit */}
-                {canDrag && Array.from({ length: COLS * ROWS }, (_, i) => {
-                  const col = i % COLS, row = Math.floor(i / COLS);
-                  const isTarget = target?.col === col && target?.row === row;
-                  if (taken.has(`${col},${row}`) && !isTarget) return null;
-                  const { x, y } = slotXY(col, row);
+                {/* Empty slots while tables can be moved; where a dragged table would land is lit */}
+                {canDrag && [
+                  ...Array.from({ length: COLS * ROWS }, (_, i) => ({ col: i % COLS, row: Math.floor(i / COLS), lit: false }))
+                    .filter((s) => !taken.some((q) => clashes(q, s))),
+                  ...(target ? [{ ...target, lit: true }] : []),
+                ].map((s) => {
+                  const { x, y } = slotXY(s.col, s.row);
                   return (
-                    <div key={`slot-${i}`} aria-hidden
-                      className={`pointer-events-none absolute rounded-lg border-2 border-dashed ${isTarget ? "border-blue-400 bg-blue-50/60" : "border-[#E6DDCB]"}`}
+                    <div key={`slot-${s.col}-${s.row}-${s.lit}`} aria-hidden
+                      className={`pointer-events-none absolute rounded-lg border-2 border-dashed ${s.lit ? "border-blue-400 bg-blue-50/60" : "border-[#E6DDCB]"}`}
                       style={{ left: `${(x / GRID_W) * 100}%`, top: `${(y / GRID_H) * 100}%`, width: `${(TABLE_SIZE / GRID_W) * 100}%`, height: `${(TABLE_SIZE / GRID_H) * 100}%` }} />
                   );
                 })}
