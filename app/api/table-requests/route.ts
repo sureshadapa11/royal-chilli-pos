@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await db
     .from("table_requests")
-    .select("id, type, status, created_at, restaurant_tables(table_number)")
+    .select("id, type, status, created_at, restaurant_tables(table_number, join_label)")
     .eq("status", "pending")
     .order("created_at");
   if (error) {
@@ -20,9 +20,9 @@ export async function GET(req: NextRequest) {
 
   const flat = (data || []).map((r) => {
     const { restaurant_tables: rt, ...rest } = r as typeof r & {
-      restaurant_tables: { table_number: string } | null;
+      restaurant_tables: { table_number: string; join_label?: string | null } | null;
     };
-    return { ...rest, table_number: rt?.table_number ?? null };
+    return { ...rest, table_number: (rt?.join_label || rt?.table_number) ?? null };
   });
 
   return NextResponse.json({ requests: flat });

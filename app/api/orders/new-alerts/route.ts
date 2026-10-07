@@ -17,7 +17,7 @@ type Row = {
   id: number;
   source: "online" | "qr";
   print_after: string;
-  order: { order_number: string; order_type: string; status: string; customer_name: string | null; restaurant_tables: { table_number: string } | null } | null;
+  order: { order_number: string; order_type: string; status: string; customer_name: string | null; restaurant_tables: { table_number: string; join_label?: string | null } | null } | null;
 };
 
 export async function GET(req: NextRequest) {
@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
   const now = Date.now();
   const { data, error } = await bizDb(session.businessId)
     .from("print_jobs")
-    .select("id, source, print_after, order:orders(order_number, order_type, status, customer_name, restaurant_tables(table_number))")
+    .select("id, source, print_after, order:orders(order_number, order_type, status, customer_name, restaurant_tables(table_number, join_label))")
     .eq("kind", "kot")
     .in("source", ["online", "qr"])
     .lte("print_after", new Date(now).toISOString())
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
       source: r.source,
       order_number: r.order!.order_number,
       order_type: r.order!.order_type,
-      table_number: r.order!.restaurant_tables?.table_number ?? null,
+      table_number: (r.order!.restaurant_tables?.join_label || r.order!.restaurant_tables?.table_number) ?? null,
       customer_name: r.order!.customer_name,
       at: r.print_after,
     }));

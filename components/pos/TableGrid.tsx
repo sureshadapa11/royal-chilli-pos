@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { cn, TABLE_ATTENTION_MINUTES, minutesSince, tableElapsedLabel } from "@/lib/utils";
 import type { RestaurantTable } from "@/lib/types";
-import { placeTables, usedBox } from "@/lib/floor-plan";
+import { groupsOf, joinLabel, placeTables, usedBox } from "@/lib/floor-plan";
 
 interface Props {
   tables: RestaurantTable[];
@@ -24,12 +24,22 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
   // The floor plan from Staff Hub → Tables (lib/floor-plan.ts): equal
   // tables in rows and columns, cropped to the part in use and scaled to fit
   // this panel. Tables without a saved spot are laid out like the old grid.
+  // Joined tables are one long table, "T1 + T2": tapping it picks the lead
+  // table, which carries the order.
   const placed = placeTables(tables);
   const box = usedBox(placed);
+  const units = groupsOf(placed).map(g => ({
+    ...g.lead,
+    box: g.box,
+    table_number: g.members.length > 1 ? joinLabel(g.members) : g.lead.table_number,
+    groupName: g.members.length > 1 ? g.lead.group_name?.trim() || null : null,
+    capacity: g.members.reduce((s, m) => s + m.capacity, 0),
+    joined: g.members.length > 1,
+  }));
 
   const stats = {
-    free:     tables.filter(t => t.status === "available").length,
-    occupied: tables.filter(t => t.status === "occupied").length,
+    free:     units.filter(t => t.status === "available").length,
+    occupied: units.filter(t => t.status === "occupied").length,
     reserved: upcomingReservationCount,
   };
 
@@ -52,7 +62,7 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
 
       {/* Floor plan */}
       <div className="relative w-full" style={{ aspectRatio: `${box.w} / ${box.h}` }}>
-              {placed.map(table => {
+              {units.map(table => {
                 const isSelected = selectedTable === table.id;
                 const status = table.status as "available" | "occupied" | "reserved";
                 const elapsedMins = table.occupied_since ? minutesSince(table.occupied_since) : null;
@@ -96,13 +106,13 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                     key={table.id}
                     role="button"
                     tabIndex={0}
-                    onClick={() => onSelect(table)}
-                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(table); }}
+                    onClick={() => onSelect(tables.find(t => t.id === table.id)!)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onSelect(tables.find(t => t.id === table.id)!); }}
                     style={{
-                      left: `calc(${((table.x - box.x) / box.w) * 100}% + 2px)`,
-                      top: `calc(${((table.y - box.y) / box.h) * 100}% + 2px)`,
-                      width: `calc(${(table.w / box.w) * 100}% - 4px)`,
-                      height: `calc(${(table.h / box.h) * 100}% - 4px)`,
+                      left: `calc(${((table.box.x - box.x) / box.w) * 100}% + 2px)`,
+                      top: `calc(${((table.box.y - box.y) / box.h) * 100}% + 2px)`,
+                      width: `calc(${(table.box.w / box.w) * 100}% - 4px)`,
+                      height: `calc(${(table.box.h / box.h) * 100}% - 4px)`,
                     }}
                     className={cn(
                       "absolute flex flex-col items-center justify-center border cursor-pointer rounded-xl",
@@ -143,6 +153,9 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                     )}>
                       {table.table_number}
                     </span>
+                    {table.groupName && (
+                      <span className="mt-0.5 max-w-full truncate px-1 text-[9px] font-semibold text-foreground/70">{table.groupName}</span>
+                    )}
 
                     {/* Status label */}
                     <span className={cn(

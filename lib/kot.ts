@@ -3,7 +3,7 @@ import supabase from "@/lib/supabase";
 export async function getOrderForPrint(orderId: number) {
   const { data: order } = await supabase
     .from("orders")
-    .select("*, restaurant_tables(table_number)")
+    .select("*, restaurant_tables(table_number, join_label)")
     .eq("id", orderId)
     .single();
   if (!order) return null;
@@ -25,10 +25,10 @@ export async function getOrderForPrint(orderId: number) {
     modsByItem.set(m.order_item_id, [...(modsByItem.get(m.order_item_id) || []), m.option_name]);
   }
 
-  const { restaurant_tables: table, ...orderRest } = order as typeof order & { restaurant_tables: { table_number: string } | null };
+  const { restaurant_tables: table, ...orderRest } = order as typeof order & { restaurant_tables: { table_number: string; join_label?: string | null } | null };
 
   return {
-    order: { ...orderRest, table_number: table?.table_number ?? null },
+    order: { ...orderRest, table_number: (table?.join_label || table?.table_number) ?? null },
     items: (items || []).map(({ menu_items: menuItem, ...i }) => ({
       ...i,
       modifiers: modsByItem.get(i.id) || [],

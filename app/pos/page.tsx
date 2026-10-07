@@ -798,7 +798,7 @@ export default function POSPage() {
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-foreground font-black text-base leading-tight">Table {tbl.table_number}</span>
+            <span className="text-foreground font-black text-base leading-tight">Table {tbl.join_label || tbl.table_number}</span>
             <span className="text-[9px] font-bold text-red-600 bg-red-500/15 border border-red-500/25 px-1.5 py-0.5 rounded-full uppercase tracking-wide">
               {tbl.location === "outdoor" ? "Outdoor" : tbl.location === "private" ? "VIP" : "Main"}
             </span>

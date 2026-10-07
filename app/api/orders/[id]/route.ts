@@ -25,7 +25,7 @@ export async function GET(
       .from("orders")
       .select(`
         *,
-        restaurant_tables(table_number),
+        restaurant_tables(table_number, join_label),
         staff:staff!orders_staff_id_fkey(name)
       `)
       .eq("id", id)
@@ -43,7 +43,7 @@ export async function GET(
     }
 
     const { restaurant_tables: rt, staff: s, ...orderRest } = order as typeof order & {
-      restaurant_tables: { table_number: string } | null;
+      restaurant_tables: { table_number: string; join_label?: string | null } | null;
       staff: { name: string } | null;
     };
 
@@ -56,7 +56,7 @@ export async function GET(
     if (itemsError) throw itemsError;
 
     return NextResponse.json({
-      order: { ...orderRest, table_number: rt?.table_number ?? null, staff_name: s?.name ?? null },
+      order: { ...orderRest, table_number: (rt?.join_label || rt?.table_number) ?? null, staff_name: s?.name ?? null },
       items,
     });
   } catch (error) {
@@ -209,7 +209,7 @@ export async function PUT(
       .from("orders")
       .select(`
         *,
-        restaurant_tables(table_number),
+        restaurant_tables(table_number, join_label),
         staff:staff!orders_staff_id_fkey(name)
       `)
       .eq("id", id)
@@ -218,13 +218,13 @@ export async function PUT(
     if (updError) throw updError;
 
     const { restaurant_tables: rt, staff: s, ...orderRest } = updated as typeof updated & {
-      restaurant_tables: { table_number: string } | null;
+      restaurant_tables: { table_number: string; join_label?: string | null } | null;
       staff: { name: string } | null;
     };
 
     return NextResponse.json({
       success: true,
-      order: { ...orderRest, table_number: rt?.table_number ?? null, staff_name: s?.name ?? null },
+      order: { ...orderRest, table_number: (rt?.join_label || rt?.table_number) ?? null, staff_name: s?.name ?? null },
     });
   } catch (error) {
     console.error("Order update error:", error);

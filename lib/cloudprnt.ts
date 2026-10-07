@@ -183,7 +183,7 @@ async function buildKitchenTicket(job: PrintJob, orderId: number, width: number)
   const t: Ticket = [];
   t.push({ text: `*** ${job.source ? SOURCE_LABEL[job.source] : "REPRINT"} ***`, align: "center", bold: true, size: "big" });
   if (order.order_type === "dine_in") {
-    t.push({ text: order.table_number ? `TABLE ${order.table_number}` : "DINE-IN", align: "center", bold: true, size: "big" });
+    t.push({ text: order.table_number ? `TABLE ${plainTableLabel(order.table_number)}` : "DINE-IN", align: "center", bold: true, size: "big" });
   } else {
     t.push({ text: order.order_type === "delivery" ? "DELIVERY" : "COLLECTION", align: "center", bold: true, size: "big" });
   }
@@ -247,7 +247,7 @@ async function buildReceipt(orderId: number, width: number): Promise<Ticket | nu
   const balanceDue = state === "unpaid" || state === "part_paid" ? Math.round((Number(order.total) - Number(order.amount_paid)) * 100) / 100 : 0;
   const statusLine = { paid: "PAID", part_paid: "BALANCE DUE", unpaid: "UNPAID", refunded: "REFUNDED", part_refunded: "PART REFUNDED" }[state];
   const place = order.order_type === "dine_in"
-    ? (order.table_number ? `TABLE ${order.table_number}` : "DINE-IN")
+    ? (order.table_number ? `TABLE ${plainTableLabel(order.table_number)}` : "DINE-IN")
     : String(order.order_type).toUpperCase();
 
   const brand = await getBrand(order.business_id ?? DEFAULT_BUSINESS_ID);
@@ -339,8 +339,13 @@ export function toPlainText(ticket: Ticket): string {
 // "£" has its own byte there; accents are stripped and anything else
 // non-ASCII (smart quotes, dashes, emoji from a customer's note) is swapped
 // for a plain equivalent rather than printing as garbage.
-const CP437_EXTRA: Record<string, number> = { "£": 0x9c };
+const CP437_EXTRA: Record<string, number> = { "£": 0x9c, "·": 0xfa };
 const ASCII_SWAPS: Record<string, string> = { "—": "-", "–": "-", "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...", "✓": "*" };
+
+/** A joined-table label ("T1 + T2 · 🎂 Birthday party") without its emoji,
+ *  which would print as "?" in the big table line. */
+export const plainTableLabel = (label: string) =>
+  label.replace(/[\p{Extended_Pictographic}\u200d\ufe0f]/gu, "").replace(/\s+/g, " ").trim();
 
 export function encodeCp437(text: string): number[] {
   const out: number[] = [];

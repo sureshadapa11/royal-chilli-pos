@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
       .from("orders")
       .select(`
         *,
-        restaurant_tables(table_number),
+        restaurant_tables(table_number, join_label),
         staff:staff!orders_staff_id_fkey(name)
       `)
       .order("created_at", { ascending: false });
@@ -77,12 +77,12 @@ export async function GET(req: NextRequest) {
     // Flatten joined fields to match original shape
     let flatOrders = (orders ?? []).map((o) => {
       const { restaurant_tables: rt, staff: s, ...rest } = o as typeof o & {
-        restaurant_tables: { table_number: string } | null;
+        restaurant_tables: { table_number: string; join_label?: string | null } | null;
         staff: { name: string } | null;
       };
       return {
         ...rest,
-        table_number: rt?.table_number ?? null,
+        table_number: (rt?.join_label || rt?.table_number) ?? null,
         staff_name: s?.name ?? null,
       };
     });
@@ -345,7 +345,7 @@ export async function POST(req: NextRequest) {
       .from("orders")
       .select(`
         *,
-        restaurant_tables(table_number),
+        restaurant_tables(table_number, join_label),
         staff:staff!orders_staff_id_fkey(name)
       `)
       .eq("id", orderId)
@@ -354,14 +354,14 @@ export async function POST(req: NextRequest) {
     if (fetchError) throw fetchError;
 
     const { restaurant_tables: rt, staff: s, ...orderRest } = order as typeof order & {
-      restaurant_tables: { table_number: string } | null;
+      restaurant_tables: { table_number: string; join_label?: string | null } | null;
       staff: { name: string } | null;
     };
 
     return NextResponse.json(
       {
         success: true,
-        order: { ...orderRest, table_number: rt?.table_number ?? null, staff_name: s?.name ?? null },
+        order: { ...orderRest, table_number: (rt?.join_label || rt?.table_number) ?? null, staff_name: s?.name ?? null },
         items: insertedItems,
       },
       { status: 201 }

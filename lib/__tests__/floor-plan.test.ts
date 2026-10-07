@@ -1,4 +1,4 @@
-import { COLS, ROWS, TABLE_SIZE, freeSlot, nearestSlot, placeTables, slotXY, usedBox } from "../floor-plan";
+import { COLS, ROWS, TABLE_SIZE, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, planJoin, slotXY, usedBox } from "../floor-plan";
 
 const t = (n: number, capacity = 4, extra: object = {}) => ({ id: n, table_number: `T${n}`, capacity, ...extra });
 const at = (placed: { id: number; col: number; row: number }[], n: number) => {
@@ -57,5 +57,55 @@ describe("floor plan", () => {
   it("crops the till's view to the tables in use", () => {
     const placed = placeTables([t(1, 4, { pos_x: slotXY(1, 0).x, pos_y: slotXY(1, 0).y }), t(2, 2, { pos_x: slotXY(2, 1).x, pos_y: slotXY(2, 1).y })]);
     expect(usedBox(placed)).toEqual({ x: slotXY(1, 0).x, y: slotXY(1, 0).y, w: 8 + TABLE_SIZE, h: 8 + TABLE_SIZE });
+  });
+
+  describe("joined tables", () => {
+    const at2 = (col: number, row: number) => ({ pos_x: slotXY(col, row).x, pos_y: slotXY(col, row).y });
+    const thirteen = () => placeTables(Array.from({ length: 13 }, (_, i) => t(i + 1)));
+
+    it("labels a group by table number, with the group name", () => {
+      expect(joinLabel([t(2), t(1)])).toBe("T1 + T2");
+      expect(joinLabel([t(10), t(9), t(1)], " 🎂 Birthday party ")).toBe("T1 + T9 + T10 · 🎂 Birthday party");
+    });
+
+    it("draws a group as one box over its slots, lead first", () => {
+      const placed = placeTables([t(1, 4, at2(0, 0)), t(2, 4, { ...at2(1, 0), joined_to: 1 }), t(3, 4, at2(3, 0))]);
+      const groups = groupsOf(placed);
+      expect(groups).toHaveLength(2);
+      const g = groups.find((x) => x.lead.id === 1)!;
+      expect(g.members.map((m) => m.id)).toEqual([1, 2]);
+      expect(g.box).toEqual({ x: slotXY(0, 0).x, y: slotXY(0, 0).y, w: 8 + TABLE_SIZE, h: TABLE_SIZE });
+    });
+
+    it("a lone table joins on the right, swapping out whatever is there", () => {
+      // T3 at (0,0), T6 at (1,0): joining T1 (0,2) onto T3 swaps it with T6
+      const plan = planJoin(thirteen(), 3, 1);
+      expect(plan).toEqual({ moves: [{ id: 1, ...slotXY(1, 0) }, { id: 6, ...slotXY(0, 2) }] });
+    });
+
+    it("nothing moves when the table is already beside it", () => {
+      expect(planJoin(thirteen(), 3, 6)).toEqual({ moves: [] }); // T6 is right of T3
+      expect(planJoin(thirteen(), 3, 2)).toEqual({ moves: [] }); // T2 is below T3
+    });
+
+    it("a group grows along its line, and only swaps out lone tables", () => {
+      // T3 + T6 across the top: the next spot along is T9's (2,0), then left is off the floor
+      const placed = placeTables(thirteen().map((p) => (p.id === 6 ? { ...p, joined_to: 3 } : p)));
+      expect(planJoin(placed, 3, 1)).toEqual({ moves: [{ id: 1, ...slotXY(2, 0) }, { id: 9, ...slotXY(0, 2) }] });
+      // T9 joined to T12: T3 + T6 can't push it aside
+      const blocked = placeTables(placed.map((p) => (p.id === 9 ? { ...p, joined_to: 12 } : p)));
+      expect(planJoin(blocked, 3, 1)).toEqual({ error: expect.stringMatching(/no room/) });
+    });
+
+    it("won't join a table that's in another group, or twice", () => {
+      const placed = placeTables(thirteen().map((p) => (p.id === 6 ? { ...p, joined_to: 3 } : p)));
+      expect(planJoin(placed, 1, 6)).toEqual({ error: expect.stringMatching(/unjoin it first/) });
+      expect(planJoin(placed, 3, 6)).toEqual({ error: expect.stringMatching(/already joined/) });
+    });
+
+    it("a group in a column grows downwards", () => {
+      const placed = placeTables([t(1, 4, at2(0, 0)), t(2, 4, { ...at2(0, 1), joined_to: 1 }), t(3, 4, at2(4, 4))]);
+      expect(planJoin(placed, 1, 3)).toEqual({ moves: [{ id: 3, ...slotXY(0, 2) }] });
+    });
   });
 });

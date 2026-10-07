@@ -7,14 +7,18 @@ import { customerForOrder } from "@/lib/customers";
 const OPEN_STATUSES = ["open", "sent_to_kitchen", "ready"];
 
 // Table numbers repeat across businesses (each has its own table 5) — the
-// QR code's domain (or ?b=) says whose.
+// QR code's domain (or ?b=) says whose. A table joined to others (Staff Hub
+// → Tables) is its group's lead table — the one the shared bill is on — with
+// `label` "T1 + T2" to show the customer.
 export async function getTableByNumber(businessId: number, tableNumber: string) {
-  const { data } = await bizDb(businessId)
-    .from("restaurant_tables")
-    .select("id, table_number, capacity, status, self_order_enabled, business_id")
-    .eq("table_number", tableNumber)
-    .maybeSingle();
-  return data;
+  const cols = "id, table_number, capacity, status, self_order_enabled, business_id, joined_to, join_label";
+  const db = bizDb(businessId);
+  let { data } = await db.from("restaurant_tables").select(cols).eq("table_number", tableNumber).maybeSingle();
+  if (data?.joined_to) {
+    const { data: lead } = await db.from("restaurant_tables").select(cols).eq("id", data.joined_to).maybeSingle();
+    if (lead) data = lead;
+  }
+  return data ? { ...data, label: data.join_label || data.table_number } : null;
 }
 
 export async function getOpenOrderForTable(businessId: number, tableId: number) {

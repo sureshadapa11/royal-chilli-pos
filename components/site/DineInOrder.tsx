@@ -22,11 +22,14 @@ const statusLabel: Record<string, string> = {
 
 export default function DineInOrder({
   tableNumber,
+  tableLabel,
   businessParam,
   categories,
   initialSelfOrderEnabled,
 }: {
   tableNumber: string;
+  /** "T1 + T2" when the table is joined to others. */
+  tableLabel?: string;
   /** ?b= from the QR link, passed on so the server finds the same business's table. */
   businessParam?: string | null;
   categories: MenuCategory[];
@@ -188,7 +191,7 @@ export default function DineInOrder({
     <div className="pb-32">
       <div className="mx-auto max-w-4xl px-4 py-10">
         <div className="text-center">
-          <p className="text-xs uppercase tracking-[0.3em] text-primary">Table {tableNumber}</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-primary">Table {tableLabel ?? tableNumber}</p>
           <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-3xl">
             Welcome to <span className="italic text-primary">The Royal Chilli</span>
           </h1>

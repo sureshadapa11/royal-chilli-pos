@@ -171,6 +171,11 @@ export interface RestaurantTable {
   pos_y?: number | null;
   shape?: "square" | "round" | "rect" | null;
   rotation?: number | null; // degrees, 45° steps
+  // Joined tables (migration 112): an extra table points at its group's lead;
+  // the lead carries the optional group name and the "T1 + T2" label.
+  joined_to?: number | null;
+  group_name?: string | null;
+  join_label?: string | null;
 }
 
 export interface WorkPeriod {
