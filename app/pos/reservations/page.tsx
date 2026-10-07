@@ -7,6 +7,8 @@ import type { RestaurantTable } from "@/lib/types";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { londonDateStr } from "@/lib/london-date";
 import TableRequestsBanner from "@/components/pos/TableRequestsBanner";
+import { useToast } from "@/hooks/use-toast";
+import { canMarkNoShow, canSeatNow, shortDate } from "@/lib/reservation-rules";
 
 const tableStatusCfg = {
   available: { color: "bg-green-100 border-green-300 text-green-700", dot: "bg-green-500", ring: "ring-green-500" },
@@ -288,6 +290,7 @@ export default function ReservationsPage() {
 
   // Table picker modal
   const [seatResv, setSeatResv] = useState<Reservation | null>(null);
+  const { toast } = useToast();
 
   const fetchTables = useCallback(async () => {
     const res = await fetch("/api/tables");
@@ -320,29 +323,31 @@ export default function ReservationsPage() {
     localStorage.setItem("pos_reservations_last_seen", new Date().toISOString());
   }, []);
 
+  // The server has the last word on what's allowed (seat only on the day,
+  // no-show only once the time has come) — say why when it refuses.
+  const putReservation = async (body: Record<string, unknown>) => {
+    const res = await fetch("/api/reservations", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      toast({ variant: "destructive", title: "Couldn't update the booking", description: data.error || "Something went wrong" });
+    }
+    return res.ok;
+  };
+
   const handleResvStatus = async (id: number, status: string) => {
     setUpdating(id);
     try {
-      await fetch("/api/reservations", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status }) });
-      await fetchReservations();
+      await putReservation({ id, status });
+      await Promise.all([fetchReservations(), fetchTables()]);
     } finally {
       setUpdating(null);
     }
   };
 
+  // Seating marks the table occupied (PUT /api/reservations does that).
   const handleSeatWithTable = async (tableId: number) => {
     if (!seatResv) return;
-    await fetch("/api/reservations", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: seatResv.id, status: "seated", table_id: tableId }),
-    });
-    // Mark table occupied
-    await fetch("/api/tables", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: tableId, status: "occupied" }),
-    });
+    await putReservation({ id: seatResv.id, status: "seated", table_id: tableId });
     setSeatResv(null);
     await Promise.all([fetchReservations(), fetchTables()]);
   };
@@ -466,19 +471,35 @@ export default function ReservationsPage() {
                                 {busy ? "…" : "✓ Confirm"}
                               </button>
                             )}
-                            {r.status === "confirmed" && (
+                            {r.status === "confirmed" && (canSeatNow(r.reservation_date) ? (
                               <button onClick={() => setSeatResv(r)} disabled={busy}
                                 className="flex-1 h-9 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all no-select">
                                 🪑 Seat Now — Pick Table
                               </button>
+                            ) : (
+                              <span className="flex-1 h-9 grid place-items-center rounded-lg border border-dashed border-border text-muted-foreground text-xs font-semibold no-select">
+                                🪑 Seat on {shortDate(r.reservation_date)}
+                              </span>
+                            ))}
+                            {canMarkNoShow(r.reservation_date, r.reservation_time) && (
+                              <button onClick={() => handleResvStatus(r.id, "no_show")} disabled={busy}
+                                className="h-9 px-3 bg-elevated hover:bg-elevated-hover border border-elevated text-muted-foreground text-xs font-semibold rounded-lg transition-all disabled:opacity-50 no-select">
+                                No Show
+                              </button>
                             )}
-                            <button onClick={() => handleResvStatus(r.id, "no_show")} disabled={busy}
-                              className="h-9 px-3 bg-elevated hover:bg-elevated-hover border border-elevated text-muted-foreground text-xs font-semibold rounded-lg transition-all disabled:opacity-50 no-select">
-                              No Show
-                            </button>
                             <button onClick={() => handleResvStatus(r.id, "cancelled")} disabled={busy}
                               className="h-9 px-3 bg-surface-hover hover:bg-red-100 border border-border hover:border-red-300 text-muted-foreground hover:text-red-600 text-xs font-semibold rounded-lg transition-all disabled:opacity-50 no-select">
                               Cancel
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Seated by mistake: back to Confirmed, and the table is freed (unless it has an order) */}
+                        {r.status === "seated" && (
+                          <div className="flex gap-2 mt-3">
+                            <button onClick={() => handleResvStatus(r.id, "confirmed")} disabled={busy}
+                              className="h-9 px-3 bg-surface-hover hover:bg-elevated border border-border text-foreground text-xs font-semibold rounded-lg transition-all disabled:opacity-50 no-select">
+                              {busy ? "…" : "↩ Undo seat"}
                             </button>
                           </div>
                         )}

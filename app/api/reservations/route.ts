@@ -4,6 +4,7 @@ import { allOwned, bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { sendReservationConfirmationEmail } from "@/lib/email";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
+import { canMarkNoShow, canSeatNow, shortDate } from "@/lib/reservation-rules";
 
 export async function GET(req: NextRequest) {
   try {
@@ -171,8 +172,35 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "That table isn't this business's" }, { status: 400 });
     }
 
+    const { data: before } = await db
+      .from("reservations")
+      .select("status, table_id, reservation_date, reservation_time")
+      .eq("id", id)
+      .maybeSingle();
+    if (!before) return NextResponse.json({ error: "Booking not found" }, { status: 404 });
+
+    // Seat only on the day; a no-show only once the booked time has come.
+    if (status === "seated" && before.status !== "seated" && !canSeatNow(before.reservation_date)) {
+      return NextResponse.json({ error: `This booking is for ${shortDate(before.reservation_date)} — it can be seated on the day.` }, { status: 409 });
+    }
+    if (status === "no_show" && !canMarkNoShow(before.reservation_date, before.reservation_time)) {
+      return NextResponse.json({ error: "It's not their booking time yet — cancel it instead if they've called off." }, { status: 409 });
+    }
+
+    // Undo a seating (seated → confirmed): the booking lets go of its table,
+    // and the table is freed unless it has an order of its own by now.
+    const undoSeat = before.status === "seated" && status === "confirmed";
+    if (undoSeat && before.table_id) {
+      const { count } = await db.from("orders").select("id", { count: "exact", head: true })
+        .eq("table_id", before.table_id).in("status", ["open", "sent_to_kitchen", "ready"]);
+      if (!count) {
+        await db.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", before.table_id);
+      }
+    }
+
     const updatePayload: Record<string, unknown> = { status };
-    if (table_id !== undefined) updatePayload.table_id = table_id;
+    if (undoSeat) updatePayload.table_id = null;
+    else if (table_id !== undefined) updatePayload.table_id = table_id;
     if (notes !== undefined) updatePayload.notes = notes;
 
     const { data, error } = await db
