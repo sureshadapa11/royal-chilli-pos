@@ -209,7 +209,8 @@ function Field({
       <input
         id={id}
         type={f.kind === "email" ? "email" : f.kind === "url" ? "url" : secret ? "password" : "text"}
-        autoComplete="off"
+        // Never let Chrome put a saved login into a key or setting.
+        autoComplete={secret ? "new-password" : "off"}
         value={String(value ?? "")}
         placeholder={secret && connected ? "Connected — leave empty to keep it" : ""}
         onChange={(e) => onChange(e.target.value)}
