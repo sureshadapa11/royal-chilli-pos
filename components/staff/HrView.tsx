@@ -47,7 +47,7 @@ function Text({ label, value, onChange, placeholder }: { label: string; value: s
   return (
     <label className="block">
       <span className="text-muted-foreground text-xs font-semibold">{label}</span>
-      <input value={value || ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value)}
+      <input autoComplete="off" value={value || ""} placeholder={placeholder} onChange={(e) => onChange(e.target.value)}
         className="mt-1 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
     </label>
   );
@@ -686,7 +686,9 @@ function EmployeePicker({
   );
 }
 
-// ── New Employee modal ──────────────────────────────────────────────────────
+// ── New Employee modal ──
+// Chrome would otherwise fill the Username / Password boxes with the signed-in
+// manager's own saved login (autoComplete off / new-password on every box).────────────────────────────────────────────────────
 // The five roles anyone can be given (lib/roles.ts) — Super admin never.
 const ROLES: { value: string; label: string }[] = [...ASSIGNABLE_ROLES];
 // Editing someone whose role isn't in the list (the Super admin, an old
@@ -739,11 +741,11 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
         </div>
         <div className="p-5 space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <input placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+            <input autoComplete="off" name="new-staff-name" placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
               className="sm:col-span-2 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            <input placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
+            <input autoComplete="off" name="new-staff-username" placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            <input placeholder="Password (6+ characters)" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
+            <input autoComplete="new-password" name="new-staff-password" placeholder="Password (6+ characters)" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
@@ -751,9 +753,9 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
             </select>
             <input type="date" value={form.hire_date} onChange={(e) => setForm({ ...form, hire_date: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            <input placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+            <input autoComplete="off" name="new-staff-email" placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            <input autoComplete="off" name="new-staff-phone" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             <select value={form.employment_type} onChange={(e) => setForm({ ...form, employment_type: e.target.value as "hourly" | "salaried" })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
@@ -834,7 +836,7 @@ function TillPinField({ staffId }: { staffId: number }) {
       <span className="text-muted-foreground text-xs font-semibold">Till PIN (4 digits)</span>
       <div className="mt-1 flex flex-wrap items-center gap-2">
         <input
-          type="password" inputMode="numeric" maxLength={4} placeholder="••••" value={pin}
+          type="password" autoComplete="new-password" inputMode="numeric" maxLength={4} placeholder="••••" value={pin}
           onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
           className="w-28 bg-background border border-border rounded-lg px-3 py-2 text-foreground text-center tracking-[0.4em]"
         />
