@@ -2,7 +2,7 @@
 // screen): one floor of equal table slots in neat rows and columns, measured
 // in grid cells. Every table is the same size and sits in one slot — pos_x /
 // pos_y is the top-left of its slot. Slots go across in half steps, so a row
-// of 3 can sit centred over a row of 4. Seats are shown as a number, not by
+// of 3 can spread as wide as a row of 4. Seats are shown as a number, not by
 // size. Safe to import in the browser.
 
 export const SHAPES = ["square", "round", "rect"] as const;
@@ -70,10 +70,10 @@ export function freeSlot(taken: Slot[]): Slot {
 const tableNo = (t: PlanTable) => parseInt(t.table_number.replace(/\D/g, ""), 10) || 0;
 
 /** The till's old layout, by table-number order: the first 9 as a 3×3 block
- *  read column by column (T3 T6 T9 / T2 T5 T8 / T1 T4 T7), centred over the
- *  rest in rows of 4 underneath. */
+ *  read column by column (T3 T6 T9 / T2 T5 T8 / T1 T4 T7), spread as wide as
+ *  the rows of 4 underneath (outer columns over the first and last table). */
 export function legacySlot(index: number): Slot {
-  if (index < 9) return { col: 0.5 + Math.floor(index / 3), row: 2 - (index % 3) };
+  if (index < 9) return { col: [0, 1.5, 3][Math.floor(index / 3)], row: 2 - (index % 3) };
   const i = index - 9;
   return { col: i % 4, row: 3 + Math.floor(i / 4) };
 }

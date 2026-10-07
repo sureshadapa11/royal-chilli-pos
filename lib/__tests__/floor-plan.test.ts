@@ -7,17 +7,17 @@ const at = (placed: { id: number; col: number; row: number }[], n: number) => {
 };
 
 describe("floor plan", () => {
-  it("lays unsaved tables out like the till's old grid: T3 T6 T9 / T2 T5 T8 / T1 T4 T7 centred over a row of 4", () => {
+  it("lays unsaved tables out like the till's old grid: T3 T6 T9 / T2 T5 T8 / T1 T4 T7 spread as wide as a row of 4", () => {
     const placed = placeTables(Array.from({ length: 13 }, (_, i) => t(i + 1)));
-    expect(at(placed, 3)).toEqual([0.5, 0]);
-    expect(at(placed, 9)).toEqual([2.5, 0]);
-    expect(at(placed, 1)).toEqual([0.5, 2]);
-    expect(at(placed, 7)).toEqual([2.5, 2]);
+    expect(at(placed, 3)).toEqual([0, 0]);
+    expect(at(placed, 9)).toEqual([3, 0]);
+    expect(at(placed, 1)).toEqual([0, 2]);
+    expect(at(placed, 7)).toEqual([3, 2]);
     expect(at(placed, 10)).toEqual([0, 3]);
     expect(at(placed, 13)).toEqual([3, 3]);
-    // the block's middle lines up with the row's middle
-    const mid = (ids: number[]) => { const xs = placed.filter((p) => ids.includes(p.id)); return (Math.min(...xs.map((p) => p.x)) + Math.max(...xs.map((p) => p.x + p.w))) / 2; };
-    expect(mid([1, 4, 7])).toBe(mid([10, 11, 12, 13]));
+    // the block is exactly as wide as the row: same left and right edges
+    const edges = (ids: number[]) => { const xs = placed.filter((p) => ids.includes(p.id)); return [Math.min(...xs.map((p) => p.x)), Math.max(...xs.map((p) => p.x + p.w))]; };
+    expect(edges([1, 4, 7])).toEqual(edges([10, 11, 12, 13]));
   });
 
   it("snaps across in half steps, and tables half a slot apart still can't overlap", () => {
@@ -89,23 +89,25 @@ describe("floor plan", () => {
     });
 
     it("a lone table joins on the right, swapping out whatever is there", () => {
-      // T3 at (0.5,0), T6 at (1.5,0): joining T1 (0.5,2) onto T3 swaps it with T6
+      // T3 at (0,0), T6 at (1.5,0): joining T1 (0,2) onto T3 swaps it with T6
       const plan = planJoin(thirteen(), 3, 1);
-      expect(plan).toEqual({ moves: [{ id: 1, ...slotXY(1.5, 0) }, { id: 6, ...slotXY(0.5, 2) }] });
+      expect(plan).toEqual({ moves: [{ id: 1, ...slotXY(1, 0) }, { id: 6, ...slotXY(0, 2) }] });
     });
 
     it("nothing moves when the table is already beside it", () => {
-      expect(planJoin(thirteen(), 3, 6)).toEqual({ moves: [] }); // T6 is right of T3
+      expect(planJoin(thirteen(), 10, 11)).toEqual({ moves: [] }); // T11 is right of T10
       expect(planJoin(thirteen(), 3, 2)).toEqual({ moves: [] }); // T2 is below T3
+      // T6 is a half step away in the spread-out block: it slides up against T3
+      expect(planJoin(thirteen(), 3, 6)).toEqual({ moves: [{ id: 6, ...slotXY(1, 0) }] });
     });
 
     it("a group grows along its line, and only swaps out lone tables", () => {
-      // T3 + T6 across the top: the next spot along is T9's (2.5,0), then left is off the floor
-      const placed = placeTables(thirteen().map((p) => (p.id === 6 ? { ...p, joined_to: 3 } : p)));
-      expect(planJoin(placed, 3, 1)).toEqual({ moves: [{ id: 1, ...slotXY(2.5, 0) }, { id: 9, ...slotXY(0.5, 2) }] });
-      // T9 joined to T12: T3 + T6 can't push it aside
-      const blocked = placeTables(placed.map((p) => (p.id === 9 ? { ...p, joined_to: 12 } : p)));
-      expect(planJoin(blocked, 3, 1)).toEqual({ error: expect.stringMatching(/no room/) });
+      // T10 + T11 along the bottom row: the next spot along is T12's (2,3), then left is off the floor
+      const placed = placeTables(thirteen().map((p) => (p.id === 11 ? { ...p, joined_to: 10 } : p)));
+      expect(planJoin(placed, 10, 1)).toEqual({ moves: [{ id: 1, ...slotXY(2, 3) }, { id: 12, ...slotXY(0, 2) }] });
+      // T12 joined to T13: T10 + T11 can't push it aside
+      const blocked = placeTables(placed.map((p) => (p.id === 13 ? { ...p, joined_to: 12 } : p)));
+      expect(planJoin(blocked, 10, 1)).toEqual({ error: expect.stringMatching(/no room/) });
     });
 
     it("won't join a table that's in another group, or twice", () => {
