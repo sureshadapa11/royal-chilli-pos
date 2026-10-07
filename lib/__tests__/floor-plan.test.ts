@@ -1,4 +1,4 @@
-import { COLS, ROWS, TABLE_SIZE, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, planJoin, slotXY, usedBox } from "../floor-plan";
+import { COLS, ROWS, TABLE_SIZE, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, planJoin, slotXY, rowsShown, usedBox } from "../floor-plan";
 
 const t = (n: number, capacity = 4, extra: object = {}) => ({ id: n, table_number: `T${n}`, capacity, ...extra });
 const at = (placed: { id: number; col: number; row: number }[], n: number) => {
@@ -7,24 +7,30 @@ const at = (placed: { id: number; col: number; row: number }[], n: number) => {
 };
 
 describe("floor plan", () => {
-  it("lays unsaved tables out like the till's old grid: T3 T6 T9 / T2 T5 T8 / T1 T4 T7 spread as wide as a row of 4", () => {
+  it("lays unsaved tables out like the till's old grid on one even grid: T3 T6 T9 / T2 T5 T8 / T1 T4 T7, then a row", () => {
     const placed = placeTables(Array.from({ length: 13 }, (_, i) => t(i + 1)));
     expect(at(placed, 3)).toEqual([0, 0]);
-    expect(at(placed, 9)).toEqual([3, 0]);
+    expect(at(placed, 9)).toEqual([2, 0]);
     expect(at(placed, 1)).toEqual([0, 2]);
-    expect(at(placed, 7)).toEqual([3, 2]);
+    expect(at(placed, 7)).toEqual([2, 2]);
     expect(at(placed, 10)).toEqual([0, 3]);
     expect(at(placed, 13)).toEqual([3, 3]);
-    // the block is exactly as wide as the row: same left and right edges
-    const edges = (ids: number[]) => { const xs = placed.filter((p) => ids.includes(p.id)); return [Math.min(...xs.map((p) => p.x)), Math.max(...xs.map((p) => p.x + p.w))]; };
-    expect(edges([1, 4, 7])).toEqual(edges([10, 11, 12, 13]));
+    // every gap between neighbours is the same
+    const xs = [...new Set(placed.map((p) => p.x))].sort((a, b) => a - b);
+    expect(new Set(xs.slice(1).map((x, i) => x - xs[i])).size).toBe(1);
   });
 
-  it("snaps across in half steps, and tables half a slot apart still can't overlap", () => {
-    expect(nearestSlot(slotXY(1.5, 0).x + 1, slotXY(0, 2).y)).toEqual({ col: 1.5, row: 2 });
-    const placed = placeTables([t(1, 4, { pos_x: slotXY(1, 0).x, pos_y: 1 }), t(2, 4, { pos_x: slotXY(1.5, 0).x, pos_y: 1 })]);
+  it("snaps to whole slots only, and two tables never share one", () => {
+    expect(nearestSlot(slotXY(1, 0).x + 3, slotXY(0, 2).y)).toEqual({ col: 1, row: 2 });
+    expect(nearestSlot(slotXY(1, 0).x + 5, 1)).toEqual({ col: 2, row: 0 });
+    const placed = placeTables([t(1, 4, { pos_x: slotXY(1, 0).x, pos_y: 1 }), t(2, 4, { pos_x: slotXY(1, 0).x + 2, pos_y: 1 })]);
     expect(at(placed, 1)).toEqual([1, 0]);
-    expect(at(placed, 2)).not.toEqual([1.5, 0]); // would overlap T1, so it goes to a free slot
+    expect(at(placed, 2)).not.toEqual([1, 0]); // would share T1's slot, so it goes to a free one
+  });
+
+  it("shows the rows in use plus one spare", () => {
+    expect(rowsShown(placeTables(Array.from({ length: 13 }, (_, i) => t(i + 1))))).toBe(5);
+    expect(rowsShown(placeTables([t(1, 4, { pos_x: 1, pos_y: 1 })]))).toBe(2);
   });
 
   it("every table is the same size, whatever its seats or shape", () => {
@@ -97,8 +103,7 @@ describe("floor plan", () => {
     it("nothing moves when the table is already beside it", () => {
       expect(planJoin(thirteen(), 10, 11)).toEqual({ moves: [] }); // T11 is right of T10
       expect(planJoin(thirteen(), 3, 2)).toEqual({ moves: [] }); // T2 is below T3
-      // T6 is a half step away in the spread-out block: it slides up against T3
-      expect(planJoin(thirteen(), 3, 6)).toEqual({ moves: [{ id: 6, ...slotXY(1, 0) }] });
+      expect(planJoin(thirteen(), 3, 6)).toEqual({ moves: [] }); // T6 is right of T3
     });
 
     it("a group grows along its line, and only swaps out lone tables", () => {

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { confirmDelete } from "@/components/ui/confirm";
 import {
-  COLS, GRID_H, GRID_W, ROWS, TABLE_SIZE, clashes, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, slotXY,
+  COLS, GRID_W, ROWS, SLOT, TABLE_SIZE, clashes, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, rowsShown, slotXY,
   type Group, type Placed,
 } from "@/lib/floor-plan";
 
@@ -82,6 +82,9 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   const isJoined = (id: number) => groupOf(id).members.length > 1;
   const target = drag ? nearestSlot(drag.x, drag.y) : null;
   const taken = placed.map((p) => ({ col: p.col, row: p.row }));
+  // Only the rows in use plus one spare, so the floor fits on the screen.
+  const showRows = rowsShown(placed);
+  const GRID_H = showRows * SLOT + 1;
   const selGroup = selected != null ? groups.find((g) => g.lead.id === selected) ?? null : null;
   const totalSeats = tables.reduce((s, t) => s + t.capacity, 0);
 
@@ -303,7 +306,9 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
             {loading ? (
               <p className="py-20 text-center text-sm text-muted-foreground">Loading…</p>
             ) : (
-              <div className={!wide && zoom > 1 ? "overflow-auto rounded-xl" : ""}>
+              <div className={!wide && zoom > 1 ? "overflow-auto rounded-xl" : "mx-auto"}
+                // On a computer, never taller than the screen: the width follows the height.
+                style={wide ? { maxWidth: `calc((100vh - 230px) * ${GRID_W} / ${GRID_H})` } : undefined}>
               <div
                 ref={canvasRef}
                 onPointerDown={(e) => { if (e.target === e.currentTarget) setSelected(null); }}
@@ -315,7 +320,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
               >
                 {/* Empty slots while tables can be moved; where a dragged table would land is lit */}
                 {canDrag && [
-                  ...Array.from({ length: COLS * ROWS }, (_, i) => ({ col: i % COLS, row: Math.floor(i / COLS), lit: false }))
+                  ...Array.from({ length: COLS * showRows }, (_, i) => ({ col: i % COLS, row: Math.floor(i / COLS), lit: false }))
                     .filter((s) => !taken.some((q) => clashes(q, s))),
                   ...(target ? [{ ...target, lit: true }] : []),
                 ].map((s) => {

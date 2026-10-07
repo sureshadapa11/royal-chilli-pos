@@ -1,9 +1,9 @@
 // The restaurant floor plan (Staff Hub → Tables, and the till's table
 // screen): one floor of equal table slots in neat rows and columns, measured
 // in grid cells. Every table is the same size and sits in one slot — pos_x /
-// pos_y is the top-left of its slot. Slots go across in half steps, so a row
-// of 3 can spread as wide as a row of 4. Seats are shown as a number, not by
-// size. Safe to import in the browser.
+// pos_y is the top-left of its slot. One even grid: whole columns and rows,
+// the same gap everywhere. Seats are shown as a number, not by size. Safe to
+// import in the browser.
 
 export const SHAPES = ["square", "round", "rect"] as const;
 export type Shape = (typeof SHAPES)[number];
@@ -47,11 +47,10 @@ const clamp =(n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n)
 
 export type Slot = { col: number; row: number };
 
-/** The slot nearest to a table whose top-left is at (x, y): whole rows,
- *  columns in half steps. */
+/** The slot nearest to a table whose top-left is at (x, y). */
 export function nearestSlot(x: number, y: number): Slot {
   return {
-    col: clamp(Math.round(((x - 1) / SLOT) * 2) / 2, 0, COLS - 1),
+    col: clamp(Math.round((x - 1) / SLOT), 0, COLS - 1),
     row: clamp(Math.round((y - 1) / SLOT), 0, ROWS - 1),
   };
 }
@@ -70,10 +69,10 @@ export function freeSlot(taken: Slot[]): Slot {
 const tableNo = (t: PlanTable) => parseInt(t.table_number.replace(/\D/g, ""), 10) || 0;
 
 /** The till's old layout, by table-number order: the first 9 as a 3×3 block
- *  read column by column (T3 T6 T9 / T2 T5 T8 / T1 T4 T7), spread as wide as
- *  the rows of 4 underneath (outer columns over the first and last table). */
+ *  read column by column (T3 T6 T9 / T2 T5 T8 / T1 T4 T7), the rest in rows
+ *  of 4 underneath — all on the same even grid. */
 export function legacySlot(index: number): Slot {
-  if (index < 9) return { col: [0, 1.5, 3][Math.floor(index / 3)], row: 2 - (index % 3) };
+  if (index < 9) return { col: Math.floor(index / 3), row: 2 - (index % 3) };
   const i = index - 9;
   return { col: i % 4, row: 3 + Math.floor(i / 4) };
 }
@@ -95,6 +94,13 @@ export function placeTables<T extends PlanTable>(tables: T[]): Placed<T>[] {
   for (const t of saved) put(t, nearestSlot(Number(t.pos_x), Number(t.pos_y)));
   sorted.forEach((t, i) => { if (t.pos_x == null || t.pos_y == null) put(t, legacySlot(i)); });
   return out;
+}
+
+/** How many rows of the floor to show: the rows in use plus one spare to
+ *  drag a table into (never more than the floor has). */
+export function rowsShown(placed: { row: number }[]): number {
+  const last = placed.length ? Math.max(...placed.map((p) => p.row)) : -1;
+  return Math.min(ROWS, Math.max(2, last + 2));
 }
 
 /** The part of the floor the tables actually use (for the till, which shows
