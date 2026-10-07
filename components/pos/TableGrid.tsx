@@ -21,9 +21,9 @@ interface Props {
 
 export default function TableGrid({ tables, selectedTable, onSelect, onStatusChange, upcomingReservationCount }: Props) {
   const [menuFor, setMenuFor] = useState<number | null>(null);
-  // The floor plan from Staff Hub → Tables (lib/floor-plan.ts), cropped to
-  // the part the tables use and scaled to fit this panel. Tables without a
-  // saved spot are laid out like the old fixed grid.
+  // The floor plan from Staff Hub → Tables (lib/floor-plan.ts): equal
+  // tables in rows and columns, cropped to the part in use and scaled to fit
+  // this panel. Tables without a saved spot are laid out like the old grid.
   const placed = placeTables(tables);
   const box = usedBox(placed);
 
@@ -103,11 +103,9 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                       top: `calc(${((table.y - box.y) / box.h) * 100}% + 2px)`,
                       width: `calc(${(table.w / box.w) * 100}% - 4px)`,
                       height: `calc(${(table.h / box.h) * 100}% - 4px)`,
-                      transform: table.rotation ? `rotate(${table.rotation}deg)` : undefined,
                     }}
                     className={cn(
-                      "absolute flex flex-col items-center justify-center border cursor-pointer",
-                      table.shape === "round" ? "rounded-full" : "rounded-xl",
+                      "absolute flex flex-col items-center justify-center border cursor-pointer rounded-xl",
                       menuFor === table.id ? "z-50" : "",
                       "transition-all duration-150 no-select pos-btn",
                       isSelected
@@ -115,11 +113,11 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                         : statusCfg.card
                     )}
                   >
-                    {/* Top colour stripe (square / long tables) */}
-                    {table.shape !== "round" && <div className={cn(
+                    {/* Top colour stripe */}
+                    <div className={cn(
                       "absolute top-0 left-3 right-3 h-[3px] rounded-b",
                       isSelected ? "bg-blue-400" : statusCfg.stripe
-                    )} />}
+                    )} />
 
                     {/* Pulsing dot for occupied / attention */}
                     {status === "occupied" && !isSelected && (
@@ -137,8 +135,7 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                       <div className="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-blue-400" />
                     )}
 
-                    {/* Number, status and seats stay upright on a turned table */}
-                    <div className="flex flex-col items-center" style={table.rotation ? { transform: `rotate(${-table.rotation}deg)` } : undefined}>
+                    <div className="flex flex-col items-center">
                     {/* Table number */}
                     <span className={cn(
                       "text-[17px] font-black leading-none tracking-tight",
@@ -179,7 +176,6 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                         <div
                           onClick={(e) => e.stopPropagation()}
                           className={cn("absolute right-0 z-50 w-32 rounded-lg border border-border bg-surface shadow-lg py-1", menuBelow ? "top-full mt-1" : "bottom-full mb-1")}
-                          style={table.rotation ? { transform: `rotate(${-table.rotation}deg)` } : undefined}
                         >
                           {([
                             { value: "available", label: "Mark Available" },

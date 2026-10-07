@@ -5,9 +5,10 @@ import { manageAllows } from "@/lib/permissions";
 import { londonNowDateAndMinutes } from "@/lib/hours";
 import { GRID_H, GRID_W, SHAPES, round2 } from "@/lib/floor-plan";
 
-// Floor plan fields (lib/floor-plan.ts): where the table sits (anywhere —
-// fractions of a cell are fine; a long table turned 90° can start a little
-// left of the edge), its shape and its turn (45° steps).
+// Floor plan fields (lib/floor-plan.ts): where the table sits (the top-left
+// of its slot — the plan snaps any spot to the nearest slot), its shape and
+// its turn (45° steps). Shape and turn are kept but not drawn for now: every
+// table is the same size.
 function layoutFields(b: { pos_x?: unknown; pos_y?: unknown; shape?: unknown; rotation?: unknown }): Record<string, unknown> | { error: string } {
   const out: Record<string, unknown> = {};
   for (const [k, max] of [["pos_x", GRID_W], ["pos_y", GRID_H]] as const) {

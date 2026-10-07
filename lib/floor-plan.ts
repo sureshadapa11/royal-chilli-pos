@@ -1,17 +1,21 @@
 // The restaurant floor plan (Staff Hub → Tables, and the till's table
-// screen): one floor, measured in grid cells. Each table sits at (pos_x,
-// pos_y) — the top-left of its upright footprint, anywhere (fractions of a
-// cell allowed) — turned by `rotation` degrees (45° steps) about its centre.
-// Its size follows its seats and shape, so an 8-seater is drawn bigger than a
-// 2-seater. Safe to import in the browser.
+// screen): one floor of equal table slots in neat rows and columns, measured
+// in grid cells. Every table is the same size and sits in one slot — pos_x /
+// pos_y is the top-left of its slot. Seats are shown as a number, not by
+// size. Safe to import in the browser.
 
 export const SHAPES = ["square", "round", "rect"] as const;
 export type Shape = (typeof SHAPES)[number];
-export const SHAPE_LABEL: Record<Shape, string> = { square: "Square", round: "Round", rect: "Long" };
 
-/** The editor's canvas, in cells. */
-export const GRID_W = 36;
-export const GRID_H = 34;
+/** One slot is SLOT cells wide and deep; the table fills all but a cell of gap. */
+export const SLOT = 8;
+export const TABLE_SIZE = 7;
+/** The floor, in slots. */
+export const COLS = 6;
+export const ROWS = 5;
+/** The floor, in cells (a cell of margin round the edge). */
+export const GRID_W = COLS * SLOT + 1;
+export const GRID_H = ROWS * SLOT + 1;
 
 export type PlanTable = {
   id: number;
@@ -19,105 +23,69 @@ export type PlanTable = {
   capacity: number;
   pos_x?: number | string | null;
   pos_y?: number | string | null;
-  shape?: Shape | null;
-  rotation?: number | null;
 };
 
-/** The space a table takes on the floor once turned (axis-aligned). */
+/** The space a table takes on the floor. */
 export type Box = { x: number; y: number; w: number; h: number };
 
 export type Placed<T extends PlanTable> = T & {
-  x: number; y: number; w: number; h: number; shape: Shape; rotation: number;
-  /** Its outline on the floor, after turning. */
+  col: number; row: number;
+  x: number; y: number; w: number; h: number;
   box: Box;
 };
 
-/** Size in cells: grows with the seats; a long table is wider and shallower. */
-export function footprint(capacity: number, shape: Shape | null | undefined): { w: number; h: number } {
-  const base = capacity <= 2 ? 4 : capacity <= 4 ? 5 : capacity <= 6 ? 6 : capacity <= 8 ? 7 : 8;
-  return shape === "rect" ? { w: base + 2, h: base - 1 } : { w: base, h: base };
-}
-
-/** Round tables look the same however they're turned. */
-export const effectiveRotation = (shape: Shape, rotation: number | null | undefined) =>
-  shape === "round" ? 0 : (((Math.round((rotation ?? 0) / 45) * 45) % 360) + 360) % 360;
-
-/** The outline of a w×h table at (x, y), turned about its centre. */
-export function outline(x: number, y: number, w: number, h: number, rotation: number): Box {
-  const r = (rotation * Math.PI) / 180;
-  const bw = Math.abs(w * Math.cos(r)) + Math.abs(h * Math.sin(r));
-  const bh = Math.abs(w * Math.sin(r)) + Math.abs(h * Math.cos(r));
-  return { x: x + w / 2 - bw / 2, y: y + h / 2 - bh / 2, w: bw, h: bh };
-}
-
-/** Moves (x, y) so the turned table stays on the floor. */
-export function keepOnFloor(x: number, y: number, w: number, h: number, rotation: number): { x: number; y: number } {
-  const b = outline(x, y, w, h, rotation);
-  const dx = b.x < 0 ? -b.x : b.x + b.w > GRID_W ? GRID_W - (b.x + b.w) : 0;
-  const dy = b.y < 0 ? -b.y : b.y + b.h > GRID_H ? GRID_H - (b.y + b.h) : 0;
-  return { x: round2(x + dx), y: round2(y + dy) };
-}
+/** Top-left cell of a slot. */
+export const slotXY = (col: number, row: number) => ({ x: 1 + col * SLOT, y: 1 + row * SLOT });
 
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
+const clamp =(n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
+
+/** The slot nearest to a table whose top-left is at (x, y). */
+export function nearestSlot(x: number, y: number): { col: number; row: number } {
+  return {
+    col: clamp(Math.round((x - 1) / SLOT), 0, COLS - 1),
+    row: clamp(Math.round((y - 1) / SLOT), 0, ROWS - 1),
+  };
+}
+
+const key = (col: number, row: number) => `${col},${row}`;
+
+/** The first empty slot, row by row. */
+export function freeSlot(taken: Set<string>): { col: number; row: number } {
+  for (let row = 0; row < ROWS; row++) {
+    for (let col = 0; col < COLS; col++) if (!taken.has(key(col, row))) return { col, row };
+  }
+  return { col: 0, row: ROWS }; // the floor is full: below it
+}
+
 const tableNo = (t: PlanTable) => parseInt(t.table_number.replace(/\D/g, ""), 10) || 0;
 
-/** Where a table goes when it has no saved position: the till's old layout —
- *  the first 9 tables (by number) as a 3×3 block read column by column, the
- *  rest in a row of 4 underneath. */
-function legacySpot(index: number): { x: number; y: number } {
-  if (index < 9) {
-    const col = Math.floor(index / 3);
-    const row = 2 - (index % 3);
-    return { x: 1 + col * 8, y: 1 + row * 8 };
-  }
+/** The till's old layout, by table-number order: the first 9 as a 3×3 block
+ *  read column by column (T3 T6 T9 / T2 T5 T8 / T1 T4 T7), the rest in rows
+ *  of 4 underneath. */
+export function legacySlot(index: number): { col: number; row: number } {
+  if (index < 9) return { col: Math.floor(index / 3), row: 2 - (index % 3) };
   const i = index - 9;
-  return { x: 1 + (i % 4) * 8, y: 25 + Math.floor(i / 4) * 8 };
+  return { col: i % 4, row: 3 + Math.floor(i / 4) };
 }
 
-export const overlaps = (a: Box, b: Box) =>
-  a.x < b.x + b.w - 0.01 && b.x < a.x + a.w - 0.01 && a.y < b.y + b.h - 0.01 && b.y < a.y + a.h - 0.01;
-
-/** A free spot for a new upright w×h table: scans row by row, leaving a cell of space. */
-export function freeSpot(taken: Box[], w: number, h: number): { x: number; y: number } {
-  for (let y = 1; y + h <= GRID_H; y++) {
-    for (let x = 1; x + w <= GRID_W; x++) {
-      const room = { x: x - 1, y: y - 1, w: w + 2, h: h + 2 };
-      if (!taken.some((p) => overlaps(room, p))) return { x, y };
-    }
-  }
-  return { x: 1, y: 1 };
-}
-
-function shapeOf(t: PlanTable): Shape {
-  return t.shape && (SHAPES as readonly string[]).includes(t.shape) ? t.shape : "square";
-}
-
-/** Every table with a position, size and outline — saved ones as saved, the
- *  rest placed like the till's old layout (or in a free spot if that's taken). */
+/** Every table in a slot — saved ones in the slot nearest their saved spot,
+ *  the rest like the till's old layout. Two tables never share a slot: a
+ *  later one (by number) moves to the first empty slot. */
 export function placeTables<T extends PlanTable>(tables: T[]): Placed<T>[] {
+  const sorted = [...tables].sort((a, b) => tableNo(a) - tableNo(b));
+  const taken = new Set<string>();
   const out: Placed<T>[] = [];
-  const make = (t: T, x: number, y: number): Placed<T> => {
-    const shape = shapeOf(t);
-    const { w, h } = footprint(t.capacity, shape);
-    const rotation = effectiveRotation(shape, t.rotation);
-    return { ...t, x, y, w, h, shape, rotation, box: outline(x, y, w, h, rotation) };
+  const put = (t: T, s: { col: number; row: number }) => {
+    if (taken.has(key(s.col, s.row)) || s.row >= ROWS) s = freeSlot(taken);
+    taken.add(key(s.col, s.row));
+    const { x, y } = slotXY(s.col, s.row);
+    out.push({ ...t, ...s, x, y, w: TABLE_SIZE, h: TABLE_SIZE, box: { x, y, w: TABLE_SIZE, h: TABLE_SIZE } });
   };
-  const unsaved: T[] = [];
-  for (const t of tables) {
-    if (t.pos_x != null && t.pos_y != null) out.push(make(t, Number(t.pos_x), Number(t.pos_y)));
-    else unsaved.push(t);
-  }
-  const allSorted = [...tables].sort((a, b) => tableNo(a) - tableNo(b));
-  for (const t of unsaved.sort((a, b) => tableNo(a) - tableNo(b))) {
-    const spot0 = legacySpot(allSorted.indexOf(t));
-    let p = make(t, spot0.x, spot0.y);
-    if (out.some((q) => overlaps(p.box, q.box))) {
-      const spot = freeSpot(out.map((q) => q.box), p.w, p.h);
-      p = make(t, spot.x, spot.y);
-    }
-    out.push(p);
-  }
+  const saved = sorted.filter((t) => t.pos_x != null && t.pos_y != null);
+  for (const t of saved) put(t, nearestSlot(Number(t.pos_x), Number(t.pos_y)));
+  sorted.forEach((t, i) => { if (t.pos_x == null || t.pos_y == null) put(t, legacySlot(i)); });
   return out;
 }
 
