@@ -21,7 +21,7 @@ jest.mock("@/lib/z-report-db", () => ({ getZReport: jest.fn(async () => zReport)
 let tableRound: number | null = null;
 jest.mock("@/lib/kitchen-rounds", () => ({ roundNumberFor: jest.fn(async () => tableRound) }));
 
-import { addressLines, buildTicket, encodeCp437, toPlainText, toStarPrnt, type PrintJob } from "@/lib/cloudprnt";
+import { addressLines, buildTicket, encodeCp437, plainTableLabel, toPlainText, toStarPrnt, type PrintJob } from "@/lib/cloudprnt";
 
 const item = (id: number, name: string, extra: Partial<Item> = {}): Item => ({
   id, item_name: name, quantity: 1, notes: null, status: "pending", modifiers: [], ...extra,
@@ -103,6 +103,8 @@ describe("encoders", () => {
   it("encodes £ as CP437 and swaps other non-ASCII characters", () => {
     expect(encodeCp437("£5")).toEqual([0x9c, 0x35]);
     expect(encodeCp437("café — ok")).toEqual([..."cafe - ok"].map((c) => c.charCodeAt(0)));
+    expect(encodeCp437("T1 · T2")).toEqual([0x54, 0x31, 0x20, 0xfa, 0x20, 0x54, 0x32]);
+    expect(plainTableLabel("T1 + T2 · 👨‍👩‍👧 Family dinner ")).toBe("T1 + T2 · Family dinner");
     expect(encodeCp437("🌶")).toEqual([0x3f]); // one "?" per emoji
   });
 

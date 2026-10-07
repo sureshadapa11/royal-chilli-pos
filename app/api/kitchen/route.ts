@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
       .from("orders")
       .select(`
         *,
-        restaurant_tables(table_number),
+        restaurant_tables(table_number, join_label),
         staff:staff!orders_staff_id_fkey(name)
       `)
       .in("status", ["sent_to_kitchen", "ready"])
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
       .from("orders")
       .select(`
         *,
-        restaurant_tables(table_number),
+        restaurant_tables(table_number, join_label),
         staff:staff!orders_staff_id_fkey(name)
       `)
       .eq("status", "cancelled")
@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
 
     const ordersWithItems = (orders ?? []).map((o) => {
       const { restaurant_tables: rt, staff: s, ...rest } = o as typeof o & {
-        restaurant_tables: { table_number: string } | null;
+        restaurant_tables: { table_number: string; join_label?: string | null } | null;
         staff: { name: string } | null;
         id: number;
         table_id: number | null;
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
       const round = roundById.get(rest.id) ?? null;
       return {
         ...rest,
-        table_number: rt?.table_number ?? null,
+        table_number: (rt?.join_label || rt?.table_number) ?? null,
         staff_name: s?.name ?? null,
         items: itemsByOrder[rest.id] ?? [],
         round,
@@ -119,13 +119,13 @@ export async function GET(req: NextRequest) {
 
     const cancelledAlerts = (justCancelled ?? []).map((o) => {
       const { restaurant_tables: rt, staff: s, ...rest } = o as typeof o & {
-        restaurant_tables: { table_number: string } | null;
+        restaurant_tables: { table_number: string; join_label?: string | null } | null;
         staff: { name: string } | null;
         id: number;
       };
       return {
         ...rest,
-        table_number: rt?.table_number ?? null,
+        table_number: (rt?.join_label || rt?.table_number) ?? null,
         staff_name: s?.name ?? null,
         items: itemsByOrder[rest.id] ?? [],
         is_modification: false,

@@ -23,6 +23,9 @@ export type PlanTable = {
   capacity: number;
   pos_x?: number | string | null;
   pos_y?: number | string | null;
+  /** Joined onto this lead table (see "Joined tables" below). */
+  joined_to?: number | null;
+  group_name?: string | null;
 };
 
 /** The space a table takes on the floor. */
@@ -98,4 +101,82 @@ export function usedBox(placed: { box: Box }[]): Box {
   const r = Math.max(...placed.map((p) => p.box.x + p.box.w));
   const b = Math.max(...placed.map((p) => p.box.y + p.box.h));
   return { x, y, w: r - x, h: b - y };
+}
+
+// ---- Joined tables ---------------------------------------------------------
+// Tables pushed together for a big party are joined in Staff Hub → Tables
+// and act as one table — one order and bill, on the lead table — until
+// unjoined. A group sits in a straight line of slots (side by side, or one
+// behind the other), so it's drawn as one long table.
+
+export type Group<T extends PlanTable> = {
+  lead: Placed<T>;
+  /** Lead first, then the rest in slot order. */
+  members: Placed<T>[];
+  /** The whole group's outline on the floor. */
+  box: Box;
+};
+
+/** Each table on its own, or a joined group, as the plan draws it. */
+export function groupsOf<T extends PlanTable>(placed: Placed<T>[]): Group<T>[] {
+  const byId = new Map(placed.map((p) => [p.id, p]));
+  const leadOf = (p: Placed<T>) => (p.joined_to != null && byId.has(p.joined_to) ? byId.get(p.joined_to)! : p);
+  const out = new Map<number, Group<T>>();
+  for (const p of placed) {
+    const lead = leadOf(p);
+    const g = out.get(lead.id) ?? { lead, members: [lead], box: lead.box };
+    if (p !== lead) g.members.push(p);
+    out.set(lead.id, g);
+  }
+  for (const g of out.values()) {
+    const rest = g.members.slice(1).sort((a, b) => a.row - b.row || a.col - b.col);
+    g.members = [g.lead, ...rest];
+    g.box = usedBox(g.members);
+  }
+  return [...out.values()];
+}
+
+/** "T1 + T2", by table number, plus " · <group name>" when there is one. */
+export function joinLabel(members: PlanTable[], groupName?: string | null): string {
+  const nums = [...members].sort((a, b) => tableNo(a) - tableNo(b)).map((m) => m.table_number).join(" + ");
+  const name = groupName?.trim();
+  return name ? `${nums} · ${name}` : nums;
+}
+
+/** Where `tableId` goes to join the group led by `leadId`: the next slot along
+ *  the group's line (right, left, below, above for a table on its own). A
+ *  table already there swaps into `tableId`'s old slot. */
+export function planJoin<T extends PlanTable>(
+  placed: Placed<T>[], leadId: number, tableId: number,
+): { moves: { id: number; x: number; y: number }[] } | { error: string } {
+  const groups = groupsOf(placed);
+  const group = groups.find((g) => g.lead.id === leadId);
+  const joining = placed.find((p) => p.id === tableId);
+  if (!group || !joining) return { error: "That table isn't on the plan" };
+  if (group.members.some((m) => m.id === tableId)) return { error: "Those tables are already joined" };
+  const own = groups.find((g) => g.members.some((m) => m.id === tableId))!;
+  if (own.members.length > 1) return { error: `${joining.table_number} is joined to other tables — unjoin it first` };
+
+  const cols = group.members.map((m) => m.col), rows = group.members.map((m) => m.row);
+  const [c0, c1, r0, r1] = [Math.min(...cols), Math.max(...cols), Math.min(...rows), Math.max(...rows)];
+  const across = { right: { col: c1 + 1, row: r0 }, left: { col: c0 - 1, row: r0 } };
+  const down = { below: { col: c0, row: r1 + 1 }, above: { col: c0, row: r0 - 1 } };
+  const candidates = group.members.length === 1
+    ? [across.right, across.left, down.below, down.above]
+    : r0 === r1 ? [across.right, across.left] : [down.below, down.above];
+
+  const usable = candidates.filter((s) => {
+    if (s.col < 0 || s.col >= COLS || s.row < 0 || s.row >= ROWS) return false;
+    const there = placed.find((p) => p.col === s.col && p.row === s.row);
+    // Only a table on its own can be swapped out of the way.
+    return !there || there.id === tableId || groups.find((g) => g.members.some((m) => m.id === there.id))!.members.length === 1;
+  });
+  if (usable.length === 0) return { error: "There's no room beside those tables — move them, then join" };
+  // Already in place? Nothing moves.
+  const to = usable.find((s) => s.col === joining.col && s.row === joining.row) ?? usable[0];
+  if (to.col === joining.col && to.row === joining.row) return { moves: [] };
+  const moves = [{ id: tableId, ...slotXY(to.col, to.row) }];
+  const there = placed.find((p) => p.col === to.col && p.row === to.row);
+  if (there) moves.push({ id: there.id, ...slotXY(joining.col, joining.row) });
+  return { moves };
 }

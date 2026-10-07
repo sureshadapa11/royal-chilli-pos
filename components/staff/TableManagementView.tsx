@@ -4,16 +4,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { confirmDelete } from "@/components/ui/confirm";
 import {
-  COLS, GRID_H, GRID_W, ROWS, TABLE_SIZE, freeSlot, nearestSlot, placeTables, slotXY, type Placed,
+  COLS, GRID_H, GRID_W, ROWS, TABLE_SIZE, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, slotXY,
+  type Group, type Placed,
 } from "@/lib/floor-plan";
 
 // Staff Hub → Tables: the restaurant's floor plan — equal tables in rows and
 // columns of slots. Drag a table to an empty slot, or onto another table to
 // swap the two (it saves when you let go); tap one to change its number or
-// seats, or delete it. The till's table screen draws the same plan.
-// Read-only without full Tables access. On a phone, "Move tables" switches
-// dragging on (otherwise a finger scrolls the page), the plan can be zoomed,
-// and a tapped table opens in a sheet from the bottom.
+// seats, join it to other tables, or delete it. Joined tables (pushed
+// together for a big party) are drawn as one long table, "T1 + T2", and act
+// as one on the till — one order, one bill — until unjoined here. The till's
+// table screen draws the same plan. Read-only without full Tables access. On
+// a phone, "Move tables" switches dragging on (otherwise a finger scrolls the
+// page), the plan can be zoomed, and a tapped table opens in a sheet from the
+// bottom.
 
 type Table = {
   id: number;
@@ -22,6 +26,8 @@ type Table = {
   status: "available" | "occupied" | "reserved";
   pos_x: number | null;
   pos_y: number | null;
+  joined_to: number | null;
+  group_name: string | null;
 };
 type Spot = Placed<Table>;
 
@@ -31,7 +37,10 @@ const STATUS: Record<Table["status"], { label: string; fill: string; ring: strin
   reserved: { label: "Reserved", fill: "bg-amber-50", ring: "border-amber-400" },
 };
 
+const GROUP_NAMES = ["🎂 Birthday party", "💼 Office party", "👨‍👩‍👧 Family dinner", "💍 Anniversary", "👥 Large group"];
+
 const heading = { fontFamily: "var(--font-space-grotesk)" };
+const label = "text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground";
 
 export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   const [tables, setTables] = useState<Table[]>([]);
@@ -68,10 +77,12 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   const canDrag = canEdit && (wide || moveMode);
 
   const placed = useMemo(() => placeTables(tables), [tables]);
-  const shown: Spot[] = placed.map((p) => (drag && drag.id === p.id ? { ...p, x: drag.x, y: drag.y } : p));
+  const groups = useMemo(() => groupsOf(placed), [placed]);
+  const groupOf = (id: number) => groups.find((g) => g.members.some((m) => m.id === id))!;
+  const isJoined = (id: number) => groupOf(id).members.length > 1;
   const target = drag ? nearestSlot(drag.x, drag.y) : null;
   const taken = new Set(placed.map((p) => `${p.col},${p.row}`));
-  const sel = placed.find((p) => p.id === selected) ?? null;
+  const selGroup = selected != null ? groups.find((g) => g.lead.id === selected) ?? null : null;
   const totalSeats = tables.reduce((s, t) => s + t.capacity, 0);
 
   async function call(url: string, method: string, body?: unknown, quiet = false) {
@@ -103,8 +114,9 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   }
 
   function onPointerDown(e: React.PointerEvent, t: Spot) {
-    // A plain tap selects (see onPointerUp); with dragging off, select now.
-    if (!canDrag) { setSelected(t.id); return; }
+    // A plain tap selects (see onPointerUp); with dragging off, or on joined
+    // tables (unjoin them to move them), select now.
+    if (!canDrag || isJoined(t.id)) { setSelected(groupOf(t.id).lead.id); return; }
     e.currentTarget.setPointerCapture(e.pointerId);
     const { cx, cy } = cellAt(e.clientX, e.clientY);
     dragStart.current = { id: t.id, offX: cx - t.x, offY: cy - t.y, startX: cx, startY: cy, moved: false };
@@ -142,6 +154,10 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     const to = nearestSlot(spot.x, spot.y);
     if (to.col === t.col && to.row === t.row) return;
     const there = placed.find((p) => p.col === to.col && p.row === to.row);
+    if (there && isJoined(there.id)) {
+      toast({ variant: "destructive", title: `${joinLabel(groupOf(there.id).members)} are joined`, description: "Drop it in a free spot, or unjoin those tables first." });
+      return;
+    }
     const moves = [{ id: t.id, ...slotXY(to.col, to.row) }];
     if (there) moves.push({ id: there.id, ...slotXY(t.col, t.row) });
     // Show it in its new place straight away, then save.
@@ -205,6 +221,42 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     if (await call(`/api/tables?id=${t.id}`, "DELETE")) setSelected(null);
   }
 
+  // ---- joining --------------------------------------------------------------
+  // `pick` is another group's lead (a lone table is its own lead). A lone
+  // table joins onto `g`; picking a joined group joins `g`'s lone table onto it.
+  async function join(g: Group<Table>, pick: number) {
+    const other = groups.find((x) => x.lead.id === pick);
+    if (!other) return;
+    const [leadId, tableId] = other.members.length > 1 ? [other.lead.id, g.lead.id] : [g.lead.id, other.lead.id];
+    const data = await call("/api/tables/join", "POST", { lead_id: leadId, table_id: tableId });
+    if (data) {
+      setSelected(data.lead_id);
+      toast({ variant: "success", title: "Tables joined", description: "They're one table on the till now — one order, one bill." });
+    }
+  }
+
+  async function unjoin(g: Group<Table>) {
+    if (await call(`/api/tables/join?lead_id=${g.lead.id}`, "DELETE")) {
+      toast({ title: `${joinLabel(g.members)} unjoined`, description: "They're separate tables again." });
+    }
+  }
+
+  async function nameGroup(g: Group<Table>, name: string) {
+    await call("/api/tables/join", "PUT", { lead_id: g.lead.id, group_name: name }, true);
+  }
+
+  const panel = selGroup && (
+    selGroup.members.length > 1 ? (
+      <GroupPanel key={`g${selGroup.lead.id}`} g={selGroup} canEdit={canEdit} busy={busy}
+        joinable={groups.filter((x) => x.members.length === 1)}
+        onJoin={(pick) => join(selGroup, pick)} onUnjoin={() => unjoin(selGroup)} onName={(n) => nameGroup(selGroup, n)} />
+    ) : (
+      <TablePanel key={selGroup.lead.id} t={selGroup.lead} canEdit={canEdit} busy={busy}
+        joinable={groups.filter((x) => x.lead.id !== selGroup.lead.id)}
+        onUpdate={(c) => update(selGroup.lead, c)} onDelete={() => remove(selGroup.lead)} onJoin={(pick) => join(selGroup, pick)} />
+    )
+  );
+
   return (
     <div className="px-4 py-6 md:px-6">
       <div className="mx-auto max-w-[1240px]">
@@ -213,7 +265,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
             <h1 style={heading} className="text-[26px] font-semibold tracking-[-0.02em] text-foreground">Tables</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {tables.length} table{tables.length === 1 ? "" : "s"} · {totalSeats} seats
-              {canDrag ? " · drag a table to a free spot, or onto another to swap · tap to edit" : canEdit ? " · tap a table to edit it, or turn on Move tables" : ""}
+              {canDrag ? " · drag a table to a free spot, or onto another to swap · tap to edit or join" : canEdit ? " · tap a table to edit or join it, or turn on Move tables" : ""}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -226,7 +278,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
           </div>
         </div>
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_280px]">
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_300px]">
           {/* The floor */}
           <div className="rounded-2xl border border-border bg-surface p-3">
             {!wide && canEdit && !loading && (
@@ -268,30 +320,47 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                       style={{ left: `${(x / GRID_W) * 100}%`, top: `${(y / GRID_H) * 100}%`, width: `${(TABLE_SIZE / GRID_W) * 100}%`, height: `${(TABLE_SIZE / GRID_H) * 100}%` }} />
                   );
                 })}
-                {shown.map((t) => {
+                {groups.map((g) => {
+                  const t = g.lead;
+                  const joined = g.members.length > 1;
                   const st = STATUS[t.status] ?? STATUS.available;
                   const isSel = t.id === selected;
                   const dragging = drag?.id === t.id;
+                  const b = dragging ? { x: drag.x, y: drag.y, w: t.w, h: t.h } : g.box;
+                  const name = joined ? t.group_name?.trim() : null;
+                  const seats = g.members.reduce((s, m) => s + m.capacity, 0);
+                  const movable = canDrag && !joined;
                   return (
                     <div
                       key={t.id}
                       role="button"
                       tabIndex={0}
-                      aria-label={`Table ${t.table_number}, ${t.capacity} seats`}
+                      aria-label={joined ? `Joined tables ${joinLabel(g.members)}, ${seats} seats` : `Table ${t.table_number}, ${seats} seats`}
                       onPointerDown={(e) => onPointerDown(e, t)}
                       onPointerMove={(e) => onPointerMove(e, t)}
                       onPointerUp={(e) => onPointerUp(e, t)}
                       onPointerCancel={() => { dragStart.current = null; setDrag(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") setSelected(t.id); }}
-                      className={`absolute flex flex-col items-center justify-center border-2 ${st.fill} ${isSel ? "border-blue-500 ring-2 ring-blue-400/40" : st.ring} rounded-lg ${canDrag ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "z-10 opacity-90 shadow-lg" : "shadow-sm"} ${canDrag ? "touch-none" : "touch-manipulation"} transition-[box-shadow]`}
+                      className={`absolute flex flex-col items-center justify-center border-2 ${st.fill} ${isSel ? "border-blue-500 ring-2 ring-blue-400/40" : st.ring} rounded-lg ${movable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "z-10 opacity-90 shadow-lg" : "shadow-sm"} ${movable ? "touch-none" : "touch-manipulation"} transition-[box-shadow]`}
                       style={{
-                        left: `${(t.x / GRID_W) * 100}%`, top: `${(t.y / GRID_H) * 100}%`,
-                        width: `${(t.w / GRID_W) * 100}%`, height: `${(t.h / GRID_H) * 100}%`,
+                        left: `${(b.x / GRID_W) * 100}%`, top: `${(b.y / GRID_H) * 100}%`,
+                        width: `${(b.w / GRID_W) * 100}%`, height: `${(b.h / GRID_H) * 100}%`,
                       }}
                     >
-                      <span className="flex flex-col items-center">
-                        <span className="text-[clamp(11px,1.4vw,17px)] font-black leading-none text-foreground">{t.table_number}</span>
-                        <span className="mt-0.5 text-[clamp(9px,0.9vw,11px)] text-muted-foreground">{t.capacity} seats</span>
+                      {/* Where one table meets the next, a faint seam */}
+                      {joined && g.members.map((m) => {
+                        const across = g.box.h <= TABLE_SIZE + 0.01;
+                        const at = across ? (m.box.x - g.box.x - 0.5) / g.box.w : (m.box.y - g.box.y - 0.5) / g.box.h;
+                        const prev = g.members.some((o) => (across ? o.col === m.col - 1 : o.row === m.row - 1));
+                        return prev ? (
+                          <span key={m.id} aria-hidden className="pointer-events-none absolute border-dashed border-current opacity-20"
+                            style={across ? { left: `${at * 100}%`, top: "12%", bottom: "12%", borderLeftWidth: 1 } : { top: `${at * 100}%`, left: "12%", right: "12%", borderTopWidth: 1 }} />
+                        ) : null;
+                      })}
+                      <span className="flex max-w-full flex-col items-center px-1 text-center">
+                        <span className="text-[clamp(11px,1.4vw,17px)] font-black leading-none text-foreground">{joined ? joinLabel(g.members) : t.table_number}</span>
+                        {name && <span className="mt-0.5 max-w-full truncate text-[clamp(9px,0.9vw,12px)] font-semibold text-foreground/80">{name}</span>}
+                        <span className="mt-0.5 text-[clamp(9px,0.9vw,11px)] text-muted-foreground">{seats} seats</span>
                       </span>
                     </div>
                   );
@@ -308,7 +377,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
           </div>
 
           {/* The selected table: beside the plan, or a sheet from the bottom on a phone */}
-          {!wide && sel ? (
+          {!wide && panel ? (
             <>
               <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setSelected(null)} />
               <div className="fixed inset-x-0 bottom-0 z-50 max-h-[75vh] overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-4 pb-8 shadow-2xl">
@@ -316,17 +385,15 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                   <span className="mx-auto h-1 w-10 rounded-full bg-border" />
                   <button type="button" onClick={() => setSelected(null)} aria-label="Close" className="absolute right-3 top-3 h-9 w-9 rounded-full text-lg text-muted-foreground hover:bg-surface-hover">✕</button>
                 </div>
-                <TablePanel key={sel.id} t={sel} canEdit={canEdit} busy={busy} onUpdate={(c) => update(sel, c)} onDelete={() => remove(sel)} />
+                {panel}
               </div>
             </>
           ) : null}
-          <div className={`rounded-2xl border border-border bg-surface p-4 self-start ${!wide && sel ? "hidden" : ""}`}>
-            {!sel ? (
+          <div className={`rounded-2xl border border-border bg-surface p-4 self-start ${!wide && panel ? "hidden" : ""}`}>
+            {panel || (
               <p className="text-sm text-muted-foreground">
-                {canEdit ? "Tap a table to change its number or seats." : "Tap a table to see its details."}
+                {canEdit ? "Tap a table to change its number or seats, or to join it to other tables." : "Tap a table to see its details."}
               </p>
-            ) : (
-              <TablePanel key={sel.id} t={sel} canEdit={canEdit} busy={busy} onUpdate={(c) => update(sel, c)} onDelete={() => remove(sel)} />
             )}
             {!canEdit && <p className="mt-3 text-xs text-muted-foreground">You can view the floor plan; changes are made by someone with full Tables access.</p>}
           </div>
@@ -340,20 +407,40 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   );
 }
 
-function TablePanel({ t, canEdit, busy, onUpdate, onDelete }: {
-  t: Spot; canEdit: boolean; busy: boolean;
-  onUpdate: (c: Partial<Pick<Table, "table_number" | "capacity">>) => void; onDelete: () => void;
+/** "Join with…": every other table (or joined group) to pick from. */
+function JoinPicker({ options, busy, onJoin, prompt }: {
+  options: Group<Table>[]; busy: boolean; onJoin: (leadId: number) => void; prompt: string;
+}) {
+  const sorted = [...options].sort((a, b) => a.lead.table_number.localeCompare(b.lead.table_number, undefined, { numeric: true }));
+  if (sorted.length === 0) return null;
+  return (
+    <select value="" disabled={busy} onChange={(e) => { if (e.target.value) onJoin(Number(e.target.value)); }}
+      className="mt-1 w-full rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-60">
+      <option value="">{prompt}</option>
+      {sorted.map((g) => (
+        <option key={g.lead.id} value={g.lead.id}>
+          {g.members.length > 1 ? joinLabel(g.members, g.lead.group_name) : g.lead.table_number}
+          {g.lead.status === "available" ? "" : ` (${STATUS[g.lead.status]?.label.toLowerCase() ?? g.lead.status})`}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function TablePanel({ t, canEdit, busy, joinable, onUpdate, onDelete, onJoin }: {
+  t: Spot; canEdit: boolean; busy: boolean; joinable: Group<Table>[];
+  onUpdate: (c: Partial<Pick<Table, "table_number" | "capacity">>) => void; onDelete: () => void; onJoin: (leadId: number) => void;
 }) {
   const [number, setNumber] = useState(t.table_number);
   const saveNumber = () => { const n = number.trim(); if (n && n !== t.table_number) onUpdate({ table_number: n }); else setNumber(t.table_number); };
   return (
     <div>
-      <p className="text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Table</p>
+      <p className={label}>Table</p>
       <input value={number} onChange={(e) => setNumber(e.target.value)} disabled={!canEdit || busy}
         onBlur={saveNumber} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
         className="mt-1 w-full rounded-lg border border-border bg-surface-hover px-3 py-2 text-lg font-bold text-foreground disabled:opacity-80" />
 
-      <p className="mt-4 text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">Seats</p>
+      <p className={`${label} mt-4`}>Seats</p>
       <div className="mt-1 flex items-center gap-3">
         <button type="button" onClick={() => onUpdate({ capacity: t.capacity - 1 })} disabled={!canEdit || busy || t.capacity <= 1}
           className="h-10 w-10 rounded-full border border-border text-xl font-bold hover:bg-surface-hover disabled:opacity-40">−</button>
@@ -362,10 +449,70 @@ function TablePanel({ t, canEdit, busy, onUpdate, onDelete }: {
           className="h-10 w-10 rounded-full border border-border text-xl font-bold hover:bg-surface-hover disabled:opacity-40">+</button>
       </div>
 
+      {canEdit && joinable.length > 0 && (
+        <>
+          <p className={`${label} mt-4`}>Join tables</p>
+          <JoinPicker options={joinable} busy={busy} onJoin={onJoin} prompt={`Join ${t.table_number} with…`} />
+          <p className="mt-1 text-xs text-muted-foreground">For a big party: the tables move side by side and act as one on the till — one order, one bill.</p>
+        </>
+      )}
+
       {canEdit && (
         <button type="button" onClick={onDelete} disabled={busy} className="mt-5 w-full rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50">
           Delete table
         </button>
+      )}
+    </div>
+  );
+}
+
+function GroupPanel({ g, canEdit, busy, joinable, onJoin, onUnjoin, onName }: {
+  g: Group<Table>; canEdit: boolean; busy: boolean; joinable: Group<Table>[];
+  onJoin: (leadId: number) => void; onUnjoin: () => void; onName: (name: string) => void;
+}) {
+  const [name, setName] = useState(g.lead.group_name ?? "");
+  const saveName = (n: string) => { if (n.trim() !== (g.lead.group_name ?? "").trim()) onName(n.trim()); };
+  const seats = g.members.reduce((s, m) => s + m.capacity, 0);
+  return (
+    <div>
+      <p className={label}>Joined tables</p>
+      <p className="mt-1 text-2xl font-black text-foreground">{joinLabel(g.members)}</p>
+      <p className="text-sm text-muted-foreground">
+        {seats} seats · one table on the till · orders go on {g.lead.table_number}
+      </p>
+
+      <p className={`${label} mt-4`}>Group name <span className="normal-case tracking-normal">(optional)</span></p>
+      <input value={name} onChange={(e) => setName(e.target.value)} disabled={!canEdit || busy} maxLength={40}
+        placeholder="e.g. Sarah's birthday"
+        onBlur={() => saveName(name)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+        className="mt-1 w-full rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-80" />
+      {canEdit && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {GROUP_NAMES.map((n) => (
+            <button key={n} type="button" disabled={busy} onClick={() => { setName(n); saveName(n); }}
+              className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${name === n ? "border-red-500 bg-red-50 text-red-700" : "border-border hover:bg-surface-hover"} disabled:opacity-60`}>
+              {n}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="mt-1 text-xs text-muted-foreground">Shows on the till, the kitchen ticket and the receipt.</p>
+
+      {canEdit && joinable.length > 0 && (
+        <>
+          <p className={`${label} mt-4`}>Add a table</p>
+          <JoinPicker options={joinable} busy={busy} onJoin={onJoin} prompt="Join another table…" />
+        </>
+      )}
+
+      {canEdit && (
+        <>
+          <button type="button" onClick={onUnjoin} disabled={busy}
+            className="mt-5 w-full rounded-lg border border-border px-3 py-2 text-sm font-bold text-foreground hover:bg-surface-hover disabled:opacity-50">
+            Unjoin tables
+          </button>
+          <p className="mt-1 text-xs text-muted-foreground">Unjoin to move, rename or delete these tables. Not while they have an open order.</p>
+        </>
       )}
     </div>
   );

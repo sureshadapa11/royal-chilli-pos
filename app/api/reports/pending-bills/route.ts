@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
       .select(`
         id, order_number, order_type, total, amount_paid, customer_name, customer_phone,
         pay_later_note, created_at, table_id,
-        restaurant_tables(table_number),
+        restaurant_tables(table_number, join_label),
         staff:staff!orders_staff_id_fkey(name)
       `)
       .eq("pay_later", true)
@@ -31,12 +31,12 @@ export async function GET(req: NextRequest) {
 
     const flat = (orders ?? []).map((o) => {
       const { restaurant_tables: rt, staff: s, ...rest } = o as typeof o & {
-        restaurant_tables: { table_number: string } | null;
+        restaurant_tables: { table_number: string; join_label?: string | null } | null;
         staff: { name: string } | null;
       };
       return {
         ...rest,
-        table_number: rt?.table_number ?? null,
+        table_number: (rt?.join_label || rt?.table_number) ?? null,
         staff_name: s?.name ?? null,
         outstanding: Math.round((Number(o.total) - Number(o.amount_paid)) * 100) / 100,
       };

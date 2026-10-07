@@ -4,6 +4,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { manageAllows } from "@/lib/permissions";
 import { londonNowDateAndMinutes } from "@/lib/hours";
 import { GRID_H, GRID_W, SHAPES, round2 } from "@/lib/floor-plan";
+import { refreshJoinLabel } from "@/lib/table-joins";
 
 // Floor plan fields (lib/floor-plan.ts): where the table sits (the top-left
 // of its slot — the plan snaps any spot to the nearest slot), its shape and
@@ -213,6 +214,13 @@ export async function PUT(req: NextRequest) {
 
     if (error) throw error;
 
+    // A joined table's new number shows in its group's "T1 + T2" label.
+    if (table_number !== undefined) {
+      const { data: row } = await db.from("restaurant_tables").select("joined_to, join_label").eq("id", id).maybeSingle();
+      if (row?.joined_to) await refreshJoinLabel(db, row.joined_to);
+      else if (row?.join_label) await refreshJoinLabel(db, id);
+    }
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Table update error:", error);
@@ -234,6 +242,11 @@ export async function DELETE(req: NextRequest) {
     const id = Number(req.nextUrl.searchParams.get("id"));
     if (!id) {
       return NextResponse.json({ error: "Table id is required" }, { status: 400 });
+    }
+
+    const { data: row } = await db.from("restaurant_tables").select("joined_to, join_label").eq("id", id).maybeSingle();
+    if (row?.joined_to || row?.join_label) {
+      return NextResponse.json({ error: "This table is joined to others — unjoin it first." }, { status: 409 });
     }
 
     // orders.table_id / reservations.table_id reference this row with no ON

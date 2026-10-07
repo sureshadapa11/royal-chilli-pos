@@ -99,7 +99,7 @@ export async function sendOrderPaymentReceipt(businessId: number, orderId: numbe
     const db = bizDb(businessId);
     const { data: order } = await db
       .from("orders")
-      .select("order_number, customer_id, customer_name, customer_email, order_type, subtotal, discount, loyalty_discount, loyalty_reason, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number), customers(email, loyalty_points)")
+      .select("order_number, customer_id, customer_name, customer_email, order_type, subtotal, discount, loyalty_discount, loyalty_reason, tax, service_charge_amount, total, updated_at, restaurant_tables(table_number, join_label), customers(email, loyalty_points)")
       .eq("id", orderId)
       .single();
     if (!order) return;
@@ -138,12 +138,12 @@ export async function sendOrderPaymentReceipt(businessId: number, orderId: numbe
     const methodLabel: Record<string, string> = { cash: "Cash", card: "Card", card_online: "Online" };
     const methods = new Set((payments || []).filter((p) => Number(p.amount) > 0).map((p) => methodLabel[p.method] ?? p.method));
 
-    const table = order.restaurant_tables as unknown as { table_number: string } | null;
+    const table = order.restaurant_tables as unknown as { table_number: string; join_label?: string | null } | null;
 
     await sendPaymentReceiptEmail(recipientEmail, {
       orderNumber: order.order_number,
       customerName: order.customer_name || "Guest",
-      tableNumber: table?.table_number ?? null,
+      tableNumber: (table?.join_label || table?.table_number) ?? null,
       orderType: order.order_type,
       subtotal: Number(order.subtotal),
       discount: Number(order.discount),

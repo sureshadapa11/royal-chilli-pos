@@ -3,7 +3,7 @@ import supabase from "@/lib/supabase";
 export async function getOrderForReceipt(orderId: number) {
   const { data: order } = await supabase
     .from("orders")
-    .select("*, restaurant_tables(table_number), staff:staff!orders_staff_id_fkey(name)")
+    .select("*, restaurant_tables(table_number, join_label), staff:staff!orders_staff_id_fkey(name)")
     .eq("id", orderId)
     .single();
   if (!order) return null;
@@ -37,12 +37,12 @@ export async function getOrderForReceipt(orderId: number) {
     .order("created_at");
 
   const { restaurant_tables: table, staff, ...orderRest } = order as typeof order & {
-    restaurant_tables: { table_number: string } | null;
+    restaurant_tables: { table_number: string; join_label?: string | null } | null;
     staff: { name: string } | null;
   };
 
   return {
-    order: { ...orderRest, table_number: table?.table_number ?? null, staff_name: staff?.name ?? null },
+    order: { ...orderRest, table_number: (table?.join_label || table?.table_number) ?? null, staff_name: staff?.name ?? null },
     items: (items || []).map((i) => ({ ...i, modifiers: modsByItem.get(i.id) || [] })),
     payments: payments || [],
   };
