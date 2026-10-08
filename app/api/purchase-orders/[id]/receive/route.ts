@@ -6,7 +6,7 @@ import { areaAllows } from "@/lib/permissions";
 import { londonDateStr } from "@/lib/london-date";
 import { resolveInventoryLocation } from "@/lib/locations";
 import { checkReceiptsForSave } from "@/lib/receipts";
-import { cleanReceivedLine } from "@/lib/purchase-orders";
+import { cleanReceivedLine, PO_STATUS_LABEL, type PoStatus } from "@/lib/purchase-orders";
 
 // Marks a PO received: stock goes in via stock_movements (so it's audit-tracked
 // like everything else), each ingredient's last-known cost is updated, batch
@@ -14,7 +14,7 @@ import { cleanReceivedLine } from "@/lib/purchase-orders";
 // are attached.
 //
 // All of it is one database transaction (receive_purchase_order, migration
-// 115): the status flips to 'received' first, so a double-click, a retry or
+// 115/116): the status flips to 'received' first, so a double-click, a retry or
 // two devices at once can only ever add the delivery to stock once.
 export async function POST(
   req: NextRequest,
@@ -56,8 +56,9 @@ export async function POST(
 
     if (result.outcome === "not_found") return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
     if (result.outcome === "wrong_status") {
-      const error = result.status === "cancelled" ? "Cannot receive a cancelled order" : "Already received";
-      return NextResponse.json({ error }, { status: result.status === "received" ? 409 : 400 });
+      if (result.status === "received") return NextResponse.json({ error: "Already received" }, { status: 409 });
+      const label = PO_STATUS_LABEL[result.status as PoStatus]?.toLowerCase() ?? result.status;
+      return NextResponse.json({ error: `This order is ${label}. Only an approved or sent order can be received.` }, { status: 400 });
     }
     if (result.outcome === "photos_taken") {
       return NextResponse.json({ error: "A photo is already used on another entry. Please take a new one." }, { status: 409 });
