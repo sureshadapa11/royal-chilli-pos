@@ -18,6 +18,9 @@
 -- 2. purchase_order_events — who did what to each order, when, and why.
 --    Append-only: rows can't be changed or deleted.
 --
+--    replace_draft_po_lines — a draft's lines can be changed (and only a
+--    draft's: once it's placed or sent for approval it's locked).
+--
 -- 3. receive_purchase_order (115) now only receives an approved or sent
 --    order, puts the stock into the order's own branch, and logs the event.
 --
@@ -40,7 +43,7 @@ CREATE TABLE IF NOT EXISTS purchase_order_events (
   id                SERIAL PRIMARY KEY,
   business_id       INT REFERENCES businesses(id),
   purchase_order_id INT NOT NULL REFERENCES purchase_orders(id) ON DELETE CASCADE,
-  action            TEXT NOT NULL,   -- created | submitted | auto_approved | approved | rejected | sent | cancelled | received
+  action            TEXT NOT NULL,   -- created | edited | submitted | auto_approved | approved | rejected | sent | cancelled | received
   from_status       TEXT,
   to_status         TEXT NOT NULL,
   staff_id          INT REFERENCES staff(id),
@@ -117,6 +120,49 @@ BEGIN
 
   RETURN jsonb_build_object('outcome', 'moved', 'purchase_order', to_jsonb(po));
 END $$;
+
+-- Swap a draft's lines in one go. p_items: [{ ingredient_id, quantity, unit_cost }]
+-- (already checked by the route). outcome: saved | not_found | wrong_status
+CREATE OR REPLACE FUNCTION replace_draft_po_lines(
+  p_business_id INT,
+  p_po_id       INT,
+  p_items       JSONB,
+  p_staff_id    INT
+) RETURNS jsonb
+LANGUAGE plpgsql
+SET search_path = public
+AS $$
+DECLARE
+  po purchase_orders%ROWTYPE;
+BEGIN
+  SELECT * INTO po FROM purchase_orders
+   WHERE id = p_po_id AND business_id = p_business_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('outcome', 'not_found');
+  END IF;
+  IF po.status <> 'draft' THEN
+    RETURN jsonb_build_object('outcome', 'wrong_status', 'status', po.status);
+  END IF;
+
+  DELETE FROM purchase_order_items WHERE purchase_order_id = p_po_id;
+  INSERT INTO purchase_order_items (business_id, purchase_order_id, ingredient_id, quantity, unit_cost)
+  SELECT p_business_id, p_po_id, x.ingredient_id, x.quantity, x.unit_cost
+    FROM jsonb_to_recordset(p_items) AS x(ingredient_id INT, quantity NUMERIC, unit_cost NUMERIC);
+
+  UPDATE purchase_orders
+     SET total_cost = (SELECT round(COALESCE(SUM(quantity * unit_cost), 0), 2)
+                         FROM purchase_order_items WHERE purchase_order_id = p_po_id)
+   WHERE id = p_po_id
+  RETURNING * INTO po;
+
+  INSERT INTO purchase_order_events (purchase_order_id, action, from_status, to_status, staff_id)
+  VALUES (p_po_id, 'edited', 'draft', 'draft', p_staff_id);
+
+  RETURN jsonb_build_object('outcome', 'saved', 'purchase_order', to_jsonb(po));
+END $$;
+
+REVOKE ALL ON FUNCTION replace_draft_po_lines(INT, INT, JSONB, INT) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION replace_draft_po_lines(INT, INT, JSONB, INT) TO service_role;
 
 -- 3 ──────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION receive_purchase_order(

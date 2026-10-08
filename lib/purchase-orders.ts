@@ -103,6 +103,26 @@ const ACTION_PAST: Record<PoAction, string> = {
   cancel: "cancelled",
 };
 
+// ── Order lines ──────────────────────────────────────────────────────────────
+
+export type PoLine = { ingredient_id: number; quantity: number; unit_cost: number };
+
+/** Checks an order's lines. One line per ingredient, quantity above 0, price £0 or more. */
+export function cleanPoLines(raw: unknown): { ok: true; lines: PoLine[] } | { ok: false; error: string } {
+  if (!Array.isArray(raw) || raw.length === 0) return { ok: false, error: "Add at least one item." };
+  const lines: PoLine[] = raw.map((i: Record<string, unknown>) => ({
+    ingredient_id: Number(i?.ingredient_id), quantity: Number(i?.quantity), unit_cost: Number(i?.unit_cost),
+  }));
+  if (lines.some((l) => !Number.isInteger(l.ingredient_id) || l.ingredient_id < 1 || !(l.quantity > 0) || l.quantity > 100000
+    || !Number.isFinite(l.unit_cost) || l.unit_cost < 0 || l.unit_cost > 100000)) {
+    return { ok: false, error: "Every line needs an ingredient, a quantity above 0 and a price of £0 or more." };
+  }
+  if (new Set(lines.map((l) => l.ingredient_id)).size !== lines.length) {
+    return { ok: false, error: "The same ingredient is on two lines. Put it on one line with the total quantity." };
+  }
+  return { ok: true, lines };
+}
+
 // ── Receiving ────────────────────────────────────────────────────────────────
 
 export type ReceivedLine = { item_id: number; received_quantity?: number; expiry_date?: string };

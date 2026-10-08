@@ -6,6 +6,7 @@ import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 import { poNumberPrefix } from "@/lib/business";
 import { resolveInventoryLocation } from "@/lib/locations";
 import { applyPoAction } from "@/lib/purchase-orders-server";
+import { cleanPoLines } from "@/lib/purchase-orders";
 
 // Based on the highest sequence number actually issued today, not a row
 // COUNT — a COUNT drifts (and reissues an already-used number, which then
@@ -61,16 +62,10 @@ export async function POST(req: NextRequest) {
     }
     const db = bizDb(session.businessId);
     const { supplier_id, expected_date, notes, items, submit } = await req.json();
-    if (!supplier_id || !Array.isArray(items) || items.length === 0) {
-      return NextResponse.json({ error: "supplier_id and at least one item are required" }, { status: 400 });
-    }
-    type Line = { ingredient_id: number; quantity: number; unit_cost: number };
-    const lines: Line[] = items.map((i: Record<string, unknown>) => ({
-      ingredient_id: Number(i.ingredient_id), quantity: Number(i.quantity), unit_cost: Number(i.unit_cost),
-    }));
-    if (lines.some((l) => !Number.isInteger(l.ingredient_id) || !(l.quantity > 0) || !Number.isFinite(l.unit_cost) || l.unit_cost < 0)) {
-      return NextResponse.json({ error: "Every line needs an ingredient, a quantity above 0 and a price of £0 or more." }, { status: 400 });
-    }
+    if (!supplier_id) return NextResponse.json({ error: "Pick a supplier." }, { status: 400 });
+    const checked = cleanPoLines(items);
+    if (!checked.ok) return NextResponse.json({ error: checked.error }, { status: 400 });
+    const lines = checked.lines;
     if (!(await allOwned(db, "suppliers", [supplier_id]))) return NextResponse.json({ error: "That supplier isn't this business's" }, { status: 400 });
 
     if (!(await allOwned(db, "ingredients", lines.map((i) => i.ingredient_id)))) {

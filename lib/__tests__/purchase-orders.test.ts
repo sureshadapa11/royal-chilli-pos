@@ -1,4 +1,4 @@
-import { cleanReceivedLine, needsApproval, planPoAction, suggestOrder, type PoActor } from "../purchase-orders";
+import { cleanPoLines, cleanReceivedLine, needsApproval, planPoAction, suggestOrder, type PoActor } from "../purchase-orders";
 
 describe("cleanReceivedLine", () => {
   it("keeps a full line", () => {
@@ -112,5 +112,21 @@ describe("suggestOrder", () => {
 
   it("ignores items with no reorder level", () => {
     expect(suggestOrder([{ ...base, id: 1, name: "Salt", current_stock: 0, reorder_level: 0 }], new Map())).toEqual([]);
+  });
+});
+
+describe("cleanPoLines", () => {
+  it("keeps good lines", () => {
+    expect(cleanPoLines([{ ingredient_id: "1", quantity: "20", unit_cost: 6 }])).toEqual({ ok: true, lines: [{ ingredient_id: 1, quantity: 20, unit_cost: 6 }] });
+  });
+  it.each([
+    [[]],
+    ["nope"],
+    [[{ ingredient_id: 1, quantity: 0, unit_cost: 6 }]],
+    [[{ ingredient_id: 1, quantity: 2, unit_cost: -1 }]],
+    [[{ ingredient_id: 0, quantity: 2, unit_cost: 1 }]],
+    [[{ ingredient_id: 1, quantity: 2, unit_cost: 1 }, { ingredient_id: 1, quantity: 3, unit_cost: 1 }]],
+  ])("refuses %j", (raw) => {
+    expect(cleanPoLines(raw).ok).toBe(false);
   });
 });
