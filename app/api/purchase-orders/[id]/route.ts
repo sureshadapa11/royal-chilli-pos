@@ -19,10 +19,9 @@ export async function GET(
   const { data: po, error: poErr } = await db.from("purchase_orders").select("*, supplier:suppliers(name)").eq("id", id).single();
   if (poErr || !po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
 
-  const [{ data: items, error: itemsErr }, { data: events }, { data: requests }] = await Promise.all([
+  const [{ data: items, error: itemsErr }, { data: events }] = await Promise.all([
     db.from("purchase_order_items").select("*, ingredient:ingredients(name, unit)").eq("purchase_order_id", id),
     db.from("purchase_order_events").select("id, action, from_status, to_status, comment, created_at, staff:staff(name)").eq("purchase_order_id", id).order("id"),
-    db.from("stock_requests").select("id, quantity, unit, reason, item_name, ingredient:ingredients(name), requester:staff!stock_requests_requested_by_fkey(name)").eq("purchase_order_id", id),
   ]);
   if (itemsErr) return NextResponse.json({ error: "Failed to fetch items" }, { status: 500 });
 
@@ -35,16 +34,11 @@ export async function GET(
     const { staff, ...rest } = e as typeof e & { staff: { name: string } | null };
     return { ...rest, staff_name: staff?.name ?? null };
   });
-  const fromKitchen = (requests || []).map((r) => {
-    const { ingredient, requester, ...rest } = r as typeof r & { ingredient: { name: string } | null; requester: { name: string } | null };
-    return { ...rest, name: ingredient?.name ?? r.item_name, requested_by_name: requester?.name ?? null };
-  });
 
   return NextResponse.json({
     purchaseOrder: { ...poRest, supplier_name: s?.name ?? null },
     items: flatItems,
     events: history,
-    requests: fromKitchen,
     canApprove: mayApprove(po, poActor(session)),
   });
 }

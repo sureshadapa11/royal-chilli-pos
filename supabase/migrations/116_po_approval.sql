@@ -1,5 +1,6 @@
--- 116: Inventory phase 1 — stock requests from the kitchen + purchase order
--- approval (agreed 2026-10-08, inventory v2 plan).
+-- 116: Inventory phase 1 — purchase order approval (agreed 2026-10-08,
+-- inventory v2 plan). The Kitchen Display stays read-only: managers order
+-- from "What to order" (reorder levels).
 --
 -- 1. Purchase order stages:
 --      draft → (submit) → awaiting_approval → (approve) → approved
@@ -17,13 +18,10 @@
 -- 2. purchase_order_events — who did what to each order, when, and why.
 --    Append-only: rows can't be changed or deleted.
 --
--- 3. stock_requests — the Kitchen Display's "Request stock". A manager turns
---    open requests into a purchase order, or declines them with a reason.
---
--- 4. receive_purchase_order (115) now only receives an approved or sent
+-- 3. receive_purchase_order (115) now only receives an approved or sent
 --    order, puts the stock into the order's own branch, and logs the event.
 --
--- 5. New permission tick approve_purchase_orders — Managers full.
+-- 4. New permission tick approve_purchase_orders — Managers full.
 --
 -- Run BEFORE merging. Safe to re-run.
 BEGIN;
@@ -117,43 +115,10 @@ BEGIN
   INSERT INTO purchase_order_events (purchase_order_id, action, from_status, to_status, staff_id, comment)
   VALUES (p_po_id, p_action, was, p_to, p_staff_id, NULLIF(btrim(COALESCE(p_comment, '')), ''));
 
-  -- A rejected or cancelled order gives its kitchen requests back, so they
-  -- can go on another order.
-  IF p_to IN ('rejected', 'cancelled') THEN
-    UPDATE stock_requests SET status = 'open', purchase_order_id = NULL, handled_by = NULL, handled_at = NULL
-     WHERE purchase_order_id = p_po_id AND status = 'ordered';
-  END IF;
-
   RETURN jsonb_build_object('outcome', 'moved', 'purchase_order', to_jsonb(po));
 END $$;
 
 -- 3 ──────────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS stock_requests (
-  id                SERIAL PRIMARY KEY,
-  business_id       INT NOT NULL REFERENCES businesses(id),
-  location_id       INT REFERENCES locations(id),
-  ingredient_id     INT REFERENCES ingredients(id),
-  item_name         TEXT,            -- something not on the ingredients list
-  quantity          NUMERIC(12,3) NOT NULL CHECK (quantity > 0),
-  unit              TEXT,
-  reason            TEXT,
-  status            TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'ordered', 'declined')),
-  requested_by      INT REFERENCES staff(id),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  handled_by        INT REFERENCES staff(id),
-  handled_at        TIMESTAMPTZ,
-  purchase_order_id INT REFERENCES purchase_orders(id),
-  decline_reason    TEXT,
-  CHECK (ingredient_id IS NOT NULL OR NULLIF(btrim(item_name), '') IS NOT NULL)
-);
-CREATE INDEX IF NOT EXISTS idx_stock_requests_open ON stock_requests (business_id, status, created_at);
-ALTER TABLE stock_requests ENABLE ROW LEVEL SECURITY;
-
-DROP TRIGGER IF EXISTS trg_match_business ON stock_requests;
-CREATE TRIGGER trg_match_business BEFORE INSERT OR UPDATE ON stock_requests
-  FOR EACH ROW EXECUTE FUNCTION check_business_match('ingredients', 'ingredient_id', 'purchase_orders', 'purchase_order_id');
-
--- 4 ──────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION receive_purchase_order(
   p_business_id INT,
   p_po_id       INT,
@@ -253,7 +218,7 @@ GRANT EXECUTE ON FUNCTION move_purchase_order(INT, INT, TEXT[], TEXT, TEXT, INT,
 REVOKE ALL ON FUNCTION receive_purchase_order(INT, INT, JSONB, INT[], INT, INT, DATE) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION receive_purchase_order(INT, INT, JSONB, INT[], INT, INT, DATE) TO service_role;
 
--- 5 ──────────────────────────────────────────────────────────────────────────
+-- 4 ──────────────────────────────────────────────────────────────────────────
 INSERT INTO role_permissions (role, permission, level, granted)
 VALUES ('manager', 'approve_purchase_orders', 'full', true),
        ('hr',      'approve_purchase_orders', 'off',  false)

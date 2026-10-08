@@ -16,10 +16,8 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
   const yesterday = d.toISOString().slice(0, 10);
   const isManagement = isManagerRole(role);
 
-  const [ingredients, stockRequests, toApprove, leave, corrections, openDay, platforms, dailyAccounts] = await Promise.all([
+  const [ingredients, toApprove, leave, corrections, openDay, platforms, dailyAccounts] = await Promise.all([
     canAccess(role, "inventory") ? db.from("ingredients").select("name, current_stock, reorder_level").eq("active", 1) : null,
-    canAccess(role, "inventory")
-      ? db.from("stock_requests").select("id", { count: "exact", head: true }).eq("status", "open") : null,
     canEdit(role, "approve_purchase_orders")
       ? db.from("purchase_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_approval") : null,
     canAccess(role, "hr") || canAccess(role, "attendance")
@@ -43,10 +41,6 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
       sub: low.length > 1 ? low.slice(0, 3).map((i) => i.name).join(", ") + (low.length > 3 ? "…" : "") : undefined,
       href: "/staff/inventory",
     });
-  }
-  const asked = stockRequests?.error ? 0 : stockRequests?.count ?? 0;
-  if (asked > 0) {
-    out.push({ icon: "🧑‍🍳", text: asked === 1 ? "1 stock request from the kitchen" : `${asked} stock requests from the kitchen`, sub: "Order them or decline", href: "/staff/inventory?tab=orders" });
   }
   const approvals = toApprove?.error ? 0 : toApprove?.count ?? 0;
   if (approvals > 0) {
