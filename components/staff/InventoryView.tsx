@@ -285,6 +285,7 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
   const [items, setItems] = useState<{ id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number; received_quantity: number; expiry_date: string }[]>([]);
   const [orderNumber, setOrderNumber] = useState("");
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [saving, setSaving] = useState(false);
   const total = Math.round(items.reduce((sum, i) => sum + Math.max(0, Number(i.received_quantity) || 0) * Number(i.unit_cost || 0), 0) * 100) / 100;
 
   useEffect(() => {
@@ -296,14 +297,18 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
 
   async function confirm() {
     if (receipts.length === 0) return toast({ variant: "destructive", title: "Photo needed", description: "Take a photo of the supplier's invoice first." });
+    if (saving) return;
+    setSaving(true);
     const res = await fetch(`/api/purchase-orders/${poId}/receive`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: items.map((i) => ({ item_id: i.id, received_quantity: i.received_quantity, expiry_date: i.expiry_date || undefined })),
         receipt_ids: receipts.map((r) => r.id),
       }),
-    });
-    const data = await res.json();
+    }).catch(() => null);
+    setSaving(false);
+    if (!res) return toast({ variant: "destructive", title: "Couldn't receive order", description: "No connection. Check the Wi-Fi and try again." });
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) return toast({ variant: "destructive", title: "Couldn't receive order", description: data.error });
     toast({ variant: "success", title: "Delivery received", description: `Cost counted in Finance: £${Number(data.purchaseOrder?.total_cost ?? 0).toFixed(2)}` });
     onSaved(); onClose();
@@ -329,7 +334,7 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
         </div>
         <div className="mt-4 flex gap-3">
           <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
-          <button onClick={confirm} disabled={receipts.length === 0} className="flex-1 h-10 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl">Mark Received</button>
+          <button onClick={confirm} disabled={receipts.length === 0 || saving} className="flex-1 h-10 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl">{saving ? "Saving…" : "Mark Received"}</button>
         </div>
       </div>
     </div>
