@@ -4,16 +4,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { confirmDelete } from "@/components/ui/confirm";
 import {
-  COLS, GRID_W, ROWS, SLOT, TABLE_SIZE, clashes, freeSlot, groupsOf, joinLabel, nearestSlot, placeTables, rowsShown, slotXY,
+  GRID_W, GRID_H, TABLE_SIZE, boxesOverlap, dimension, firstFreePosition, groupsOf, joinLabel, placeTables,
   type Group, type Placed,
 } from "@/lib/floor-plan";
 
-// Staff Hub → Tables: the restaurant's floor plan — equal tables in rows and
-// columns of slots. Drag a table to an empty slot, or onto another table to
-// swap the two (it saves when you let go); tap one to change its number or
-// seats, join it to other tables, or delete it. Joined tables (pushed
-// together for a big party) are drawn as one long table, "T1 + T2", and act
-// as one on the till — one order, one bill — until unjoined here. The till's
+// Staff Hub → Tables: the restaurant's floor plan. Drag a table across the
+// canvas to a clear position (it saves when you let go); tap one to change its number,
+// shape, footprint or seating capacity, join it to other tables, or delete it.
+// Joined tables are drawn as one long table, "T1 + T2", and act as one on the
+// till — one order, one bill — until unjoined here. The till's
 // table screen draws the same plan. Read-only without full Tables access. On
 // a phone, "Move tables" switches dragging on (otherwise a finger scrolls the
 // page), the plan can be zoomed, and a tapped table opens in a sheet from the
@@ -23,6 +22,9 @@ type Table = {
   id: number;
   table_number: string;
   capacity: number;
+  shape: "square" | "round" | "rect";
+  width: number;
+  depth: number;
   status: "available" | "occupied" | "reserved";
   pos_x: number | null;
   pos_y: number | null;
@@ -80,11 +82,9 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   const groups = useMemo(() => groupsOf(placed), [placed]);
   const groupOf = (id: number) => groups.find((g) => g.members.some((m) => m.id === id))!;
   const isJoined = (id: number) => groupOf(id).members.length > 1;
-  const target = drag ? nearestSlot(drag.x, drag.y) : null;
-  const taken = placed.map((p) => ({ col: p.col, row: p.row }));
-  // Only the rows in use plus one spare, so the floor fits on the screen.
-  const showRows = rowsShown(placed);
-  const GRID_H = showRows * SLOT + 1;
+  const target = drag ? { x: Math.round(drag.x * 2) / 2, y: Math.round(drag.y * 2) / 2 } : null;
+  // Use one stable coordinate system across Staff Hub and the till.
+  const canvasH = GRID_H;
   const selGroup = selected != null ? groups.find((g) => g.lead.id === selected) ?? null : null;
   const totalSeats = tables.reduce((s, t) => s + t.capacity, 0);
 
@@ -113,7 +113,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   // ---- dragging ----------------------------------------------------------
   function cellAt(clientX: number, clientY: number) {
     const r = canvasRef.current!.getBoundingClientRect();
-    return { cx: ((clientX - r.left) / r.width) * GRID_W, cy: ((clientY - r.top) / r.height) * GRID_H };
+    return { cx: ((clientX - r.left) / r.width) * GRID_W, cy: ((clientY - r.top) / r.height) * canvasH };
   }
 
   function onPointerDown(e: React.PointerEvent, t: Spot) {
@@ -132,9 +132,9 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     const d = dragStart.current;
     if (!d || d.id !== t.id) return null;
     const { cx, cy } = cellAt(e.clientX, e.clientY);
-    if (!d.moved && Math.hypot(cx - d.startX, cy - d.startY) < 0.5) return null;
+    if (!d.moved && Math.hypot(cx - d.startX, cy - d.startY) < 0.25) return null;
     d.moved = true;
-    return { x: cx - d.offX, y: cy - d.offY };
+    return { x: Math.max(0, Math.min(GRID_W - t.w, cx - d.offX)), y: Math.max(0, Math.min(canvasH - t.h, cy - d.offY)) };
   }
 
   function onPointerMove(e: React.PointerEvent, t: Spot) {
@@ -154,27 +154,20 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     // so you can carry on moving tables.
     if (wasDrag && (!spot || wide)) setSelected(t.id);
     if (!spot) return;
-    const to = nearestSlot(spot.x, spot.y);
-    if (to.col === t.col && to.row === t.row) return;
-    const inTheWay = placed.filter((p) => p.id !== t.id && clashes(p, to));
-    if (inTheWay.length > 1) {
-      toast({ variant: "destructive", title: "No room there", description: "Drop it in a free spot, or onto one table to swap them." });
+    const to = { x: Math.round(spot.x * 2) / 2, y: Math.round(spot.y * 2) / 2 };
+    if (to.x === t.x && to.y === t.y) return;
+    const proposed = { x: to.x, y: to.y, w: t.w, h: t.h };
+    if (placed.some((p) => p.id !== t.id && boxesOverlap(proposed, p.box))) {
+      toast({ variant: "destructive", title: "No room there", description: "Move it to a clear area of the floor." });
       return;
     }
-    const [there] = inTheWay;
-    if (there && isJoined(there.id)) {
-      toast({ variant: "destructive", title: `${joinLabel(groupOf(there.id).members)} are joined`, description: "Drop it in a free spot, or unjoin those tables first." });
-      return;
-    }
-    const moves = [{ id: t.id, ...slotXY(to.col, to.row) }];
-    if (there) moves.push({ id: there.id, ...slotXY(t.col, t.row) });
+    const moves = [{ id: t.id, ...to }];
     // Show it in its new place straight away, then save.
     setTables((list) => list.map((x) => {
       const m = moves.find((v) => v.id === x.id);
       return m ? { ...x, pos_x: m.x, pos_y: m.y } : x;
     }));
     await saveSpots(moves);
-    if (there) toast({ title: `${t.table_number} and ${there.table_number} swapped places` });
   }
 
   async function saveSpots(moves: { id: number; x: number; y: number }[]) {
@@ -207,12 +200,11 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
   async function addTable() {
     const nums = tables.map((t) => parseInt(t.table_number.replace(/\D/g, ""), 10)).filter(Number.isFinite);
     const number = `T${(nums.length ? Math.max(...nums) : 0) + 1}`;
-    const slot = freeSlot(taken);
-    if (slot.row >= ROWS) {
-      toast({ variant: "destructive", title: "The floor plan is full", description: "Delete a table to make room." });
+    const { x, y } = firstFreePosition(placed);
+    if (placed.some((p) => boxesOverlap(p.box, { x, y, w: TABLE_SIZE, h: TABLE_SIZE }))) {
+      toast({ variant: "destructive", title: "The floor plan is full", description: "Make room before adding another table." });
       return;
     }
-    const { x, y } = slotXY(slot.col, slot.row);
     const data = await call("/api/tables", "POST", { table_number: number, capacity: 4, pos_x: x, pos_y: y });
     if (data?.table) {
       setSelected(data.table.id);
@@ -220,8 +212,12 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
     }
   }
 
-  async function update(t: Spot, change: Partial<Pick<Table, "table_number" | "capacity">>) {
-    await call("/api/tables", "PUT", { id: t.id, ...change }, true);
+  async function update(t: Spot, change: Partial<Pick<Table, "table_number" | "capacity" | "shape" | "width" | "depth">>) {
+    const width = Number(change.width ?? t.width), depth = Number(change.depth ?? t.depth);
+    const pos_x = Math.min(t.x, GRID_W - width), pos_y = Math.min(t.y, GRID_H - depth);
+    await call("/api/tables", "PUT", { id: t.id, ...change,
+      ...(pos_x !== t.x ? { pos_x } : {}), ...(pos_y !== t.y ? { pos_y } : {}),
+    }, true);
   }
 
   async function remove(t: Spot) {
@@ -273,7 +269,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
             <h1 style={heading} className="text-[26px] font-semibold tracking-[-0.02em] text-foreground">Tables</h1>
             <p className="mt-1 text-sm text-muted-foreground">
               {tables.length} table{tables.length === 1 ? "" : "s"} · {totalSeats} seats
-              {canDrag ? " · drag a table to a free spot, or onto another to swap · tap to edit or join" : canEdit ? " · tap a table to edit or join it, or turn on Move tables" : ""}
+              {canDrag ? " · drag tables to clear positions · tap to edit shape, size, seats or join" : canEdit ? " · tap a table to edit or join it, or turn on Move tables" : ""}
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -308,29 +304,26 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
             ) : (
               <div className={!wide && zoom > 1 ? "overflow-auto rounded-xl" : "mx-auto"}
                 // On a computer, never taller than the screen: the width follows the height.
-                style={wide ? { maxWidth: `calc((100vh - 230px) * ${GRID_W} / ${GRID_H})` } : undefined}>
+                style={wide ? { maxWidth: `calc((100vh - 230px) * ${GRID_W} / ${canvasH})` } : undefined}>
               <div
                 ref={canvasRef}
                 onPointerDown={(e) => { if (e.target === e.currentTarget) setSelected(null); }}
                 className="relative select-none rounded-xl bg-[#FBF8F1]"
                 style={{
                   width: !wide ? `${zoom * 100}%` : "100%",
-                  aspectRatio: `${GRID_W} / ${GRID_H}`,
+                  aspectRatio: `${GRID_W} / ${canvasH}`,
                 }}
               >
-                {/* Empty slots while tables can be moved; where a dragged table would land is lit */}
-                {canDrag && [
-                  ...Array.from({ length: COLS * showRows }, (_, i) => ({ col: i % COLS, row: Math.floor(i / COLS), lit: false }))
-                    .filter((s) => !taken.some((q) => clashes(q, s))),
-                  ...(target ? [{ ...target, lit: true }] : []),
-                ].map((s) => {
-                  const { x, y } = slotXY(s.col, s.row);
-                  return (
-                    <div key={`slot-${s.col}-${s.row}-${s.lit}`} aria-hidden
-                      className={`pointer-events-none absolute rounded-lg border-2 border-dashed ${s.lit ? "border-blue-400 bg-blue-50/60" : "border-[#E6DDCB]"}`}
-                      style={{ left: `${(x / GRID_W) * 100}%`, top: `${(y / GRID_H) * 100}%`, width: `${(TABLE_SIZE / GRID_W) * 100}%`, height: `${(TABLE_SIZE / GRID_H) * 100}%` }} />
-                  );
-                })}
+                {/* Subtle alignment grid and live footprint preview while dragging. */}
+                {canDrag && <div aria-hidden className="pointer-events-none absolute inset-0 rounded-xl opacity-35"
+                  style={{ backgroundImage: "linear-gradient(to right, #e6ddcb 1px, transparent 1px), linear-gradient(to bottom, #e6ddcb 1px, transparent 1px)", backgroundSize: `${100 / GRID_W}% ${100 / canvasH}%` }} />}
+                {canDrag && target && drag && (() => {
+                  const moving = placed.find((p) => p.id === drag.id);
+                  if (!moving) return null;
+                  const invalid = placed.some((p) => p.id !== moving.id && boxesOverlap({ x: target.x, y: target.y, w: moving.w, h: moving.h }, p.box));
+                  return <div aria-hidden className={`pointer-events-none absolute rounded-lg border-2 border-dashed ${invalid ? "border-red-500 bg-red-100/60" : "border-blue-400 bg-blue-50/60"}`}
+                    style={{ left: `${(target.x / GRID_W) * 100}%`, top: `${(target.y / canvasH) * 100}%`, width: `${(moving.w / GRID_W) * 100}%`, height: `${(moving.h / canvasH) * 100}%` }} />;
+                })()}
                 {groups.map((g) => {
                   const t = g.lead;
                   const joined = g.members.length > 1;
@@ -352,17 +345,19 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
                       onPointerUp={(e) => onPointerUp(e, t)}
                       onPointerCancel={() => { dragStart.current = null; setDrag(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") setSelected(t.id); }}
-                      className={`absolute flex flex-col items-center justify-center border-2 ${st.fill} ${isSel ? "border-blue-500 ring-2 ring-blue-400/40" : st.ring} rounded-lg ${movable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "z-10 opacity-90 shadow-lg" : "shadow-sm"} ${movable ? "touch-none" : "touch-manipulation"} transition-[box-shadow]`}
+                      className={`absolute flex flex-col items-center justify-center border-2 ${st.fill} ${isSel ? "border-blue-500 ring-2 ring-blue-400/40" : st.ring} ${t.shape === "round" ? "rounded-full" : t.shape === "rect" ? "rounded-xl" : "rounded-lg"} ${movable ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${dragging ? "z-10 opacity-90 shadow-lg" : "shadow-sm"} ${movable ? "touch-none" : "touch-manipulation"} transition-[box-shadow]`}
                       style={{
-                        left: `${(b.x / GRID_W) * 100}%`, top: `${(b.y / GRID_H) * 100}%`,
-                        width: `${(b.w / GRID_W) * 100}%`, height: `${(b.h / GRID_H) * 100}%`,
+                        left: `${(b.x / GRID_W) * 100}%`, top: `${(b.y / canvasH) * 100}%`,
+                        width: `${(b.w / GRID_W) * 100}%`, height: `${(b.h / canvasH) * 100}%`,
                       }}
                     >
                       {/* Where one table meets the next, a faint seam */}
                       {joined && g.members.map((m) => {
-                        const across = g.box.h <= TABLE_SIZE + 0.01;
+                        const across = g.members.every((member) => Math.abs(member.y - g.lead.y) < 0.01);
                         const at = across ? (m.box.x - g.box.x - 0.5) / g.box.w : (m.box.y - g.box.y - 0.5) / g.box.h;
-                        const prev = g.members.some((o) => (across ? o.col === m.col - 1 : o.row === m.row - 1));
+                        const prev = g.members.some((o) => across
+                          ? Math.abs(o.box.x + o.box.w + 1 - m.box.x) < 0.51
+                          : Math.abs(o.box.y + o.box.h + 1 - m.box.y) < 0.51);
                         return prev ? (
                           <span key={m.id} aria-hidden className="pointer-events-none absolute border-dashed border-current opacity-20"
                             style={across ? { left: `${at * 100}%`, top: "12%", bottom: "12%", borderLeftWidth: 1 } : { top: `${at * 100}%`, left: "12%", right: "12%", borderTopWidth: 1 }} />
@@ -403,7 +398,7 @@ export default function TableManagementView({ canEdit }: { canEdit: boolean }) {
           <div className={`rounded-2xl border border-border bg-surface p-4 self-start ${!wide && panel ? "hidden" : ""}`}>
             {panel || (
               <p className="text-sm text-muted-foreground">
-                {canEdit ? "Tap a table to change its number or seats, or to join it to other tables." : "Tap a table to see its details."}
+                {canEdit ? "Tap a table to change its number, shape, footprint or seats, or join it to other tables." : "Tap a table to see its details."}
               </p>
             )}
             {!canEdit && <p className="mt-3 text-xs text-muted-foreground">You can view the floor plan; changes are made by someone with full Tables access.</p>}
@@ -440,7 +435,7 @@ function JoinPicker({ options, busy, onJoin, prompt }: {
 
 function TablePanel({ t, canEdit, busy, joinable, onUpdate, onDelete, onJoin }: {
   t: Spot; canEdit: boolean; busy: boolean; joinable: Group<Table>[];
-  onUpdate: (c: Partial<Pick<Table, "table_number" | "capacity">>) => void; onDelete: () => void; onJoin: (leadId: number) => void;
+  onUpdate: (c: Partial<Pick<Table, "table_number" | "capacity" | "shape" | "width" | "depth">>) => void; onDelete: () => void; onJoin: (leadId: number) => void;
 }) {
   const [number, setNumber] = useState(t.table_number);
   const saveNumber = () => { const n = number.trim(); if (n && n !== t.table_number) onUpdate({ table_number: n }); else setNumber(t.table_number); };
@@ -458,6 +453,25 @@ function TablePanel({ t, canEdit, busy, joinable, onUpdate, onDelete, onJoin }: 
         <span className="min-w-[2ch] text-center text-2xl font-bold tabular-nums">{t.capacity}</span>
         <button type="button" onClick={() => onUpdate({ capacity: t.capacity + 1 })} disabled={!canEdit || busy || t.capacity >= 30}
           className="h-10 w-10 rounded-full border border-border text-xl font-bold hover:bg-surface-hover disabled:opacity-40">+</button>
+      </div>
+
+      <p className={`${label} mt-4`}>Shape</p>
+      <select value={t.shape ?? "square"} onChange={(e) => onUpdate({ shape: e.target.value as Table["shape"] })} disabled={!canEdit || busy}
+        className="mt-1 w-full rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm font-semibold text-foreground disabled:opacity-70">
+        <option value="square">Square</option><option value="round">Round</option><option value="rect">Rectangle</option>
+      </select>
+
+      <p className={`${label} mt-4`}>Footprint size</p>
+      <p className="mt-1 text-xs text-muted-foreground">Set the table width and depth on the floor plan.</p>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        {(["width", "depth"] as const).map((key) => (
+          <label key={key} className="text-xs font-medium capitalize text-muted-foreground">{key}
+            <select value={dimension(t[key])} onChange={(e) => onUpdate({ [key]: Number(e.target.value) })} disabled={!canEdit || busy}
+              className="mt-1 block w-full rounded-lg border border-border bg-surface-hover px-2.5 py-2 text-sm font-semibold text-foreground disabled:opacity-70">
+              {[4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => <option key={n} value={n}>{n} units</option>)}
+            </select>
+          </label>
+        ))}
       </div>
 
       {canEdit && joinable.length > 0 && (

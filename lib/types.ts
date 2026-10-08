@@ -170,6 +170,8 @@ export interface RestaurantTable {
   pos_x?: number | null;
   pos_y?: number | null;
   shape?: "square" | "round" | "rect" | null;
+  width?: number | null;
+  depth?: number | null;
   rotation?: number | null; // degrees, 45° steps
   // Joined tables (migration 112): an extra table points at its group's lead;
   // the lead carries the optional group name and the "T1 + T2" label.

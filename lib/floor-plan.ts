@@ -1,9 +1,5 @@
-// The restaurant floor plan (Staff Hub → Tables, and the till's table
-// screen): one floor of equal table slots in neat rows and columns, measured
-// in grid cells. Every table is the same size and sits in one slot — pos_x /
-// pos_y is the top-left of its slot. One even grid: whole columns and rows,
-// the same gap everywhere. Seats are shown as a number, not by size. Safe to
-// import in the browser.
+// Shared floor-plan geometry for Staff Hub and the till. Coordinates and
+// dimensions use floor units; saved positions can be fractional.
 
 export const SHAPES = ["square", "round", "rect"] as const;
 export type Shape = (typeof SHAPES)[number];
@@ -11,6 +7,8 @@ export type Shape = (typeof SHAPES)[number];
 /** One slot is SLOT cells wide and deep; the table fills all but a cell of gap. */
 export const SLOT = 8;
 export const TABLE_SIZE = 7;
+export const MIN_TABLE_SIZE = 4;
+export const MAX_TABLE_SIZE = 12;
 /** The floor, in slots. */
 export const COLS = 5;
 export const ROWS = 5;
@@ -22,6 +20,9 @@ export type PlanTable = {
   id: number;
   table_number: string;
   capacity: number;
+  shape?: Shape | null;
+  width?: number | string | null;
+  depth?: number | string | null;
   pos_x?: number | string | null;
   pos_y?: number | string | null;
   /** Joined onto this lead table (see "Joined tables" below). */
@@ -84,16 +85,41 @@ export function placeTables<T extends PlanTable>(tables: T[]): Placed<T>[] {
   const sorted = [...tables].sort((a, b) => tableNo(a) - tableNo(b));
   const taken: Slot[] = [];
   const out: Placed<T>[] = [];
-  const put = (t: T, s: Slot) => {
-    if (s.row >= ROWS || s.col > COLS - 1 || taken.some((q) => clashes(q, s))) s = freeSlot(taken);
-    taken.push(s);
-    const { x, y } = slotXY(s.col, s.row);
-    out.push({ ...t, ...s, x, y, w: TABLE_SIZE, h: TABLE_SIZE, box: { x, y, w: TABLE_SIZE, h: TABLE_SIZE } });
+  const put = (t: T, s: Slot, saved = false) => {
+    const w = dimension(t.width), h = dimension(t.depth);
+    let x = saved && t.pos_x != null ? Number(t.pos_x) : slotXY(s.col, s.row).x;
+    let y = saved && t.pos_y != null ? Number(t.pos_y) : slotXY(s.col, s.row).y;
+    x = clamp(x, 0, GRID_W - w); y = clamp(y, 0, GRID_H - h);
+    if (out.some((p) => boxesOverlap(p.box, { x, y, w, h }))) {
+      const free = firstFreePosition(out, w, h);
+      x = free.x; y = free.y;
+    }
+    const col = Math.round((x - 1) / SLOT), row = Math.round((y - 1) / SLOT);
+    out.push({ ...t, col, row, x, y, w, h, box: { x, y, w, h } });
   };
   const saved = sorted.filter((t) => t.pos_x != null && t.pos_y != null);
-  for (const t of saved) put(t, nearestSlot(Number(t.pos_x), Number(t.pos_y)));
+  for (const t of saved) put(t, nearestSlot(Number(t.pos_x), Number(t.pos_y)), true);
   sorted.forEach((t, i) => { if (t.pos_x == null || t.pos_y == null) put(t, legacySlot(i)); });
   return out;
+}
+
+export function dimension(value: unknown): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? clamp(n, MIN_TABLE_SIZE, MAX_TABLE_SIZE) : TABLE_SIZE;
+}
+
+export function boxesOverlap(a: Box, b: Box, gap = 0.5): boolean {
+  return a.x < b.x + b.w + gap && a.x + a.w + gap > b.x &&
+    a.y < b.y + b.h + gap && a.y + a.h + gap > b.y;
+}
+
+export function firstFreePosition(placed: { box: Box }[], w = TABLE_SIZE, h = TABLE_SIZE): { x: number; y: number } {
+  for (let y = 1; y + h <= GRID_H; y += 0.5) {
+    for (let x = 1; x + w <= GRID_W; x += 0.5) {
+      if (!placed.some((p) => boxesOverlap(p.box, { x, y, w, h }))) return { x, y };
+    }
+  }
+  return { x: 1, y: 1 };
 }
 
 /** How many rows of the floor to show: the rows in use plus one spare to
@@ -154,9 +180,7 @@ export function joinLabel(members: PlanTable[], groupName?: string | null): stri
   return name ? `${nums} · ${name}` : nums;
 }
 
-/** Where `tableId` goes to join the group led by `leadId`: the next slot along
- *  the group's line (right, left, below, above for a table on its own). A
- *  table already there swaps into `tableId`'s old slot. */
+/** Place a table beside a group, respecting each table's actual footprint. */
 export function planJoin<T extends PlanTable>(
   placed: Placed<T>[], leadId: number, tableId: number,
 ): { moves: { id: number; x: number; y: number }[] } | { error: string } {
@@ -168,27 +192,39 @@ export function planJoin<T extends PlanTable>(
   const own = groups.find((g) => g.members.some((m) => m.id === tableId))!;
   if (own.members.length > 1) return { error: `${joining.table_number} is joined to other tables — unjoin it first` };
 
-  const cols = group.members.map((m) => m.col), rows = group.members.map((m) => m.row);
-  const [c0, c1, r0, r1] = [Math.min(...cols), Math.max(...cols), Math.min(...rows), Math.max(...rows)];
-  const across = { right: { col: c1 + 1, row: r0 }, left: { col: c0 - 1, row: r0 } };
-  const down = { below: { col: c0, row: r1 + 1 }, above: { col: c0, row: r0 - 1 } };
-  const candidates = group.members.length === 1
-    ? [across.right, across.left, down.below, down.above]
-    : r0 === r1 ? [across.right, across.left] : [down.below, down.above];
-
-  const inTheWay = (s: Slot) => placed.filter((p) => p.id !== tableId && clashes(p, s));
-  const usable = candidates.filter((s) => {
-    if (s.col < 0 || s.col > COLS - 1 || s.row < 0 || s.row >= ROWS) return false;
-    const there = inTheWay(s);
-    // Only one table on its own can be swapped out of the way.
-    return there.length === 0 || (there.length === 1 && groups.find((g) => g.members.some((m) => m.id === there[0].id))!.members.length === 1);
+  const across = group.box.w >= group.box.h;
+  const candidates = group.members.length === 1 || across
+    ? [
+        { x: group.box.x + group.box.w + 1, y: group.box.y },
+        { x: group.box.x - joining.w - 1, y: group.box.y },
+        ...(group.members.length === 1 ? [
+          { x: group.box.x, y: group.box.y + group.box.h + 1 },
+          { x: group.box.x, y: group.box.y - joining.h - 1 },
+        ] : []),
+      ]
+    : [
+        { x: group.box.x, y: group.box.y + group.box.h + 1 },
+        { x: group.box.x, y: group.box.y - joining.h - 1 },
+      ];
+  const usable = candidates.flatMap((s) => {
+    const box = { ...s, w: joining.w, h: joining.h };
+    if (s.x < 0 || s.y < 0 || s.x + joining.w > GRID_W || s.y + joining.h > GRID_H) return [];
+    const blockers = placed.filter((p) => p.id !== tableId && boxesOverlap(p.box, box));
+    if (blockers.length === 0) return [{ ...s, swapId: null as number | null }];
+    if (blockers.length !== 1) return [];
+    const there = blockers[0];
+    const thereGroup = groups.find((g) => g.members.some((m) => m.id === there.id));
+    if (!thereGroup || thereGroup.members.length !== 1) return [];
+    const swapBox = { x: joining.x, y: joining.y, w: there.w, h: there.h };
+    if (swapBox.x + swapBox.w > GRID_W || swapBox.y + swapBox.h > GRID_H) return [];
+    if (placed.some((p) => p.id !== tableId && p.id !== there.id && boxesOverlap(p.box, swapBox))) return [];
+    return [{ ...s, swapId: there.id }];
   });
   if (usable.length === 0) return { error: "There's no room beside those tables — move them, then join" };
   // Already in place? Nothing moves.
-  const to = usable.find((s) => s.col === joining.col && s.row === joining.row) ?? usable[0];
-  if (to.col === joining.col && to.row === joining.row) return { moves: [] };
-  const moves = [{ id: tableId, ...slotXY(to.col, to.row) }];
-  const [there] = inTheWay(to);
-  if (there) moves.push({ id: there.id, ...slotXY(joining.col, joining.row) });
+  const to = usable.find((s) => s.x === joining.x && s.y === joining.y) ?? usable[0];
+  if (to.x === joining.x && to.y === joining.y) return { moves: [] };
+  const moves = [{ id: tableId, x: to.x, y: to.y }];
+  if (to.swapId != null) moves.push({ id: to.swapId, x: joining.x, y: joining.y });
   return { moves };
 }
