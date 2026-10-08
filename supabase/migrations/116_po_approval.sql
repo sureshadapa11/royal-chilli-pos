@@ -23,6 +23,10 @@
 --
 -- 3. receive_purchase_order (115) now only receives an approved or sent
 --    order, puts the stock into the order's own branch, and logs the event.
+--    Supplier prices change, so each line can take the price on the invoice
+--    (purchase_order_items.received_unit_cost). Stock cost, the ingredient's
+--    last-known cost and Finance use that; lines whose price changed are
+--    listed in the history.
 --
 -- 4. New permission tick approve_purchase_orders — Managers full.
 --
@@ -37,6 +41,8 @@ ALTER TABLE purchase_orders ADD CONSTRAINT purchase_orders_status_check
 ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS location_id INT REFERENCES locations(id);
 ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS approved_by INT REFERENCES staff(id);
 ALTER TABLE purchase_orders ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ;
+-- The price on the supplier's invoice, when it differs from the order.
+ALTER TABLE purchase_order_items ADD COLUMN IF NOT EXISTS received_unit_cost NUMERIC(10,4);
 
 -- 2 ──────────────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS purchase_order_events (
@@ -201,19 +207,20 @@ BEGIN
   -- What actually arrived, per line. A line sent twice counts once.
   DROP TABLE IF EXISTS _received;
   CREATE TEMP TABLE _received ON COMMIT DROP AS
-  SELECT i.id, i.ingredient_id, i.unit_cost,
+  SELECT i.id, i.ingredient_id, i.unit_cost AS ordered_cost,
+         COALESCE(o.unit_cost, i.unit_cost) AS unit_cost,
          GREATEST(0, COALESCE(o.received_quantity, i.quantity)) AS qty,
          o.expiry_date
     FROM purchase_order_items i
     LEFT JOIN (
       SELECT DISTINCT ON (item_id) *
         FROM jsonb_to_recordset(COALESCE(p_items, '[]'::jsonb))
-          AS x(item_id INT, received_quantity NUMERIC, expiry_date DATE)
+          AS x(item_id INT, received_quantity NUMERIC, expiry_date DATE, unit_cost NUMERIC)
     ) o ON o.item_id = i.id
    WHERE i.purchase_order_id = po.id;
 
   UPDATE purchase_order_items i
-     SET received_quantity = r.qty, expiry_date = r.expiry_date
+     SET received_quantity = r.qty, expiry_date = r.expiry_date, received_unit_cost = r.unit_cost
     FROM _received r
    WHERE i.id = r.id;
 
@@ -237,8 +244,12 @@ BEGIN
    WHERE id = po.id
   RETURNING * INTO po;
 
-  INSERT INTO purchase_order_events (purchase_order_id, action, from_status, to_status, staff_id)
-  VALUES (po.id, 'received', was, 'received', p_staff_id);
+  -- e.g. "Price changed: Chicken Breast £6.00 → £6.40"
+  INSERT INTO purchase_order_events (purchase_order_id, action, from_status, to_status, staff_id, comment)
+  VALUES (po.id, 'received', was, 'received', p_staff_id, (
+    SELECT 'Price changed: ' || string_agg(g.name || ' £' || to_char(r.ordered_cost, 'FM999990.00') || ' → £' || to_char(r.unit_cost, 'FM999990.00'), ', ' ORDER BY g.name)
+      FROM _received r JOIN ingredients g ON g.id = r.ingredient_id
+     WHERE r.qty > 0 AND r.unit_cost <> r.ordered_cost));
 
   -- The invoice photos (checked by the route). If one was used elsewhere in
   -- the meantime, undo the whole receipt.

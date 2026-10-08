@@ -7,7 +7,9 @@ import { OPEN_PO_STATUSES, suggestOrder, type SuggestIngredient } from "@/lib/pu
 
 // GET — what to order: items at or below their reorder level, less what's
 // already on an open order. Fills a draft order; nothing is ordered until a
-// manager creates it.
+// manager creates it. Also the last price paid for every ingredient (and
+// when), shown as a hint: supplier prices change, so the manager types
+// today's price on each order.
 export async function GET(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
@@ -34,7 +36,22 @@ export async function GET(req: NextRequest) {
       for (const l of lines ?? []) onOrder.set(l.ingredient_id, (onOrder.get(l.ingredient_id) ?? 0) + Number(l.quantity));
     }
 
-    return NextResponse.json({ lines: suggestOrder((ingredients ?? []) as SuggestIngredient[], onOrder) });
+    // Most recent received line per ingredient: the invoice price if one was
+    // entered, otherwise the order price.
+    const lastPaid: Record<number, { price: number; date: string | null }> = {};
+    const { data: paid } = await db.from("purchase_order_items")
+      .select("ingredient_id, unit_cost, received_unit_cost, po:purchase_orders!inner(received_date, status)")
+      .eq("po.status", "received")
+      .gt("received_quantity", 0)
+      .order("id", { ascending: false })
+      .limit(2000);
+    for (const p of (paid ?? []) as unknown as { ingredient_id: number; unit_cost: number; received_unit_cost: number | null; po: { received_date: string | null } }[]) {
+      if (lastPaid[p.ingredient_id]) continue;
+      lastPaid[p.ingredient_id] = { price: Number(p.received_unit_cost ?? p.unit_cost), date: p.po?.received_date ?? null };
+    }
+
+    const lines = suggestOrder((ingredients ?? []) as SuggestIngredient[], onOrder);
+    return NextResponse.json({ lines, lastPaid });
   } catch (error) {
     console.error("Suggest order error:", error);
     return NextResponse.json({ error: "Failed to work out a suggested order" }, { status: 500 });

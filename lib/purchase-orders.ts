@@ -107,15 +107,16 @@ const ACTION_PAST: Record<PoAction, string> = {
 
 export type PoLine = { ingredient_id: number; quantity: number; unit_cost: number };
 
-/** Checks an order's lines. One line per ingredient, quantity above 0, price £0 or more. */
+/** Checks an order's lines. One line per ingredient, quantity and price above 0
+ *  (a £0 line would slip a big order under the approval limit). */
 export function cleanPoLines(raw: unknown): { ok: true; lines: PoLine[] } | { ok: false; error: string } {
   if (!Array.isArray(raw) || raw.length === 0) return { ok: false, error: "Add at least one item." };
   const lines: PoLine[] = raw.map((i: Record<string, unknown>) => ({
     ingredient_id: Number(i?.ingredient_id), quantity: Number(i?.quantity), unit_cost: Number(i?.unit_cost),
   }));
   if (lines.some((l) => !Number.isInteger(l.ingredient_id) || l.ingredient_id < 1 || !(l.quantity > 0) || l.quantity > 100000
-    || !Number.isFinite(l.unit_cost) || l.unit_cost < 0 || l.unit_cost > 100000)) {
-    return { ok: false, error: "Every line needs an ingredient, a quantity above 0 and a price of £0 or more." };
+    || !(l.unit_cost > 0) || l.unit_cost > 100000)) {
+    return { ok: false, error: "Every line needs an ingredient, a quantity and today's price (above £0)." };
   }
   if (new Set(lines.map((l) => l.ingredient_id)).size !== lines.length) {
     return { ok: false, error: "The same ingredient is on two lines. Put it on one line with the total quantity." };
@@ -125,13 +126,14 @@ export function cleanPoLines(raw: unknown): { ok: true; lines: PoLine[] } | { ok
 
 // ── Receiving ────────────────────────────────────────────────────────────────
 
-export type ReceivedLine = { item_id: number; received_quantity?: number; expiry_date?: string };
+export type ReceivedLine = { item_id: number; received_quantity?: number; expiry_date?: string; unit_cost?: number };
 
 // Checks one delivery line from the receive screen. Returns null when it's
-// unusable. A missing quantity means the line arrived as ordered.
+// unusable. A missing quantity means the line arrived as ordered; a missing
+// price means the invoice price matches the order.
 export function cleanReceivedLine(raw: unknown): ReceivedLine | null {
   if (!raw || typeof raw !== "object") return null;
-  const { item_id, received_quantity, expiry_date } = raw as Record<string, unknown>;
+  const { item_id, received_quantity, expiry_date, unit_cost } = raw as Record<string, unknown>;
   const id = Number(item_id);
   if (!Number.isInteger(id) || id < 1) return null;
   const line: ReceivedLine = { item_id: id };
@@ -139,6 +141,11 @@ export function cleanReceivedLine(raw: unknown): ReceivedLine | null {
     const qty = Number(received_quantity);
     if (!Number.isFinite(qty) || qty < 0) return null;
     line.received_quantity = qty;
+  }
+  if (unit_cost != null && unit_cost !== "") {
+    const price = Number(unit_cost);
+    if (!(price > 0) || price > 100000) return null;
+    line.unit_cost = price;
   }
   if (expiry_date != null && expiry_date !== "") {
     if (typeof expiry_date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(expiry_date) || Number.isNaN(Date.parse(expiry_date))) return null;

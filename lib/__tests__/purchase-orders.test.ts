@@ -10,6 +10,11 @@ describe("cleanReceivedLine", () => {
     expect(cleanReceivedLine({ item_id: "4", received_quantity: "", expiry_date: undefined })).toEqual({ item_id: 4 });
   });
 
+  it("keeps the invoice price", () => {
+    expect(cleanReceivedLine({ item_id: 4, unit_cost: "6.40" })).toEqual({ item_id: 4, unit_cost: 6.4 });
+    expect(cleanReceivedLine({ item_id: 4, unit_cost: 0 })).toBeNull();
+  });
+
   it("accepts zero (nothing arrived)", () => {
     expect(cleanReceivedLine({ item_id: 4, received_quantity: 0 })).toEqual({ item_id: 4, received_quantity: 0 });
   });
@@ -124,6 +129,8 @@ describe("cleanPoLines", () => {
     ["nope"],
     [[{ ingredient_id: 1, quantity: 0, unit_cost: 6 }]],
     [[{ ingredient_id: 1, quantity: 2, unit_cost: -1 }]],
+    [[{ ingredient_id: 1, quantity: 2, unit_cost: 0 }]],
+    [[{ ingredient_id: 1, quantity: 2 }]],
     [[{ ingredient_id: 0, quantity: 2, unit_cost: 1 }]],
     [[{ ingredient_id: 1, quantity: 2, unit_cost: 1 }, { ingredient_id: 1, quantity: 3, unit_cost: 1 }]],
   ])("refuses %j", (raw) => {
