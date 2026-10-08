@@ -3,14 +3,14 @@ import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { manageAllows } from "@/lib/permissions";
 import { londonNowDateAndMinutes } from "@/lib/hours";
-import { GRID_H, GRID_W, SHAPES, round2 } from "@/lib/floor-plan";
+import { GRID_H, GRID_W, MAX_TABLE_SIZE, MIN_TABLE_SIZE, SHAPES, round2 } from "@/lib/floor-plan";
 import { refreshJoinLabel } from "@/lib/table-joins";
 
-// Floor plan fields (lib/floor-plan.ts): where the table sits (the top-left
-// of its slot — the plan snaps any spot to the nearest slot), its shape and
-// its turn (45° steps). Shape and turn are kept but not drawn for now: every
-// table is the same size.
-function layoutFields(b: { pos_x?: unknown; pos_y?: unknown; shape?: unknown; rotation?: unknown }): Record<string, unknown> | { error: string } {
+// Floor plan fields: free position, table shape, footprint and turn.
+function layoutFields(
+  b: { pos_x?: unknown; pos_y?: unknown; shape?: unknown; rotation?: unknown; width?: unknown; depth?: unknown },
+  current: { pos_x?: unknown; pos_y?: unknown; width?: unknown; depth?: unknown } = {},
+): Record<string, unknown> | { error: string } {
   const out: Record<string, unknown> = {};
   for (const [k, max] of [["pos_x", GRID_W], ["pos_y", GRID_H]] as const) {
     if (b[k] === undefined) continue;
@@ -26,6 +26,19 @@ function layoutFields(b: { pos_x?: unknown; pos_y?: unknown; shape?: unknown; ro
     const r = Number(b.rotation);
     if (!Number.isInteger(r) || r % 45 !== 0) return { error: "Tables turn in 45° steps" };
     out.rotation = ((r % 360) + 360) % 360;
+  }
+  for (const k of ["width", "depth"] as const) {
+    if (b[k] === undefined) continue;
+    const n = round2(Number(b[k]));
+    if (!Number.isFinite(n) || n < MIN_TABLE_SIZE || n > MAX_TABLE_SIZE) return { error: `Table ${k} must be between ${MIN_TABLE_SIZE} and ${MAX_TABLE_SIZE}` };
+    out[k] = n;
+  }
+  const width = Number(out.width ?? current.width ?? 7);
+  const depth = Number(out.depth ?? current.depth ?? 7);
+  const x = b.pos_x === undefined ? (current.pos_x == null ? null : Number(current.pos_x)) : Number(out.pos_x);
+  const y = b.pos_y === undefined ? (current.pos_y == null ? null : Number(current.pos_y)) : Number(out.pos_y);
+  if ((x !== null && (x < 0 || x + width > GRID_W)) || (y !== null && (y < 0 || y + depth > GRID_H))) {
+    return { error: "That table footprint would go off the floor plan" };
   }
   return out;
 }
@@ -170,12 +183,19 @@ export async function PUT(req: NextRequest) {
     // Floor staff flip `status` all shift; changing a table's number/capacity/
     // area/spot on the floor plan is a setup action (Tables → Full).
     const editsLayout = capacity !== undefined || location !== undefined || table_number !== undefined ||
-      body.pos_x !== undefined || body.pos_y !== undefined || body.shape !== undefined || body.rotation !== undefined;
+      body.pos_x !== undefined || body.pos_y !== undefined || body.shape !== undefined || body.rotation !== undefined ||
+      body.width !== undefined || body.depth !== undefined;
     if (editsLayout && !manageAllows(session.role, "tables", req.method)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const layout = layoutFields(body);
+    let currentLayout: { pos_x?: unknown; pos_y?: unknown; width?: unknown; depth?: unknown } = {};
+    if (body.pos_x !== undefined || body.pos_y !== undefined || body.width !== undefined || body.depth !== undefined) {
+      const { data, error } = await db.from("restaurant_tables").select("pos_x, pos_y, width, depth").eq("id", id).maybeSingle();
+      if (error) throw error;
+      currentLayout = data ?? {};
+    }
+    const layout = layoutFields(body, currentLayout);
     if ("error" in layout) return NextResponse.json({ error: layout.error }, { status: 400 });
     const updateFields: Record<string, unknown> = { ...layout };
     if (status !== undefined) updateFields.status = status;

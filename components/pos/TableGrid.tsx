@@ -115,7 +115,8 @@ export default function TableGrid({ tables, selectedTable, onSelect, onStatusCha
                       height: `calc(${(table.box.h / box.h) * 100}% - 4px)`,
                     }}
                     className={cn(
-                      "absolute flex flex-col items-center justify-center border cursor-pointer rounded-xl",
+                      "absolute flex flex-col items-center justify-center border cursor-pointer",
+                      table.shape === "round" ? "rounded-full" : table.shape === "rect" ? "rounded-xl" : "rounded-lg",
                       menuFor === table.id ? "z-50" : "",
                       "transition-all duration-150 no-select pos-btn",
                       isSelected
