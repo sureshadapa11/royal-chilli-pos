@@ -126,14 +126,30 @@ export function cleanPoLines(raw: unknown): { ok: true; lines: PoLine[] } | { ok
 
 // ── Receiving ────────────────────────────────────────────────────────────────
 
-export type ReceivedLine = { item_id: number; received_quantity?: number; expiry_date?: string; unit_cost?: number };
+export const REJECTION_REASONS = ["damaged", "wrong_item", "short_dated", "temperature", "quality", "other"] as const;
+export type RejectionReason = (typeof REJECTION_REASONS)[number];
+export const REJECTION_LABEL: Record<RejectionReason, string> = {
+  damaged: "Damaged",
+  wrong_item: "Wrong item",
+  short_dated: "Out of date / short date",
+  temperature: "Wrong temperature",
+  quality: "Poor quality",
+  other: "Other",
+};
+
+/** received_quantity is what ARRIVED; rejected_quantity of that was refused at
+ *  the door (with a reason). Only arrived − rejected goes into stock. */
+export type ReceivedLine = {
+  item_id: number; received_quantity?: number; expiry_date?: string; unit_cost?: number;
+  rejected_quantity?: number; rejection_reason?: RejectionReason;
+};
 
 // Checks one delivery line from the receive screen. Returns null when it's
 // unusable. A missing quantity means the line arrived as ordered; a missing
 // price means the invoice price matches the order.
 export function cleanReceivedLine(raw: unknown): ReceivedLine | null {
   if (!raw || typeof raw !== "object") return null;
-  const { item_id, received_quantity, expiry_date, unit_cost } = raw as Record<string, unknown>;
+  const { item_id, received_quantity, expiry_date, unit_cost, rejected_quantity, rejection_reason } = raw as Record<string, unknown>;
   const id = Number(item_id);
   if (!Number.isInteger(id) || id < 1) return null;
   const line: ReceivedLine = { item_id: id };
@@ -141,6 +157,15 @@ export function cleanReceivedLine(raw: unknown): ReceivedLine | null {
     const qty = Number(received_quantity);
     if (!Number.isFinite(qty) || qty < 0) return null;
     line.received_quantity = qty;
+  }
+  if (rejected_quantity != null && rejected_quantity !== "" && Number(rejected_quantity) !== 0) {
+    const rejected = Number(rejected_quantity);
+    if (!Number.isFinite(rejected) || rejected < 0) return null;
+    // Can't refuse more than arrived (arrived defaults to the ordered amount, checked in SQL).
+    if (line.received_quantity != null && rejected > line.received_quantity) return null;
+    if (!REJECTION_REASONS.includes(rejection_reason as RejectionReason)) return null;
+    line.rejected_quantity = rejected;
+    line.rejection_reason = rejection_reason as RejectionReason;
   }
   if (unit_cost != null && unit_cost !== "") {
     const price = Number(unit_cost);

@@ -3,6 +3,7 @@ import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
 import { mayApprove } from "@/lib/purchase-orders";
+import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import { poActor } from "@/lib/purchase-orders-server";
 
 export async function GET(
@@ -19,9 +20,15 @@ export async function GET(
   const { data: po, error: poErr } = await db.from("purchase_orders").select("*, supplier:suppliers(name)").eq("id", id).single();
   if (poErr || !po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
 
-  const [{ data: items, error: itemsErr }, { data: events }] = await Promise.all([
+  // Food Safety delivery checks (attendance app) for this order, or for this
+  // supplier today — Receive shows them rather than asking for temperatures again.
+  const today = tradingRangeUtc(tradingDayStr());
+  const [{ data: items, error: itemsErr }, { data: events }, { data: checks }] = await Promise.all([
     db.from("purchase_order_items").select("*, ingredient:ingredients(name, unit)").eq("purchase_order_id", id),
     db.from("purchase_order_events").select("id, action, from_status, to_status, comment, created_at, staff:staff(name)").eq("purchase_order_id", id).order("id"),
+    db.from("fs_delivery_check").select("id, item, temp_value, accepted, corrective_action, created_at, staff:staff(name)")
+      .or(`purchase_order_id.eq.${Number(id)},and(supplier_id.eq.${Number(po.supplier_id)},created_at.gte.${today.start},created_at.lte.${today.end})`)
+      .order("created_at"),
   ]);
   if (itemsErr) return NextResponse.json({ error: "Failed to fetch items" }, { status: 500 });
 
@@ -39,6 +46,10 @@ export async function GET(
     purchaseOrder: { ...poRest, supplier_name: s?.name ?? null },
     items: flatItems,
     events: history,
+    deliveryChecks: (checks || []).map((c) => {
+      const { staff, ...rest } = c as typeof c & { staff: { name: string } | null };
+      return { ...rest, staff_name: staff?.name ?? null };
+    }),
     canApprove: mayApprove(po, poActor(session)),
   });
 }

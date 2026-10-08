@@ -15,6 +15,21 @@ describe("cleanReceivedLine", () => {
     expect(cleanReceivedLine({ item_id: 4, unit_cost: 0 })).toBeNull();
   });
 
+  it("keeps what was refused, with a reason", () => {
+    expect(cleanReceivedLine({ item_id: 4, received_quantity: 20, rejected_quantity: 2, rejection_reason: "damaged" }))
+      .toEqual({ item_id: 4, received_quantity: 20, rejected_quantity: 2, rejection_reason: "damaged" });
+    expect(cleanReceivedLine({ item_id: 4, received_quantity: 20, rejected_quantity: 0, rejection_reason: "" })).toEqual({ item_id: 4, received_quantity: 20 });
+  });
+
+  it.each([
+    [{ item_id: 4, received_quantity: 20, rejected_quantity: 2 }],
+    [{ item_id: 4, received_quantity: 20, rejected_quantity: 2, rejection_reason: "smelly" }],
+    [{ item_id: 4, received_quantity: 1, rejected_quantity: 2, rejection_reason: "damaged" }],
+    [{ item_id: 4, received_quantity: 1, rejected_quantity: -1, rejection_reason: "damaged" }],
+  ])("refuses a bad rejection %j", (raw) => {
+    expect(cleanReceivedLine(raw)).toBeNull();
+  });
+
   it("accepts zero (nothing arrived)", () => {
     expect(cleanReceivedLine({ item_id: 4, received_quantity: 0 })).toEqual({ item_id: 4, received_quantity: 0 });
   });

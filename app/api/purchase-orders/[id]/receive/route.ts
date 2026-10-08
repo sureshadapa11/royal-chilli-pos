@@ -35,7 +35,7 @@ export async function POST(
     const { items, receipt_ids } = await req.json(); // items: [{ item_id, received_quantity, expiry_date }]
     const lines = Array.isArray(items) ? items.map(cleanReceivedLine) : [];
     if (lines.some((l) => l === null)) {
-      return NextResponse.json({ error: "Check the quantities and dates — each must be 0 or more, with a valid date." }, { status: 400 });
+      return NextResponse.json({ error: "Check each line: amounts 0 or more, no more refused than arrived, a reason for anything refused, and a valid date." }, { status: 400 });
     }
 
     // Checked before anything moves, so a missing photo leaves the PO untouched.

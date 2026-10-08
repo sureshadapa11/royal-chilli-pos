@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import ReceiptPhotos, { ReceiptLinks, type Receipt } from "@/components/staff/ReceiptPhotos";
-import { needsApproval, PO_STATUS_LABEL, type PoStatus } from "@/lib/purchase-orders";
+import { needsApproval, PO_STATUS_LABEL, REJECTION_LABEL, REJECTION_REASONS, type PoStatus, type RejectionReason } from "@/lib/purchase-orders";
 
 // Inventory → Purchase Orders (inventory v2 phase 1, agreed 2026-10-08):
 // "What to order" from reorder levels, orders over the approval limit approved
@@ -15,6 +15,7 @@ type Supplier = { id: number; name: string };
 type PO = {
   id: number; order_number: string; supplier_id: number; supplier_name: string | null; status: PoStatus;
   order_date: string; total_cost: number; created_by_name: string | null; can_approve: boolean; reject_reason: string | null;
+  short_delivery?: boolean;
 };
 type SuggestLine = { ingredient_id: number; name: string; unit: string; supplier_id: number | null; current_stock: number; reorder_level: number; on_order: number; quantity: number };
 type LastPaid = Record<number, { price: number; date: string | null }>;
@@ -192,6 +193,9 @@ export default function PurchaseOrdersTab({ suppliers, ingredients }: { supplier
               <div className="flex items-center gap-1.5 flex-wrap">
                 {po.status === "received" && <ReceiptLinks photos={photos[po.id]} />}
                 <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${STATUS_CLASS[po.status] ?? STATUS_CLASS.draft}`}>{PO_STATUS_LABEL[po.status] ?? po.status}</span>
+                {po.status === "received" && po.short_delivery && (
+                  <button onClick={() => setHistory(po.id)} className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800" title="What was short or refused">Short delivery</button>
+                )}
                 {po.status === "draft" && <>
                   <button disabled={disabled} onClick={() => startFromOrder(po, "edit")} className={btnPlain}>Edit</button>
                   <button disabled={disabled} onClick={() => act(po, "submit")} className={btnRed}>{overLimit ? "Send for approval" : "Place order"}</button>
@@ -341,22 +345,33 @@ function OrderModal({ draft, suppliers, ingredients, lastPaid, limit, superAdmin
 }
 
 // ── Receive a delivery ──────────────────────────────────────────────────────
-type ReceiveLine = { id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number; received_quantity: string; price: string; expiry_date: string };
+// One delivery closes the order (agreed 2026-10-08): what didn't come or was
+// refused is the shortfall, kept in the history — nothing waits for the rest.
+type ReceiveLine = {
+  id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number;
+  arrived: string; refused: string; reason: RejectionReason | ""; price: string; expiry_date: string;
+};
+type DeliveryCheck = { id: number; item: string; temp_value: number | null; accepted: boolean; corrective_action: string | null; created_at: string; staff_name: string | null };
 
 function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () => void; onSaved: () => void }) {
   const { toast } = useToast();
   const [items, setItems] = useState<ReceiveLine[]>([]);
   const [orderNumber, setOrderNumber] = useState("");
+  const [supplier, setSupplier] = useState("");
+  const [checks, setChecks] = useState<DeliveryCheck[] | null>(null);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [saving, setSaving] = useState(false);
-  const total = Math.round(items.reduce((sum, i) => sum + Math.max(0, num(i.received_quantity) || 0) * (num(i.price) || 0), 0) * 100) / 100;
+  const accepted = (i: ReceiveLine) => Math.max(0, (num(i.arrived) || 0) - (num(i.refused) || 0));
+  const total = Math.round(items.reduce((sum, i) => sum + accepted(i) * (num(i.price) || 0), 0) * 100) / 100;
 
   useEffect(() => {
     fetch(`/api/purchase-orders/${poId}`).then((r) => r.json()).then((d) => {
       setOrderNumber(d.purchaseOrder.order_number);
+      setSupplier(d.purchaseOrder.supplier_name ?? "");
+      setChecks(d.deliveryChecks || []);
       setItems((d.items || []).map((i: { id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number }) => ({
         ...i, quantity: Number(i.quantity), unit_cost: Number(i.unit_cost),
-        received_quantity: String(Number(i.quantity)), price: String(Number(i.unit_cost)), expiry_date: "",
+        arrived: String(Number(i.quantity)), refused: "", reason: "", price: String(Number(i.unit_cost)), expiry_date: "",
       })));
     });
   }, [poId]);
@@ -364,16 +379,20 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
 
   async function confirm() {
     if (receipts.length === 0) return toast({ variant: "destructive", title: "Photo needed", description: "Take a photo of the supplier's invoice first." });
-    if (items.some((i) => !(num(i.received_quantity) >= 0))) return toast({ variant: "destructive", title: "Enter what arrived on every line (0 if nothing)" });
-    if (items.some((i) => num(i.received_quantity) > 0 && !(num(i.price) > 0))) return toast({ variant: "destructive", title: "Enter the invoice price on every line that arrived" });
+    if (items.some((i) => !(num(i.arrived) >= 0))) return toast({ variant: "destructive", title: "Enter what arrived on every line (0 if nothing)" });
+    if (items.some((i) => (num(i.refused) || 0) > (num(i.arrived) || 0))) return toast({ variant: "destructive", title: "Refused can't be more than arrived" });
+    if (items.some((i) => (num(i.refused) || 0) > 0 && !i.reason)) return toast({ variant: "destructive", title: "Pick a reason for everything refused" });
+    if (items.some((i) => accepted(i) > 0 && !(num(i.price) > 0))) return toast({ variant: "destructive", title: "Enter the invoice price on every line you're keeping" });
     if (saving) return;
     setSaving(true);
     const res = await fetch(`/api/purchase-orders/${poId}/receive`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         items: items.map((i) => ({
-          item_id: i.id, received_quantity: num(i.received_quantity), expiry_date: i.expiry_date || undefined,
+          item_id: i.id, received_quantity: num(i.arrived), expiry_date: i.expiry_date || undefined,
           unit_cost: num(i.price) > 0 ? num(i.price) : undefined,
+          rejected_quantity: (num(i.refused) || 0) > 0 ? num(i.refused) : undefined,
+          rejection_reason: (num(i.refused) || 0) > 0 ? i.reason : undefined,
         })),
         receipt_ids: receipts.map((r) => r.id),
       }),
@@ -382,33 +401,65 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
     if (!res) return toast({ variant: "destructive", title: "Couldn't receive order", description: "No connection. Check the Wi-Fi and try again." });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) return toast({ variant: "destructive", title: "Couldn't receive order", description: data.error });
-    toast({ variant: "success", title: "Delivery received", description: `Cost counted in Finance: £${Number(data.purchaseOrder?.total_cost ?? 0).toFixed(2)}` });
+    toast({
+      variant: "success",
+      title: data.purchaseOrder?.short_delivery ? "Received — short delivery noted" : "Delivery received",
+      description: `Cost counted in Finance: £${Number(data.purchaseOrder?.total_cost ?? 0).toFixed(2)}`,
+    });
     onSaved(); onClose();
   }
 
   return (
     <div className={overlay}>
-      <div className={`${panel} max-w-2xl`}>
-        <h2 className="text-foreground font-bold text-lg">Receive {orderNumber}</h2>
-        <p className="mt-1 text-muted-foreground text-xs">Enter what actually arrived and the price on the invoice — Finance and food cost use these. Prices that changed show in amber.</p>
-        <div className="mt-4 space-y-3">
-          <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_80px_96px_130px] gap-2 text-xs text-muted-foreground">
-            <span>Item (ordered)</span><span>Arrived</span><span>Invoice £ / unit</span><span>Use by</span>
+      <div className={`${panel} max-w-3xl`}>
+        <h2 className="text-foreground font-bold text-lg">Receive {orderNumber}{supplier ? ` · ${supplier}` : ""}</h2>
+        <p className="mt-1 text-muted-foreground text-xs">Enter what arrived, anything you refused at the door (and why), and the price on the invoice. Only what you keep goes into stock and Finance. Anything short or refused is noted and the order closes.</p>
+
+        {/* Temperatures live in Food Safety — shown here, not asked again. */}
+        <div className="mt-3 rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm">
+          <p className="text-foreground font-semibold">Food Safety delivery check</p>
+          {checks === null ? <p className="text-muted-foreground text-xs">Loading…</p>
+            : checks.length === 0 ? <p className="text-amber-700 text-xs">None logged today for {supplier || "this supplier"}. Log the temperatures in the Food Safety app (Delivery checks).</p>
+            : <ul className="mt-0.5 space-y-0.5">{checks.map((c) => (
+                <li key={c.id} className={`text-xs ${c.accepted ? "text-foreground" : "text-red-700"}`}>
+                  {c.accepted ? "✓" : "✗"} {c.item}{c.temp_value != null ? ` · ${Number(c.temp_value)}°C` : ""} · {c.staff_name ?? "—"} · {new Date(c.created_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" })}
+                  {!c.accepted && c.corrective_action ? ` — ${c.corrective_action}` : ""}
+                </li>
+              ))}</ul>}
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div className="hidden md:grid grid-cols-[minmax(0,1fr)_72px_72px_150px_86px_130px] gap-2 text-xs text-muted-foreground">
+            <span>Item (ordered)</span><span>Arrived</span><span>Refused</span><span>Why refused</span><span>Invoice £</span><span>Use by</span>
           </div>
           {items.map((item, i) => {
             const changed = num(item.price) > 0 && Math.abs(num(item.price) - item.unit_cost) > 0.00005;
+            const refused = num(item.refused) || 0;
+            const notDelivered = Math.max(0, item.quantity - (num(item.arrived) || 0));
             return (
-              <div key={item.id} className="grid grid-cols-2 sm:grid-cols-[minmax(0,1fr)_80px_96px_130px] gap-2 items-center">
-                <span className="col-span-2 sm:col-span-1 text-foreground text-sm">{item.ingredient_name} <span className="text-muted-foreground">({item.quantity} {item.unit} @ {money(item.unit_cost)})</span></span>
-                <input type="number" inputMode="decimal" min="0" step="0.01" value={item.received_quantity} onChange={(e) => set(i, { received_quantity: e.target.value })} className={input} aria-label={`${item.ingredient_name} arrived`} />
-                <input type="number" inputMode="decimal" min="0" step="0.01" value={item.price} onChange={(e) => set(i, { price: e.target.value })} className={`${input} ${changed ? "border-amber-500 bg-amber-50 text-amber-900" : ""}`} aria-label={`${item.ingredient_name} invoice price`} />
-                <input type="date" value={item.expiry_date} onChange={(e) => set(i, { expiry_date: e.target.value })} className={`${input} col-span-2 sm:col-span-1`} aria-label={`${item.ingredient_name} use by`} />
-                {changed && <p className="col-span-2 sm:col-span-4 text-xs text-amber-700">Price changed: {money(item.unit_cost)} → {money(num(item.price))}</p>}
+              <div key={item.id} className="space-y-1">
+                <div className="grid grid-cols-2 md:grid-cols-[minmax(0,1fr)_72px_72px_150px_86px_130px] gap-2 items-center">
+                  <span className="col-span-2 md:col-span-1 text-foreground text-sm">{item.ingredient_name} <span className="text-muted-foreground">({item.quantity} {item.unit} @ {money(item.unit_cost)})</span></span>
+                  <input type="number" inputMode="decimal" min="0" step="0.01" value={item.arrived} onChange={(e) => set(i, { arrived: e.target.value })} className={input} aria-label={`${item.ingredient_name} arrived`} placeholder="Arrived" />
+                  <input type="number" inputMode="decimal" min="0" step="0.01" value={item.refused} onChange={(e) => set(i, { refused: e.target.value })} className={`${input} ${refused > 0 ? "border-red-400" : ""}`} aria-label={`${item.ingredient_name} refused`} placeholder="0" />
+                  <select value={item.reason} disabled={refused <= 0} onChange={(e) => set(i, { reason: e.target.value as RejectionReason | "" })} className={`${input} col-span-2 md:col-span-1 disabled:opacity-40 ${refused > 0 && !item.reason ? "border-red-400" : ""}`} aria-label={`${item.ingredient_name} why refused`}>
+                    <option value="">{refused > 0 ? "Why refused?" : "—"}</option>
+                    {REJECTION_REASONS.map((r) => <option key={r} value={r}>{REJECTION_LABEL[r]}</option>)}
+                  </select>
+                  <input type="number" inputMode="decimal" min="0" step="0.01" value={item.price} onChange={(e) => set(i, { price: e.target.value })} className={`${input} ${changed ? "border-amber-500 bg-amber-50 text-amber-900" : ""}`} aria-label={`${item.ingredient_name} invoice price`} />
+                  <input type="date" value={item.expiry_date} onChange={(e) => set(i, { expiry_date: e.target.value })} className={input} aria-label={`${item.ingredient_name} use by`} />
+                </div>
+                <p className="text-xs">
+                  <span className="text-foreground">Into stock: <b>{Math.round(accepted(item) * 1000) / 1000} {item.unit}</b></span>
+                  {notDelivered > 0 && <span className="text-amber-700"> · {Math.round(notDelivered * 1000) / 1000} {item.unit} not delivered</span>}
+                  {refused > 0 && <span className="text-red-700"> · {refused} {item.unit} refused</span>}
+                  {changed && <span className="text-amber-700"> · price {money(item.unit_cost)} → {money(num(item.price))}</span>}
+                </p>
               </div>
             );
           })}
         </div>
-        <p className="mt-3 text-right text-foreground text-sm font-semibold">Delivery total: {money(total)}</p>
+        <p className="mt-3 text-right text-foreground text-sm font-semibold">Delivery total (kept): {money(total)}</p>
         <div className="mt-3">
           <ReceiptPhotos entity="purchase_order" label="Supplier invoice photo" value={receipts} onChange={setReceipts} />
         </div>
