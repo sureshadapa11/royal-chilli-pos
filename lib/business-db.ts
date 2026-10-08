@@ -14,6 +14,8 @@ export const BUSINESS_TABLES = new Set([
   "supplier_payments", "expenses",
   // 110: photo proof for money going out
   "receipt_photos",
+  // 116: purchase order history
+  "purchase_order_events",
   "fs_check_type", "fs_check_log", "fs_temp_type", "fs_temp_log",
   "fs_delivery_check", "fs_problem", "fs_signoff",
   "shifts", "attendance", "timesheets", "payroll_periods", "employee_payslips", "leave_requests",

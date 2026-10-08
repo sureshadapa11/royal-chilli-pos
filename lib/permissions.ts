@@ -17,6 +17,7 @@ export const TAB_KEYS = [
   "tables",
   "inventory",
   "approve_stock_takes",
+  "approve_purchase_orders",
   "drivers",
   "delivery_platforms",
   "daily_accounts",
@@ -39,6 +40,7 @@ export const TAB_LABELS: Record<TabKey, string> = {
   tables: "Tables",
   inventory: "Inventory",
   approve_stock_takes: "Approve stock takes",
+  approve_purchase_orders: "Approve purchase orders",
   drivers: "Drivers",
   delivery_platforms: "Delivery platforms",
   daily_accounts: "Daily accounts",
@@ -73,6 +75,8 @@ const DEFAULTS: Record<TabKey, Partial<Record<StaffRole, Level>>> = {
   tables: { manager: "full" },
   inventory: { manager: "full" },
   approve_stock_takes: { manager: "full" },
+  // Orders over the business's limit (migration 116) — never your own.
+  approve_purchase_orders: { manager: "full" },
   drivers: { manager: "full" },
   delivery_platforms: { manager: "full" },
   daily_accounts: { manager: "full" },
@@ -174,6 +178,7 @@ export const canManageStaff = (role: StaffRole) => isStaffManagement(role);
 export const canManageInventory = (role: StaffRole) => canAccess(role, "inventory");
 export const canManageFinance = (role: StaffRole) => canAccess(role, "finance");
 export const canApproveStockTakes = (role: StaffRole) => canEdit(role, "approve_stock_takes");
+export const canApprovePurchaseOrders = (role: StaffRole) => canEdit(role, "approve_purchase_orders");
 export const canViewCrm = (role: StaffRole) => canAccess(role, "customers");
 export const canManageCrm = (role: StaffRole) => canEdit(role, "customers");
 export const canManageDrivers = (role: StaffRole) => canAccess(role, "drivers");

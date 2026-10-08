@@ -5,14 +5,13 @@ import { useToast } from "@/hooks/use-toast";
 import { tradingDayStr } from "@/lib/london-date";
 import FoodCostReport from "@/components/staff/FoodCostReport";
 import { ExpensesTab, SupplierPaymentsTab } from "@/components/staff/SpendingTabs";
-import ReceiptPhotos, { ReceiptLinks, type Receipt } from "@/components/staff/ReceiptPhotos";
+import PurchaseOrdersTab from "@/components/staff/PurchaseOrdersTab";
 
 type Ingredient = {
   id: number; name: string; unit: string; current_stock: number; reorder_level: number;
   reorder_quantity: number; cost_per_unit: number; supplier_id: number | null; supplier_name: string | null;
 };
 type Supplier = { id: number; name: string; contact_name: string | null; phone: string | null; email: string | null; active: number };
-type PO = { id: number; order_number: string; supplier_id: number; supplier_name: string; status: string; order_date: string; expected_date: string | null; total_cost: number };
 type Recipe = { id: number; menu_item_id: number | null; menu_item_name: string | null; menu_item_price: number | null; name: string; yield_quantity: number; yield_unit: string; recipe_cost: number; food_cost_pct: number | null };
 type StockTake = { id: number; location: string; status: string; opened_at: string; posted_at: string | null; counted_by_name: string | null };
 type StockTakeLine = { id: number; ingredient_id: number; ingredient_name: string; unit: string; system_qty: number; counted_qty: number | null; variance_qty: number | null; reason_code: string | null };
@@ -215,172 +214,6 @@ function SuppliersTab({ suppliers, onChange }: { suppliers: Supplier[]; onChange
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-// ── Purchase Orders ──────────────────────────────────────────────────────────
-type POItem = { ingredient_id: number; quantity: number; unit_cost: number };
-
-function NewPoModal({ suppliers, ingredients, onClose, onSaved }: { suppliers: Supplier[]; ingredients: Ingredient[]; onClose: () => void; onSaved: () => void }) {
-  const [supplierId, setSupplierId] = useState("");
-  const [items, setItems] = useState<POItem[]>([{ ingredient_id: 0, quantity: 1, unit_cost: 0 }]);
-  const { toast } = useToast();
-
-  function updateItem(i: number, field: keyof POItem, value: number) {
-    setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, [field]: value } : it)));
-  }
-
-  async function save() {
-    if (!supplierId) return toast({ variant: "destructive", title: "Pick a supplier" });
-    const validItems = items.filter((i) => i.ingredient_id > 0 && i.quantity > 0);
-    if (validItems.length === 0) return toast({ variant: "destructive", title: "Add at least one item" });
-    if (new Set(validItems.map((i) => i.ingredient_id)).size !== validItems.length) {
-      return toast({ variant: "destructive", title: "Same ingredient on two lines", description: "Put it on one line with the total quantity." });
-    }
-    const res = await fetch("/api/purchase-orders", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ supplier_id: Number(supplierId), items: validItems, status: "ordered" }),
-    });
-    const data = await res.json();
-    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't create order", description: data.error });
-    toast({ variant: "success", title: "Purchase order created", description: `${validItems.length} item${validItems.length > 1 ? "s" : ""} ordered.` });
-    onSaved(); onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
-        <h2 className="text-foreground font-bold text-lg">New Purchase Order</h2>
-        <select value={supplierId} onChange={(e) => setSupplierId(e.target.value)} className="mt-3 w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
-          <option value="">Select supplier…</option>
-          {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-
-        <div className="mt-4 space-y-2">
-          {items.map((item, i) => (
-            <div key={i} className="grid grid-cols-[1fr_70px_80px] gap-2">
-              <select value={item.ingredient_id} onChange={(e) => updateItem(i, "ingredient_id", Number(e.target.value))} className="bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm">
-                <option value={0}>Ingredient…</option>
-                {ingredients.map((ing) => <option key={ing.id} value={ing.id}>{ing.name} ({ing.unit})</option>)}
-              </select>
-              <input type="number" step="0.01" placeholder="Qty" value={item.quantity} onChange={(e) => updateItem(i, "quantity", Number(e.target.value))} className="bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm" />
-              <input type="number" step="0.01" placeholder="£/unit" value={item.unit_cost} onChange={(e) => updateItem(i, "unit_cost", Number(e.target.value))} className="bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm" />
-            </div>
-          ))}
-          <button onClick={() => setItems((prev) => [...prev, { ingredient_id: 0, quantity: 1, unit_cost: 0 }])} className="text-red-600 text-xs font-semibold">+ Add line</button>
-        </div>
-
-        <div className="mt-4 flex gap-3">
-          <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
-          <button onClick={save} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Create Order</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () => void; onSaved: () => void }) {
-  const { toast } = useToast();
-  const [items, setItems] = useState<{ id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number; received_quantity: number; expiry_date: string }[]>([]);
-  const [orderNumber, setOrderNumber] = useState("");
-  const [receipts, setReceipts] = useState<Receipt[]>([]);
-  const [saving, setSaving] = useState(false);
-  const total = Math.round(items.reduce((sum, i) => sum + Math.max(0, Number(i.received_quantity) || 0) * Number(i.unit_cost || 0), 0) * 100) / 100;
-
-  useEffect(() => {
-    fetch(`/api/purchase-orders/${poId}`).then((r) => r.json()).then((d) => {
-      setOrderNumber(d.purchaseOrder.order_number);
-      setItems((d.items || []).map((i: { id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number }) => ({ ...i, received_quantity: i.quantity, expiry_date: "" })));
-    });
-  }, [poId]);
-
-  async function confirm() {
-    if (receipts.length === 0) return toast({ variant: "destructive", title: "Photo needed", description: "Take a photo of the supplier's invoice first." });
-    if (saving) return;
-    setSaving(true);
-    const res = await fetch(`/api/purchase-orders/${poId}/receive`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        items: items.map((i) => ({ item_id: i.id, received_quantity: i.received_quantity, expiry_date: i.expiry_date || undefined })),
-        receipt_ids: receipts.map((r) => r.id),
-      }),
-    }).catch(() => null);
-    setSaving(false);
-    if (!res) return toast({ variant: "destructive", title: "Couldn't receive order", description: "No connection. Check the Wi-Fi and try again." });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't receive order", description: data.error });
-    toast({ variant: "success", title: "Delivery received", description: `Cost counted in Finance: £${Number(data.purchaseOrder?.total_cost ?? 0).toFixed(2)}` });
-    onSaved(); onClose();
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
-      <div className="bg-surface border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-5">
-        <h2 className="text-foreground font-bold text-lg">Receive {orderNumber}</h2>
-        <p className="mt-1 text-muted-foreground text-xs">Enter what actually arrived — the order&apos;s cost in Finance is worked out from these quantities.</p>
-        <div className="mt-4 space-y-2">
-          {items.map((item, i) => (
-            <div key={item.id} className="grid grid-cols-[1fr_90px_120px] gap-2 items-center">
-              <span className="text-foreground text-sm">{item.ingredient_name}</span>
-              <input type="number" step="0.01" value={item.received_quantity} onChange={(e) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, received_quantity: Number(e.target.value) } : it))} className="bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm" />
-              <input type="date" value={item.expiry_date} onChange={(e) => setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, expiry_date: e.target.value } : it))} className="bg-surface-hover border border-border rounded-lg px-2 py-1.5 text-foreground text-sm" />
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-right text-foreground text-sm font-semibold">Delivery total: {fmtMoney(total)}</p>
-        <div className="mt-3">
-          <ReceiptPhotos entity="purchase_order" label="Supplier invoice photo" value={receipts} onChange={setReceipts} />
-        </div>
-        <div className="mt-4 flex gap-3">
-          <button onClick={onClose} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
-          <button onClick={confirm} disabled={receipts.length === 0 || saving} className="flex-1 h-10 bg-emerald-700 hover:bg-emerald-600 disabled:opacity-50 text-white font-bold rounded-xl">{saving ? "Saving…" : "Mark Received"}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PurchaseOrdersTab({ suppliers, ingredients }: { suppliers: Supplier[]; ingredients: Ingredient[] }) {
-  const [pos, setPos] = useState<PO[]>([]);
-  const [modal, setModal] = useState(false);
-  const [receiving, setReceiving] = useState<number | null>(null);
-  const [photos, setPhotos] = useState<Record<string, { id: number }[]>>({});
-
-  const load = useCallback(async () => {
-    const res = await fetch("/api/purchase-orders");
-    const data = await res.json();
-    const list: PO[] = data.purchaseOrders || [];
-    setPos(list);
-    const received = list.filter((po) => po.status === "received").map((po) => po.id).slice(0, 500);
-    if (received.length) {
-      const r = await fetch(`/api/receipts?entity=purchase_order&ids=${received.join(",")}`);
-      if (r.ok) setPhotos((await r.json()).receipts || {});
-    }
-  }, []);
-  useEffect(() => { load(); }, [load]);
-
-  return (
-    <div>
-      <div className="flex justify-end"><button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ New Purchase Order</button></div>
-      <div className="mt-3 space-y-2">
-        {pos.map((po) => (
-          <div key={po.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3 flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <p className="text-foreground font-semibold">{po.order_number} · {po.supplier_name}</p>
-              <p className="text-muted-foreground text-sm">{po.order_date} · {fmtMoney(po.total_cost)}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              {po.status === "received" && <ReceiptLinks photos={photos[po.id]} />}
-              <span className={`text-xs font-semibold px-2 py-0.5 rounded-full capitalize ${po.status === "received" ? "bg-green-100 text-green-700" : po.status === "cancelled" ? "bg-surface-hover text-muted-foreground" : "bg-amber-100 text-amber-700"}`}>{po.status}</span>
-              {po.status === "ordered" && <button onClick={() => setReceiving(po.id)} className="px-3 py-1.5 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold rounded-lg">Receive</button>}
-            </div>
-          </div>
-        ))}
-        {pos.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No purchase orders yet.</p>}
-      </div>
-      {modal && <NewPoModal suppliers={suppliers} ingredients={ingredients} onClose={() => setModal(false)} onSaved={load} />}
-      {receiving && <ReceivePoModal poId={receiving} onClose={() => setReceiving(null)} onSaved={load} />}
     </div>
   );
 }
@@ -719,6 +552,11 @@ export default function InventoryView({ canApproveStockTakes, canRecordSpending 
   }, []);
 
   useEffect(() => { loadSuppliers(); loadIngredients(); loadAlerts(); }, [loadSuppliers, loadIngredients, loadAlerts]);
+  // A link straight to a tab (e.g. the "to approve" notification → ?tab=orders).
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("tab");
+    if (want === "orders" || want === "stocktake" || want === "recipes" || want === "suppliers") setTab(want);
+  }, []);
 
   const tabs = [
     { id: "ingredients", label: "Ingredients" },

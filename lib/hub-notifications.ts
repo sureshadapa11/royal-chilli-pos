@@ -1,7 +1,7 @@
 import { bizDb } from "@/lib/business-db";
 import { isManagerRole } from "@/lib/roles";
 import type { StaffRole } from "@/lib/types";
-import { canAccess } from "@/lib/permissions";
+import { canAccess, canEdit } from "@/lib/permissions";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 
 // Things waiting on someone, shown under the Staff Hub's Notifications menu.
@@ -16,8 +16,10 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
   const yesterday = d.toISOString().slice(0, 10);
   const isManagement = isManagerRole(role);
 
-  const [ingredients, leave, corrections, openDay, platforms, dailyAccounts] = await Promise.all([
+  const [ingredients, toApprove, leave, corrections, openDay, platforms, dailyAccounts] = await Promise.all([
     canAccess(role, "inventory") ? db.from("ingredients").select("name, current_stock, reorder_level").eq("active", 1) : null,
+    canEdit(role, "approve_purchase_orders")
+      ? db.from("purchase_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_approval") : null,
     canAccess(role, "hr") || canAccess(role, "attendance")
       ? db.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending") : null,
     canAccess(role, "attendance")
@@ -39,6 +41,10 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
       sub: low.length > 1 ? low.slice(0, 3).map((i) => i.name).join(", ") + (low.length > 3 ? "…" : "") : undefined,
       href: "/staff/inventory",
     });
+  }
+  const approvals = toApprove?.error ? 0 : toApprove?.count ?? 0;
+  if (approvals > 0) {
+    out.push({ icon: "✅", text: approvals === 1 ? "1 purchase order to approve" : `${approvals} purchase orders to approve`, sub: "Over the approval limit", href: "/staff/inventory?tab=orders" });
   }
   if (openDay && (openDay.count ?? 0) > 0) {
     out.push({ icon: "🧾", text: "Close Day not done", sub: "An earlier day is still open on the till", href: "/pos" });

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
+import { mayApprove } from "@/lib/purchase-orders";
+import { poActor } from "@/lib/purchase-orders-server";
 
 export async function GET(
   req: NextRequest,
@@ -17,10 +19,10 @@ export async function GET(
   const { data: po, error: poErr } = await db.from("purchase_orders").select("*, supplier:suppliers(name)").eq("id", id).single();
   if (poErr || !po) return NextResponse.json({ error: "Purchase order not found" }, { status: 404 });
 
-  const { data: items, error: itemsErr } = await db
-    .from("purchase_order_items")
-    .select("*, ingredient:ingredients(name, unit)")
-    .eq("purchase_order_id", id);
+  const [{ data: items, error: itemsErr }, { data: events }] = await Promise.all([
+    db.from("purchase_order_items").select("*, ingredient:ingredients(name, unit)").eq("purchase_order_id", id),
+    db.from("purchase_order_events").select("id, action, from_status, to_status, comment, created_at, staff:staff(name)").eq("purchase_order_id", id).order("id"),
+  ]);
   if (itemsErr) return NextResponse.json({ error: "Failed to fetch items" }, { status: 500 });
 
   const { supplier: s, ...poRest } = po as typeof po & { supplier: { name: string } | null };
@@ -28,10 +30,20 @@ export async function GET(
     const { ingredient: ing, ...rest } = i as typeof i & { ingredient: { name: string; unit: string } | null };
     return { ...rest, ingredient_name: ing?.name ?? null, unit: ing?.unit ?? null };
   });
+  const history = (events || []).map((e) => {
+    const { staff, ...rest } = e as typeof e & { staff: { name: string } | null };
+    return { ...rest, staff_name: staff?.name ?? null };
+  });
 
-  return NextResponse.json({ purchaseOrder: { ...poRest, supplier_name: s?.name ?? null }, items: flatItems });
+  return NextResponse.json({
+    purchaseOrder: { ...poRest, supplier_name: s?.name ?? null },
+    items: flatItems,
+    events: history,
+    canApprove: mayApprove(po, poActor(session)),
+  });
 }
 
+// Expected date and notes only. Stages change through /action (lib/purchase-orders.ts).
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -43,12 +55,11 @@ export async function PATCH(
     }
     const db = bizDb(session.businessId);
     const { id } = await params;
-    const { status, expected_date, notes } = await req.json();
+    const { expected_date, notes } = await req.json();
 
     const updates: Record<string, unknown> = {};
-    if (status && ["draft", "ordered", "cancelled"].includes(status)) updates.status = status;
-    if (expected_date !== undefined) updates.expected_date = expected_date;
-    if (notes !== undefined) updates.notes = notes;
+    if (expected_date !== undefined) updates.expected_date = expected_date || null;
+    if (notes !== undefined) updates.notes = notes || null;
     if (Object.keys(updates).length === 0) return NextResponse.json({ error: "No fields to update" }, { status: 400 });
 
     const { data, error } = await db.from("purchase_orders").update(updates).eq("id", id).select().single();
