@@ -105,8 +105,7 @@ async function loadCache(): Promise<void> {
     cache = DEFAULTS;
     return;
   }
-  // A key with no stored row for a role (e.g. a tick added since) keeps its default.
-  const next = Object.fromEntries(TAB_KEYS.map((k) => [k, { ...DEFAULTS[k] }])) as Cache;
+  const next = Object.fromEntries(TAB_KEYS.map((k) => [k, {}])) as Cache;
   for (const row of data) {
     const key = row.permission as TabKey;
     if (!(TAB_KEYS as readonly string[]).includes(key)) continue;

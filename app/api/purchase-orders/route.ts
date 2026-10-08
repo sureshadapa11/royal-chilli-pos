@@ -5,8 +5,8 @@ import { areaAllows } from "@/lib/permissions";
 import { londonDateStr, londonDayRangeUtc } from "@/lib/london-date";
 import { poNumberPrefix } from "@/lib/business";
 import { resolveInventoryLocation } from "@/lib/locations";
-import { applyPoAction } from "@/lib/purchase-orders-server";
-import { cleanPoLines } from "@/lib/purchase-orders";
+import { applyPoAction, poActor } from "@/lib/purchase-orders-server";
+import { cleanPoLines, mayApprove } from "@/lib/purchase-orders";
 
 // Based on the highest sequence number actually issued today, not a row
 // COUNT — a COUNT drifts (and reissues an already-used number, which then
@@ -39,21 +39,38 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status");
 
-  let query = db.from("purchase_orders").select("*, supplier:suppliers(name)").order("created_at", { ascending: false });
+  let query = db.from("purchase_orders")
+    .select("*, supplier:suppliers(name), creator:staff!purchase_orders_created_by_fkey(name)")
+    .order("created_at", { ascending: false })
+    .limit(300);
   if (status) query = query.eq("status", status);
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: "Failed to fetch purchase orders" }, { status: 500 });
+
+  // Why each rejected order was rejected (the person who ordered needs to see it).
+  const rejectedIds = (data || []).filter((po) => po.status === "rejected").map((po) => po.id);
+  const why = new Map<number, string | null>();
+  if (rejectedIds.length) {
+    const { data: ev } = await db.from("purchase_order_events").select("purchase_order_id, comment")
+      .in("purchase_order_id", rejectedIds).eq("action", "rejected").order("id");
+    for (const e of ev ?? []) why.set(e.purchase_order_id, e.comment);
+  }
+
+  const actor = poActor(session);
   const flat = (data || []).map((po) => {
-    const { supplier: s, ...rest } = po as typeof po & { supplier: { name: string } | null };
-    return { ...rest, supplier_name: s?.name ?? null };
+    const { supplier: s, creator, ...rest } = po as typeof po & { supplier: { name: string } | null; creator: { name: string } | null };
+    return {
+      ...rest,
+      supplier_name: s?.name ?? null,
+      created_by_name: creator?.name ?? null,
+      can_approve: mayApprove(po, actor),
+      reject_reason: why.get(po.id) ?? null,
+    };
   });
   return NextResponse.json({ purchaseOrders: flat });
 }
 
-// Creates a draft order, and with
-// `submit: true` sends it straight on: approved if it's within the approval
-// limit, otherwise waiting for a manager (lib/purchase-orders.ts).
 export async function POST(req: NextRequest) {
   try {
     const session = await getSessionFromRequest(req);
