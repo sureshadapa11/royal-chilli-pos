@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { freshStart } from "@/lib/auth-sync";
 
 export default function PinPad() {
   const [pin, setPin] = useState("");
@@ -27,7 +28,7 @@ export default function PinPad() {
         // Full load so the till starts fresh as this person. Kitchen staff
         // go straight to the Kitchen Display — it's all they use.
         const data = await res.json().catch(() => ({}));
-        window.location.replace(data?.user?.role === "kitchen" ? "/pos/kitchen" : "/pos");
+        freshStart(data?.user?.role === "kitchen" ? "/pos/kitchen" : "/pos");
         return;
       }
       const data = await res.json().catch(() => ({}));

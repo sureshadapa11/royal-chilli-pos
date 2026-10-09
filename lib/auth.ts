@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sessionCookieDomain } from "./app-hosts";
 import type { SessionUser } from "./types";
 import { DEFAULT_BUSINESS_ID } from "./business-id";
+import { ALL_BUSINESSES_COOKIE } from "./owner-view";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "royal-chilli-pos-fallback-secret-key-2024"
@@ -93,6 +94,8 @@ export function getSessionCookieOptions(host?: string | null) {
 export function clearSessionCookie(res: NextResponse, host?: string | null) {
   const { name, options } = getSessionCookieOptions(host);
   res.cookies.set(name, "", { ...options, maxAge: 0 });
+  // The owner's "All businesses" view is theirs, not the device's.
+  res.cookies.set(ALL_BUSINESSES_COOKIE, "", { ...options, maxAge: 0 });
   if (options.domain) {
     res.headers.append("Set-Cookie", `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${options.secure ? "; Secure" : ""}`);
   }

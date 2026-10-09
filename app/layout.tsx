@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Poppins, Playfair_Display, Cinzel, Work_Sans, Space_Grotesk } from "next/font/google";
 import PwaRegister from "@/components/PwaRegister";
+import AuthSync from "@/components/AuthSync";
 import "./globals.css";
 import { SITE_URL } from "@/lib/site-url";
 import { ConfirmHost } from "@/components/ui/confirm";
@@ -60,6 +61,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${poppins.variable} ${playfair.variable} ${cinzel.variable} ${workSans.variable} ${spaceGrotesk.variable} ${poppins.className} antialiased`}>
         <PwaRegister />
+        <AuthSync />
         {children}
         <ConfirmHost />
       </body>
