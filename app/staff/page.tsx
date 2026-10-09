@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getDashboardData } from "@/lib/staff-dashboard";
-import { getAdminDashboard, mergeDashboards, RANGES, type RangeKey } from "@/lib/admin-dashboard";
+import { getAdminDashboard, mergeDashboards } from "@/lib/admin-dashboard";
 import { cookies } from "next/headers";
 import { listBusinesses } from "@/lib/business";
 import { ALL_BUSINESSES_COOKIE } from "@/lib/owner-view";
@@ -24,7 +24,7 @@ function greeting(): string {
 
 // Super admins and Managers get the sales & costs dashboard; HR keeps its
 // people view.
-export default async function StaffHubPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
+export default async function StaffHubPage() {
   const session = await getSession();
   const role = session?.role;
   // Drivers only have their deliveries screen in the hub.
@@ -44,16 +44,13 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
   // Super admins and Managers: the sales & costs dashboard (a Manager only
   // ever sees their own business — no switcher, no All businesses table).
   if (role === "admin" || role === "manager") {
-    const { range } = await searchParams;
-    // Summary offers whole weeks and months; an old ?range=today link gets this week.
-    const key: RangeKey = range && range in RANGES && range !== "today" ? (range as RangeKey) : "this_week";
     // Owner with "Working in: All businesses": every business's dashboard combined.
     const allMode = !!session!.owner && (await cookies()).get(ALL_BUSINESSES_COOKIE)?.value === "1";
     const data = allMode
-      ? mergeDashboards(await Promise.all((await listBusinesses()).map(async (b) => ({ name: b.name, data: await getAdminDashboard(b.id, key) }))))
-      : await getAdminDashboard(session!.businessId, key);
+      ? mergeDashboards(await Promise.all((await listBusinesses()).map(async (b) => ({ name: b.name, data: await getAdminDashboard(b.id, "this_week") }))))
+      : await getAdminDashboard(session!.businessId, "this_week");
     // The group owner sees every business first, then the one they're working in.
-    const group = session!.owner ? await getGroupOverview(key) : null;
+    const group = session!.owner ? await getGroupOverview("this_week") : null;
     return (
       <div className="px-4 pb-12 pt-6 md:px-6">
         <div className="mx-auto max-w-[1240px]">

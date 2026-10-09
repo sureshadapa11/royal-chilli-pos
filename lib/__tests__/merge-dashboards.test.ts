@@ -10,8 +10,10 @@ const dash = (o: { today: number; week: [number, number][]; dish: [string, numbe
   weekVsLastWeekPct: null,
   channels: [{ key: "dine_in", label: "Dine-in", platform: false, revenue: o.channel, orders: 2 }],
   topDishes: [{ name: o.dish[0], revenue: o.dish[1], qty: 1 }],
-  platforms: [{ key: "hiest", label: "Hiest", orders: 1, sales: 10, commission: 2, keep: 8 }],
-  platformsMissingYesterday: false,
+  dailyAccounts: {
+    bankIn: o.bank, cash: 50, notBanked: 20, pending: 5, cateringPaid: 15, cateringPending: 8,
+    opening: null, closing: null, submitted: o.submitted, daysSoFar: 7, missing: [],
+  },
   summary: {
     range: "this_week", from: "2026-09-28", to: "2026-10-04", totalSales: 100, exVat: 80,
     costs: { ingredients: 5, staff: o.staff, expenses: o.rent, expenseLines: [{ key: "rent", label: "Rent", amount: o.rent }], commission: 2, cardFees: 1, total: 10 },
@@ -28,7 +30,7 @@ describe("owner's All businesses dashboard", () => {
     expect(m.todayRevenue).toBe(150);
     expect(m.week.map((d) => d.revenue)).toEqual([150, 150, 0]);
     expect(m.channels).toEqual([expect.objectContaining({ key: "dine_in", revenue: 280, orders: 4 })]);
-    expect(m.platforms[0]).toMatchObject({ key: "hiest", orders: 2, sales: 20, keep: 16 });
+    expect(m.dailyAccounts).toMatchObject({ bankIn: 40, cash: 100, notBanked: 40, submitted: 7, daysSoFar: 14 });
     expect(m.summary.profit).toBe(90);
     expect(m.summary.costs.expenseLines).toEqual([{ key: "rent", label: "Rent", amount: 20 }]);
   });
