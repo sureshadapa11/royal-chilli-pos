@@ -43,7 +43,6 @@ export default async function StaffHubLayout({
         ...(see("tables") ? [{ href: "/staff/tables", label: "Tables", icon: "🪑" }] : []),
         ...(see("inventory") ? [{ href: "/staff/inventory", label: "Inventory", icon: "📦" }] : []),
         ...(canManageDrivers(session.role) ? [{ href: "/staff/drivers", label: "Drivers", icon: "🚗" }] : []),
-        ...(see("delivery_platforms") ? [{ href: "/staff/platforms", label: "Delivery platforms", icon: "🛵", note: "Enter daily totals" }] : []),
         ...(see("daily_accounts") ? [{ href: "/staff/daily-accounts", label: "Daily accounts", icon: "🧮", note: "Day-end sheet" }] : []),
         ...(see("website") ? [{ href: "/staff/website", label: "Website", icon: "🌐" }] : []),
         ...(see("till") ? [{ href: "/pos", label: "Till", icon: "💷" }] : []),
@@ -78,7 +77,7 @@ export default async function StaffHubLayout({
   // the menu and on the page.
   const PAGES: [TabKey, string[]][] = [
     ["menu", ["/staff/menu"]], ["tables", ["/staff/tables"]], ["inventory", ["/staff/inventory"]],
-    ["drivers", ["/staff/drivers"]], ["delivery_platforms", ["/staff/platforms"]],
+    ["drivers", ["/staff/drivers"]],
     ["daily_accounts", ["/staff/daily-accounts"]], ["website", ["/staff/website"]],
     ["hr", ["/staff/hr", "/staff/payroll"]], ["customers", ["/staff/customers"]],
     ["analytics", ["/staff/analytics"]], ["reports", ["/staff/reports"]], ["finance", ["/staff/finance"]],
