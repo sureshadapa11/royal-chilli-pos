@@ -16,7 +16,7 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
   const yesterday = d.toISOString().slice(0, 10);
   const isManagement = isManagerRole(role);
 
-  const [ingredients, toApprove, leave, corrections, openDay, platforms, dailyAccounts] = await Promise.all([
+  const [ingredients, toApprove, leave, corrections, openDay, dailyAccounts] = await Promise.all([
     canAccess(role, "inventory") ? db.from("ingredients").select("name, current_stock, reorder_level").eq("active", 1) : null,
     canEdit(role, "approve_purchase_orders")
       ? db.from("purchase_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_approval") : null,
@@ -26,8 +26,6 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
       ? db.from("attendance_corrections").select("id", { count: "exact", head: true }).eq("status", "pending") : null,
     isManagement
       ? db.from("work_periods").select("id", { count: "exact", head: true }).eq("status", "open").lt("opened_at", tradingRangeUtc(today).start) : null,
-    canAccess(role, "delivery_platforms")
-      ? db.from("platform_sales").select("id", { count: "exact", head: true }).eq("sales_date", yesterday) : null,
     canAccess(role, "daily_accounts")
       ? db.from("daily_accounts").select("status").eq("trading_date", yesterday).maybeSingle() : null,
   ]);
@@ -52,9 +50,6 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
   const pending = (leave?.count ?? 0) + (corrections?.count ?? 0);
   if (pending > 0) {
     out.push({ icon: "🕐", text: `${pending} waiting for approval`, sub: "Leave requests & time corrections", href: "/api/sso/attendance" });
-  }
-  if (platforms && !platforms.error && (platforms.count ?? 0) === 0) {
-    out.push({ icon: "🛵", text: "Enter yesterday's platform totals", sub: "Just Eat, Uber Eats, Deliveroo, Hiest", href: "/staff/platforms" });
   }
   if (dailyAccounts && !dailyAccounts.error && dailyAccounts.data?.status !== "submitted") {
     out.push({

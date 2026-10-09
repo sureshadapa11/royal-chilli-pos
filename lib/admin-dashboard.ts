@@ -6,8 +6,8 @@ import { savedDays, summarise, type DailySummary } from "@/lib/daily-accounts";
 
 // Admin dashboard figures (Staff Hub home, admin only). Revenue = our own paid
 // orders (till, QR, website) after discounts, VAT included, minus refunds on
-// the day they were given, plus the delivery platforms' gross sales typed in
-// daily (platform_sales). The summary is the Finance P&L (lib/finance.ts
+// the day they were given, plus delivery-platform gross sales from Daily
+// Accounts. The summary is the Finance P&L (lib/finance.ts
 // getPnl) for the chosen range, so the two screens always agree. Weeks run
 // Monday–Sunday; days are trading days (5am–5am UK).
 

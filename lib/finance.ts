@@ -15,7 +15,7 @@ import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
 //   • Own sales (till, QR, website) = paid orders by order date, VAT included,
 //     after discounts, minus refunds on the day the refund was given (same as
 //     the Z report and the accountant export).
-//   • Delivery platforms = the daily totals typed into Delivery platforms.
+//   • Delivery platforms = the daily totals saved in Daily Accounts.
 //   • Profit is worked out ex-VAT: VAT on sales belongs to HMRC, and VAT on
 //     expenses marked "VAT applicable" is reclaimed, so neither is profit or cost.
 //   • Ingredient cost = purchase orders received in the period (cash basis).
@@ -97,12 +97,45 @@ export async function getSalesData(businessId: number, from: string, to: string)
 }
 
 export async function getPlatformSales(businessId: number, from: string, to: string): Promise<PlatformSaleRow[]> {
-  const { data, error } = await bizDb(businessId)
-    .from("platform_sales").select("sales_date, platform, orders, sales, commission")
-    .gte("sales_date", from).lte("sales_date", to);
-  // Don't take a whole report down over the platform figures.
-  if (error) { console.error("platform_sales:", error.message); return []; }
-  return (data ?? []).map((r) => ({ ...r, orders: Number(r.orders), sales: Number(r.sales), commission: Number(r.commission) }));
+  const db = bizDb(businessId);
+  const [{ data: accounts, error }, { data: legacyOrders }] = await Promise.all([
+    db.from("daily_accounts").select("trading_date, just_eat, uber_eats, deliveroo, hiest, commission")
+      .gte("trading_date", from).lte("trading_date", to),
+    // Keep historical order counts for dashboard channel comparisons. Sales
+    // and commission always come from Daily Accounts, the current source of truth.
+    db.from("platform_sales").select("sales_date, platform, orders")
+      .gte("sales_date", from).lte("sales_date", to),
+  ]);
+  if (error) { console.error("daily_accounts platform totals:", error.message); return []; }
+  const orderCounts = new Map<string, number>();
+  for (const row of legacyOrders ?? []) orderCounts.set(`${row.sales_date}:${row.platform}`, Number(row.orders) || 0);
+  const out: PlatformSaleRow[] = [];
+  for (const row of accounts ?? []) {
+    const platforms: [PlatformKey, unknown][] = [
+      ["just_eat", row.just_eat], ["uber_eats", row.uber_eats], ["deliveroo", row.deliveroo], ["hiest", row.hiest],
+    ];
+    let commissionAssigned = false;
+    for (const [platform, rawSales] of platforms) {
+      const sales = Number(rawSales ?? 0);
+      const commission = !commissionAssigned ? Number(row.commission ?? 0) : 0;
+      if (sales !== 0 || commission !== 0) {
+        out.push({
+          sales_date: row.trading_date,
+          platform,
+          orders: orderCounts.get(`${row.trading_date}:${platform}`) ?? 0,
+          sales,
+          commission,
+        });
+        commissionAssigned = true;
+      }
+    }
+    // Commission may be entered even when platform sales have not yet been
+    // split out. Keep it in the P&L once rather than losing or multiplying it.
+    if (!commissionAssigned && Number(row.commission ?? 0) !== 0) {
+      out.push({ sales_date: row.trading_date, platform: "just_eat", orders: 0, sales: 0, commission: Number(row.commission) });
+    }
+  }
+  return out;
 }
 
 // ── Costs ────────────────────────────────────────────────────────────────────
