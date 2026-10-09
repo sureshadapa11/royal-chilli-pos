@@ -24,7 +24,7 @@ function greeting(): string {
 
 // Super admins and Managers get the sales & costs dashboard; HR keeps its
 // people view.
-export default async function StaffHubPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
+export default async function StaffHubPage({ searchParams }: { searchParams: Promise<{ range?: string; summaryRange?: string }> }) {
   const session = await getSession();
   const role = session?.role;
   // Drivers only have their deliveries screen in the hub.
@@ -44,16 +44,18 @@ export default async function StaffHubPage({ searchParams }: { searchParams: Pro
   // Super admins and Managers: the sales & costs dashboard (a Manager only
   // ever sees their own business — no switcher, no All businesses table).
   if (role === "admin" || role === "manager") {
-    const { range } = await searchParams;
-    // Summary offers whole weeks and months; an old ?range=today link gets this week.
-    const key: RangeKey = range && range in RANGES && range !== "today" ? (range as RangeKey) : "this_week";
+    const { range, summaryRange } = await searchParams;
+    // Summary offers whole weeks and months. Accept the old `range` parameter
+    // as a fallback so existing dashboard links keep working.
+    const selectedRange = summaryRange ?? range;
+    const key: RangeKey = selectedRange && selectedRange in RANGES && selectedRange !== "today" ? (selectedRange as RangeKey) : "this_week";
     // Owner with "Working in: All businesses": every business's dashboard combined.
     const allMode = !!session!.owner && (await cookies()).get(ALL_BUSINESSES_COOKIE)?.value === "1";
     const data = allMode
       ? mergeDashboards(await Promise.all((await listBusinesses()).map(async (b) => ({ name: b.name, data: await getAdminDashboard(b.id, key) }))))
       : await getAdminDashboard(session!.businessId, key);
     // The group owner sees every business first, then the one they're working in.
-    const group = session!.owner ? await getGroupOverview(key) : null;
+    const group = session!.owner ? await getGroupOverview("this_week") : null;
     return (
       <div className="px-4 pb-12 pt-6 md:px-6">
         <div className="mx-auto max-w-[1240px]">

@@ -74,7 +74,7 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
   const channelsWithSales = data.channels.filter((c) => c.revenue > 0);
   const avgSpend = data.channels.filter((c) => c.orders > 0).map((c) => ({ ...c, avg: Math.round((c.revenue / c.orders) * 100) / 100 }));
   const topMax = Math.max(1, ...data.topDishes.map((d) => d.revenue));
-  const plat = data.platforms.reduce((t, p) => ({ orders: t.orders + p.orders, sales: t.sales + p.sales, commission: t.commission + p.commission, keep: t.keep + p.keep }), { orders: 0, sales: 0, commission: 0, keep: 0 });
+  const dailyAccountsMissing = Math.max(0, data.dailyAccounts.daysSoFar - data.dailyAccounts.submitted);
 
   // The cost lines the owner wants (agreed 2026-10-03), £0 included. Rent,
   // utilities, equipment and professional fees are counted in "Other
@@ -126,7 +126,7 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
 
         <Card title="Summary" className="md:col-span-2 xl:col-span-1">
           <div className="mb-3 mt-1 flex flex-wrap gap-2">
-            <select aria-label="Date range" value={sm.range} onChange={(e) => router.push(`/staff?range=${e.target.value}`, { scroll: false })}
+            <select aria-label="Summary date range" value={sm.range} onChange={(e) => router.push(`/staff?summaryRange=${e.target.value}`, { scroll: false })}
               className="rounded-[9px] border border-[#ECE5D6] bg-[#FBF8F1] px-2.5 py-1.5 text-[13px]">
               {SUMMARY_RANGES.map((k) => <option key={k} value={k}>{RANGE_LABELS[k]}</option>)}
             </select>
@@ -298,46 +298,32 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
         </Card>
       </div>
 
-      {/* Row 5: delivery platforms */}
+      {/* Row 5: daily accounts */}
       <Card
-        title="Delivery platforms"
-        sub="This week · entered daily from each tablet's summary"
-        action={<Link href="/staff/platforms" className="text-[13px] font-semibold text-[#C82D1D] hover:underline">Enter totals →</Link>}
+        title="Daily Accounts"
+        sub="This week · saved day-end figures"
+        action={<Link href="/staff/daily-accounts" className="text-[13px] font-semibold text-[#C82D1D] hover:underline">Open Daily Accounts →</Link>}
       >
-        {data.platformsMissingYesterday && (
-          <p className="mb-2 rounded-lg bg-[#FFF4D6] px-3 py-2 text-[12.5px] text-[#8A5A00]">Yesterday&apos;s platform totals haven&apos;t been entered yet.</p>
-        )}
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[460px] text-[13.5px]">
-            <thead>
-              <tr className="text-[11.5px] uppercase tracking-[0.04em] text-muted-foreground">
-                <th className="py-1.5 text-left font-semibold">Platform</th>
-                <th className="py-1.5 text-right font-semibold">Orders</th>
-                <th className="py-1.5 text-right font-semibold">Sales</th>
-                <th className="py-1.5 text-right font-semibold">Commission</th>
-                <th className="py-1.5 text-right font-semibold">You keep</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.platforms.map((p) => (
-                <tr key={p.key} className="border-t border-[#F0EBDF]">
-                  <td className="py-2"><span className="mr-2 inline-block h-2.5 w-2.5 rounded-[3px] align-[-1px]" style={{ background: CHANNEL_COLOUR[p.key] }} />{p.label}</td>
-                  <td className="py-2 text-right tabular-nums">{p.orders}</td>
-                  <td className="py-2 text-right tabular-nums">{gbp2(p.sales)}</td>
-                  <td className="py-2 text-right tabular-nums">{gbp2(p.commission)}</td>
-                  <td className="py-2 text-right font-semibold tabular-nums" style={{ color: GOOD }}>{gbp2(p.keep)}</td>
-                </tr>
-              ))}
-              <tr className="border-t-2 border-[#ECE5D6] font-semibold">
-                <td className="py-2">Total</td>
-                <td className="py-2 text-right tabular-nums">{plat.orders}</td>
-                <td className="py-2 text-right tabular-nums">{gbp2(plat.sales)}</td>
-                <td className="py-2 text-right tabular-nums">{gbp2(plat.commission)}</td>
-                <td className="py-2 text-right tabular-nums" style={{ color: GOOD }}>{gbp2(plat.keep)}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          {[
+            ["Cash", data.dailyAccounts.cash],
+            ["Bank in", data.dailyAccounts.bankIn],
+            ["Cash not banked", data.dailyAccounts.notBanked],
+            ["Pending bills", data.dailyAccounts.pending],
+            ["Catering paid", data.dailyAccounts.cateringPaid],
+            ["Catering pending", data.dailyAccounts.cateringPending],
+          ].map(([label, amount]) => (
+            <div key={label as string} className="rounded-xl bg-[#FBF8F1] px-3 py-2.5">
+              <span className="block text-[11.5px] font-semibold uppercase tracking-[0.04em] text-muted-foreground">{label}</span>
+              <b style={heading} className="mt-0.5 block text-[18px] font-bold tabular-nums">{gbp2(Number(amount))}</b>
+            </div>
+          ))}
         </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12px] text-muted-foreground">
+          <span>{data.dailyAccounts.submitted} of {data.dailyAccounts.daysSoFar} days submitted</span>
+          {dailyAccountsMissing > 0 && <span>{dailyAccountsMissing} day{dailyAccountsMissing === 1 ? "" : "s"} not submitted</span>}
+        </div>
+        <p className="mt-2 text-[11.5px] text-muted-foreground">Daily Accounts figures include saved drafts. They are shown separately and do not change sales or profit.</p>
       </Card>
     </div>
   );

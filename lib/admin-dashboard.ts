@@ -1,8 +1,8 @@
 import supabase from "@/lib/supabase";
 import { tradingDayStr } from "@/lib/london-date";
-import { PLATFORMS, type PlatformKey } from "@/lib/platforms";
+import { PLATFORMS } from "@/lib/platforms";
 import { chunked, getPnl, getSalesData, labourCostByDay, r2 } from "@/lib/finance";
-import { bizDb } from "@/lib/business-db";
+import { savedDays, summarise, type DailySummary } from "@/lib/daily-accounts";
 
 // Admin dashboard figures (Staff Hub home, admin only). Revenue = our own paid
 // orders (till, QR, website) after discounts, VAT included, minus refunds on
@@ -21,8 +21,6 @@ export const RANGES = {
 export type RangeKey = keyof typeof RANGES;
 
 export type Channel = { key: string; label: string; platform: boolean; revenue: number; orders: number };
-export type PlatformRow = { key: PlatformKey; label: string; orders: number; sales: number; commission: number; keep: number };
-
 export type AdminDashboard = {
   today: string;
   todayRevenue: number;
@@ -33,8 +31,7 @@ export type AdminDashboard = {
   weekVsLastWeekPct: number | null;
   channels: Channel[];
   topDishes: { name: string; revenue: number; qty: number }[];
-  platforms: PlatformRow[];
-  platformsMissingYesterday: boolean;
+  dailyAccounts: DailySummary;
   summary: {
     range: RangeKey;
     from: string;
@@ -96,13 +93,14 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
   const sun = addDays(mon, 6);
   const lastMon = addDays(mon, -7);
   const sum = rangeDates(range, today);
-  const yesterday = addDays(today, -1);
+  const weekRange = rangeDates("this_week", today);
 
   // One fetch covering last week → this week.
-  const [sales14, costByDay, summary] = await Promise.all([
+  const [sales14, costByDay, summary, dailyRows] = await Promise.all([
     getSalesData(businessId, lastMon, sun),
     labourCostByDay(businessId, mon, sun),
     getPnl(businessId, sum.from, sum.to),
+    savedDays(businessId, weekRange.from, weekRange.to),
   ]);
   const plat14 = sales14.platforms;
 
@@ -155,13 +153,6 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
     }),
   ];
 
-  const platforms: PlatformRow[] = PLATFORMS.map((p) => {
-    const rows = weekPlat.filter((r) => r.platform === p.key);
-    const sales = r2(rows.reduce((s, r) => s + r.sales, 0));
-    const commission = r2(rows.reduce((s, r) => s + r.commission, 0));
-    return { key: p.key, label: p.label, orders: rows.reduce((s, r) => s + r.orders, 0), sales, commission, keep: r2(sales - commission) };
-  });
-
   // Top dishes by revenue, this week (own orders only — platforms aren't itemised).
   const items = await chunked(weekOrders.map((o) => o.id), async (ids) => {
     const { data, error } = await supabase.from("order_items").select("order_id, item_name, item_price, quantity")
@@ -180,9 +171,6 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
     .map(([name, v]) => ({ name, revenue: r2(v.revenue), qty: v.qty }))
     .sort((a, b) => b.revenue - a.revenue).slice(0, 5);
 
-  const { count: yCount, error: yErr } = await bizDb(businessId).from("platform_sales").select("id", { count: "exact", head: true })
-    .eq("sales_date", yesterday);
-
   return {
     today,
     todayRevenue: dayRevenue(today),
@@ -193,8 +181,7 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
     weekVsLastWeekPct: pct(daysSoFar.reduce((s, d) => s + d.revenue, 0), lastWeekSoFar),
     channels,
     topDishes,
-    platforms,
-    platformsMissingYesterday: !yErr && (yCount ?? 0) === 0,
+    dailyAccounts: summarise(dailyRows, weekRange.from, weekRange.to, today),
     summary: {
       range, from: sum.from, to: sum.to, totalSales: summary.sales.total, exVat: summary.sales.ex_vat,
       costs: {
@@ -246,8 +233,19 @@ export function mergeDashboards(list: { name: string; data: AdminDashboard }[]):
       .flatMap((l) => l.data.topDishes.map((t) => ({ ...t, name: `${t.name} · ${l.name}` })))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 8),
-    platforms: byKey((d) => d.platforms, (a, b) => ({ ...a, orders: a.orders + b.orders, sales: add(a.sales, b.sales), commission: add(a.commission, b.commission), keep: add(a.keep, b.keep) })),
-    platformsMissingYesterday: list.some((l) => l.data.platformsMissingYesterday),
+    dailyAccounts: {
+      bankIn: list.reduce((s, l) => add(s, l.data.dailyAccounts.bankIn), 0),
+      cash: list.reduce((s, l) => add(s, l.data.dailyAccounts.cash), 0),
+      notBanked: list.reduce((s, l) => add(s, l.data.dailyAccounts.notBanked), 0),
+      pending: list.reduce((s, l) => add(s, l.data.dailyAccounts.pending), 0),
+      cateringPaid: list.reduce((s, l) => add(s, l.data.dailyAccounts.cateringPaid), 0),
+      cateringPending: list.reduce((s, l) => add(s, l.data.dailyAccounts.cateringPending), 0),
+      opening: null,
+      closing: null,
+      submitted: list.reduce((s, l) => s + l.data.dailyAccounts.submitted, 0),
+      daysSoFar: list.reduce((s, l) => s + l.data.dailyAccounts.daysSoFar, 0),
+      missing: [],
+    },
     summary: {
       range: first.summary.range,
       from: first.summary.from,
