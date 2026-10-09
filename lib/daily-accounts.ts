@@ -8,8 +8,8 @@ import { DAILY_KEYS, type DailyValues } from "@/lib/daily-accounts-fields";
 // Day-end accounts (Staff Hub → Daily accounts). The till's figures for a
 // trading day, to pre-fill the manager's sheet: the Z report of every shift
 // opened that day (net sales, card, cash, opening and counted closing cash,
-// pay-later bills left unpaid), takeaway sales, and the delivery platforms'
-// totals typed in that day. Anything the till doesn't know is null.
+// pay-later bills left unpaid), and takeaway sales. Delivery totals are entered
+// directly in this sheet. Anything the till doesn't know is null.
 
 export const blankValues = (): DailyValues =>
   Object.fromEntries(DAILY_KEYS.map((k) => [k, null])) as DailyValues;
@@ -44,11 +44,6 @@ export async function tillFigures(businessId: number, date: string): Promise<Dai
     - sales.refunds.filter((r) => r.order_type === "takeaway").reduce((s, r) => s + r.amount, 0);
   if (takeaway !== 0 || reports.length) values.takeaway = r2(takeaway);
 
-  for (const p of sales.platforms) {
-    const key = p.platform as keyof DailyValues;
-    if (key in values) values[key] = r2((values[key] ?? 0) + Number(p.sales));
-  }
-  if (sales.platforms.length) values.commission = r2(sales.platforms.reduce((s, p) => s + Number(p.commission), 0));
   return values;
 }
 

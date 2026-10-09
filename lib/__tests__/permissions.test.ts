@@ -15,7 +15,7 @@ import { canAccess, canEdit, levelOf, areaAllows, manageAllows, isStaffManagemen
 
 describe("canAccess — default matrix", () => {
   it("Super admin sees every area", () => {
-    for (const t of ["attendance", "hr", "menu", "tables", "inventory", "website", "finance", "analytics", "reports", "audit", "settings", "till", "drivers", "customers", "daily_accounts", "delivery_platforms"] as const) {
+    for (const t of ["attendance", "hr", "menu", "tables", "inventory", "website", "finance", "analytics", "reports", "audit", "settings", "till", "drivers", "customers", "daily_accounts"] as const) {
       expect(canAccess("admin", t)).toBe(true);
     }
   });
@@ -30,7 +30,7 @@ describe("canAccess — default matrix", () => {
   });
 
   it("Manager: full on the day-to-day areas, view only on Customers and Insights, no HR or Audit log", () => {
-    for (const t of ["menu", "tables", "inventory", "approve_stock_takes", "drivers", "delivery_platforms", "daily_accounts", "website", "till", "attendance", "settings"] as const) {
+    for (const t of ["menu", "tables", "inventory", "approve_stock_takes", "drivers", "daily_accounts", "website", "till", "attendance", "settings"] as const) {
       expect(levelOf("manager", t)).toBe("full");
     }
     for (const t of ["customers", "analytics", "reports", "finance"] as const) {
