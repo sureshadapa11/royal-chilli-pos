@@ -21,6 +21,16 @@ export const RANGES = {
 export type RangeKey = keyof typeof RANGES;
 
 export type Channel = { key: string; label: string; platform: boolean; revenue: number; orders: number };
+export type AdminSummary = {
+  range: RangeKey;
+  from: string;
+  to: string;
+  totalSales: number;
+  exVat: number;
+  costs: { ingredients: number; staff: number; expenses: number; expenseLines: { key: string; label: string; amount: number }[]; commission: number; cardFees: number; total: number };
+  profit: number;
+};
+
 export type AdminDashboard = {
   today: string;
   todayRevenue: number;
@@ -32,15 +42,7 @@ export type AdminDashboard = {
   channels: Channel[];
   topDishes: { name: string; revenue: number; qty: number }[];
   dailyAccounts: DailySummary;
-  summary: {
-    range: RangeKey;
-    from: string;
-    to: string;
-    totalSales: number;
-    exVat: number;
-    costs: { ingredients: number; staff: number; expenses: number; expenseLines: { key: string; label: string; amount: number }[]; commission: number; cardFees: number; total: number };
-    profit: number;
-  };
+  summary: AdminSummary;
 };
 
 
@@ -76,6 +78,52 @@ export function rangeDates(range: RangeKey, today: string): { from: string; to: 
   }
 }
 
+function summaryFromPnl(range: RangeKey, pnl: Awaited<ReturnType<typeof getPnl>>): AdminSummary {
+  return {
+    range, from: pnl.from, to: pnl.to,
+    totalSales: pnl.sales.total,
+    exVat: pnl.sales.ex_vat,
+    costs: {
+      ingredients: pnl.costs.ingredients,
+      staff: pnl.costs.staff,
+      expenses: pnl.costs.expenses,
+      expenseLines: pnl.costs.expense_lines,
+      commission: pnl.costs.commission,
+      cardFees: pnl.costs.card_fees,
+      total: pnl.costs.total,
+    },
+    profit: pnl.profit,
+  };
+}
+
+export async function getAdminSummary(businessId: number, range: RangeKey): Promise<AdminSummary> {
+  const dates = rangeDates(range, tradingDayStr());
+  return summaryFromPnl(range, await getPnl(businessId, dates.from, dates.to));
+}
+
+export function mergeAdminSummaries(list: AdminSummary[]): AdminSummary {
+  const [first, ...rest] = list;
+  const sum = (pick: (s: AdminSummary) => number) => list.reduce((total, s) => r2(total + pick(s)), 0);
+  return {
+    range: first.range, from: first.from, to: first.to,
+    totalSales: sum((s) => s.totalSales),
+    exVat: sum((s) => s.exVat),
+    costs: {
+      ingredients: sum((s) => s.costs.ingredients),
+      staff: sum((s) => s.costs.staff),
+      expenses: sum((s) => s.costs.expenses),
+      expenseLines: first.costs.expenseLines.map((line) => ({
+        ...line,
+        amount: rest.reduce((total, s) => r2(total + (s.costs.expenseLines.find((x) => x.key === line.key)?.amount ?? 0)), line.amount),
+      })),
+      commission: sum((s) => s.costs.commission),
+      cardFees: sum((s) => s.costs.cardFees),
+      total: sum((s) => s.costs.total),
+    },
+    profit: sum((s) => s.profit),
+  };
+}
+
 const dayOf = (o: { created_at: string }) => tradingDayStr(new Date(o.created_at));
 const dayLabel = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short" });
 
@@ -92,14 +140,13 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
   const mon = mondayOf(today);
   const sun = addDays(mon, 6);
   const lastMon = addDays(mon, -7);
-  const sum = rangeDates(range, today);
   const weekRange = rangeDates("this_week", today);
 
   // One fetch covering last week → this week.
   const [sales14, costByDay, summary, dailyRows] = await Promise.all([
     getSalesData(businessId, lastMon, sun),
     labourCostByDay(businessId, mon, sun),
-    getPnl(businessId, sum.from, sum.to),
+    getAdminSummary(businessId, range),
     savedDays(businessId, weekRange.from, weekRange.to),
   ]);
   const plat14 = sales14.platforms;
@@ -183,12 +230,7 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
     topDishes,
     dailyAccounts: summarise(dailyRows, weekRange.from, weekRange.to, today),
     summary: {
-      range, from: sum.from, to: sum.to, totalSales: summary.sales.total, exVat: summary.sales.ex_vat,
-      costs: {
-        ingredients: summary.costs.ingredients, staff: summary.costs.staff, expenses: summary.costs.expenses, expenseLines: summary.costs.expense_lines,
-        commission: summary.costs.commission, cardFees: summary.costs.card_fees, total: summary.costs.total,
-      },
-      profit: summary.profit,
+      ...summary,
     },
   };
 }
@@ -246,24 +288,6 @@ export function mergeDashboards(list: { name: string; data: AdminDashboard }[]):
       daysSoFar: list.reduce((s, l) => s + l.data.dailyAccounts.daysSoFar, 0),
       missing: [],
     },
-    summary: {
-      range: first.summary.range,
-      from: first.summary.from,
-      to: first.summary.to,
-      totalSales: sm.reduce((s, x) => add(s, x.totalSales), 0),
-      exVat: sm.reduce((s, x) => add(s, x.exVat), 0),
-      costs: {
-        ingredients: sm.reduce((s, x) => add(s, x.costs.ingredients), 0),
-        staff: sm.reduce((s, x) => add(s, x.costs.staff), 0),
-        expenses: sm.reduce((s, x) => add(s, x.costs.expenses), 0),
-        expenseLines: first.summary.costs.expenseLines.map((l) => ({
-          ...l, amount: sm.reduce((s, x) => add(s, x.costs.expenseLines.find((y) => y.key === l.key)?.amount ?? 0), 0),
-        })),
-        commission: sm.reduce((s, x) => add(s, x.costs.commission), 0),
-        cardFees: sm.reduce((s, x) => add(s, x.costs.cardFees), 0),
-        total: sm.reduce((s, x) => add(s, x.costs.total), 0),
-      },
-      profit: sm.reduce((s, x) => add(s, x.profit), 0),
-    },
+    summary: mergeAdminSummaries(sm),
   };
 }

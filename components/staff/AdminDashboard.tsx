@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   AreaChart, Area, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer,
 } from "recharts";
-import type { AdminDashboard as Data, RangeKey } from "@/lib/admin-dashboard";
+import type { AdminDashboard as Data, AdminSummary, RangeKey } from "@/lib/admin-dashboard";
 
 // Admin-only Staff Hub home. Fixed colour per channel (never by rank), one
 // y-axis per chart, hover tooltips everywhere, legends on multi-series charts.
@@ -64,10 +64,79 @@ function Legend({ items }: { items: { label: string; colour: string }[] }) {
   );
 }
 
-export default function AdminDashboard({ data }: { data: Data; businessName?: string }) {
-  const router = useRouter();
-  const { summary: sm } = data;
+function SummaryCard({ initialSummary }: { initialSummary: AdminSummary }) {
+  const [summary, setSummary] = useState(initialSummary);
+  const [range, setRange] = useState(initialSummary.range);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
+  // Keep period changes inside this card; a route navigation would refresh the
+  // server-rendered dashboard around it as well.
+  async function changeRange(nextRange: RangeKey) {
+    setRange(nextRange);
+    setLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`/api/staff/dashboard-summary?range=${nextRange}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Couldn't load this summary period.");
+      setSummary(await response.json() as AdminSummary);
+    } catch (e) {
+      setRange(summary.range);
+      setError(e instanceof Error ? e.message : "Couldn't load this summary period.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const marketing = summary.costs.expenseLines.find((l) => l.key === "marketing")?.amount ?? 0;
+  const otherExpenses = Math.round(summary.costs.expenseLines.filter((l) => l.key !== "marketing").reduce((t, l) => t + l.amount, 0) * 100) / 100;
+  const costs: [string, number][] = [
+    ["Staff pay", summary.costs.staff],
+    ["Marketing", marketing],
+    ["Other expenses", otherExpenses],
+    ["Ingredients & supplies", summary.costs.ingredients],
+    ["Platform commission", summary.costs.commission],
+    ["Card fees (est.)", summary.costs.cardFees],
+  ];
+
+  return (
+    <Card title="Summary" className="md:col-span-2 xl:col-span-1">
+      <div aria-busy={loading}>
+        <div className="mb-3 mt-1 flex flex-wrap items-center gap-2">
+          <select aria-label="Summary date range" value={range} disabled={loading} onChange={(e) => void changeRange(e.target.value as RangeKey)}
+            className="rounded-[9px] border border-[#ECE5D6] bg-[#FBF8F1] px-2.5 py-1.5 text-[13px] disabled:opacity-60">
+            {SUMMARY_RANGES.map((k) => <option key={k} value={k}>{RANGE_LABELS[k]}</option>)}
+          </select>
+          {loading && <span className="text-[12px] text-muted-foreground" role="status">Updating summary…</span>}
+          {error && <span className="text-[12px] text-[#C0392B]" role="alert">{error}</span>}
+        </div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {[
+            ["Total sales", summary.totalSales, ""],
+            ["Ex VAT", summary.exVat, ""],
+            ["Costs", summary.costs.total, ""],
+            ["Profit", summary.profit, "profit"],
+          ].map(([label, value, kind]) => (
+            <div key={label as string} className={`rounded-xl px-3 py-2.5 ${kind ? (Number(value) >= 0 ? "bg-[#E7F5EC]" : "bg-[#FDECE9]") : "bg-[#FBF8F1]"}`}>
+              <span className="block text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{label}</span>
+              <b style={{ ...heading, color: kind ? (Number(value) >= 0 ? GOOD : "#C0392B") : undefined }} className="mt-0.5 block text-[20px] font-bold tabular-nums">{gbp(Number(value))}</b>
+            </div>
+          ))}
+        </div>
+        <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[13px] text-[#5B524B]">
+          {costs.map(([label, amount]) => (
+            <div key={label} className="contents"><span>{label}</span><span className="text-right tabular-nums text-foreground">{gbp2(amount)}</span></div>
+          ))}
+          <span className="border-t border-[#ECE5D6] pt-1 font-semibold text-foreground">Total costs</span>
+          <span className="border-t border-[#ECE5D6] pt-1 text-right font-semibold tabular-nums text-foreground">{gbp2(summary.costs.total)}</span>
+        </div>
+        <p className="mt-2 text-[12px] text-muted-foreground">Profit = sales ex VAT − costs. Staff pay is from clocked-out shifts × pay rate.</p>
+      </div>
+    </Card>
+  );
+}
+
+export default function AdminDashboard({ data }: { data: Data; businessName?: string }) {
   // Days still to come this week draw as gaps, not as £0.
   const week = data.week.map((d) => ({ ...d, revenueSoFar: d.date <= data.today ? d.revenue : null }));
   const channelTotal = data.channels.reduce((s, c) => s + c.revenue, 0);
@@ -75,20 +144,6 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
   const avgSpend = data.channels.filter((c) => c.orders > 0).map((c) => ({ ...c, avg: Math.round((c.revenue / c.orders) * 100) / 100 }));
   const topMax = Math.max(1, ...data.topDishes.map((d) => d.revenue));
   const dailyAccountsMissing = Math.max(0, data.dailyAccounts.daysSoFar - data.dailyAccounts.submitted);
-
-  // The cost lines the owner wants (agreed 2026-10-03), £0 included. Rent,
-  // utilities, equipment and professional fees are counted in "Other
-  // expenses", so the lines still add up to Total costs.
-  const marketing = sm.costs.expenseLines.find((l) => l.key === "marketing")?.amount ?? 0;
-  const otherExpenses = Math.round(sm.costs.expenseLines.filter((l) => l.key !== "marketing").reduce((t, l) => t + l.amount, 0) * 100) / 100;
-  const costs: [string, number][] = [
-    ["Staff pay", sm.costs.staff],
-    ["Marketing", marketing],
-    ["Other expenses", otherExpenses],
-    ["Ingredients & supplies", sm.costs.ingredients],
-    ["Platform commission", sm.costs.commission],
-    ["Card fees (est.)", sm.costs.cardFees],
-  ];
 
   return (
     <div className="flex flex-col gap-4">
@@ -124,36 +179,7 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
           </div>
         </Card>
 
-        <Card title="Summary" className="md:col-span-2 xl:col-span-1">
-          <div className="mb-3 mt-1 flex flex-wrap gap-2">
-            <select aria-label="Summary date range" value={sm.range} onChange={(e) => router.push(`/staff?summaryRange=${e.target.value}`, { scroll: false })}
-              className="rounded-[9px] border border-[#ECE5D6] bg-[#FBF8F1] px-2.5 py-1.5 text-[13px]">
-              {SUMMARY_RANGES.map((k) => <option key={k} value={k}>{RANGE_LABELS[k]}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              ["Total sales", sm.totalSales, ""],
-              ["Ex VAT", sm.exVat, ""],
-              ["Costs", sm.costs.total, ""],
-              ["Profit", sm.profit, "profit"],
-            ].map(([label, v, kind]) => (
-              <div key={label as string} className={`rounded-xl px-3 py-2.5 ${kind ? (Number(v) >= 0 ? "bg-[#E7F5EC]" : "bg-[#FDECE9]") : "bg-[#FBF8F1]"}`}>
-                <span className="block text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">{label}</span>
-                <b style={{ ...heading, color: kind ? (Number(v) >= 0 ? GOOD : "#C0392B") : undefined }} className="mt-0.5 block text-[20px] font-bold tabular-nums">{gbp(Number(v))}</b>
-              </div>
-            ))}
-          </div>
-          <div className="mt-2.5 grid grid-cols-[1fr_auto] gap-x-3 gap-y-1 text-[13px] text-[#5B524B]">
-            {costs.map(([k, v]) => (
-              <div key={k} className="contents"><span>{k}</span><span className="text-right tabular-nums text-foreground">{gbp2(v)}</span></div>
-            ))}
-            <span className="border-t border-[#ECE5D6] pt-1 font-semibold text-foreground">Total costs</span>
-            <span className="border-t border-[#ECE5D6] pt-1 text-right font-semibold tabular-nums text-foreground">{gbp2(sm.costs.total)}</span>
-          </div>
-          <p className="mt-2 text-[12px] text-muted-foreground">Profit = sales ex VAT − costs. Staff pay is from clocked-out shifts × pay rate.</p>
-
-        </Card>
+        <SummaryCard initialSummary={data.summary} />
       </div>
 
       {/* Row 2: sales trend · week vs week */}
