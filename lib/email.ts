@@ -827,3 +827,69 @@ export async function sendReferralUnlockedEmail(
     <tr><td align="center" style="padding:16px 32px 28px;">${button(data.accountUrl, "See my rewards")}</td></tr>`;
   await sendBrevoEmail(to, "Your £5 Bring a Friend reward is ready", shell(body));
 }
+
+// ---------- Monday report (to the business itself) ----------
+
+export type WeeklyReportData = {
+  businessId: number;
+  weekLabel: string;                 // e.g. "Mon 5 – Sun 11 Oct"
+  sales: number; profit: number; costs: number;
+  salesBefore: number | null;        // the week before, for the ▲/▼
+  daysEntered: number;               // Daily accounts sheets submitted (of 7)
+  feedback: { count: number; average: number | null; stars: number[]; liked: string[]; improve: string[] };
+  unhappy: { when: string; rating: number; who: string; comment: string | null; handled: boolean }[];
+  openToFollowUp: number;
+  dashboardUrl: string;
+  feedbackUrl: string;
+};
+
+export async function sendWeeklyReportEmail(to: string, d: WeeklyReportData) {
+  const brand = await getEmailBrand(d.businessId);
+  const change = d.salesBefore ? Math.round(((d.sales - d.salesBefore) / d.salesBefore) * 1000) / 10 : null;
+  const tile = (label: string, value: string, colour = C.ink) => `
+    <td style="padding:6px; width:33%;"><div style="background:${C.card}; border:1px solid ${C.rule}; border-radius:8px; padding:12px;">
+      <div style="font-family:${SANS}; font-size:10.5px; letter-spacing:1px; text-transform:uppercase; color:${C.muted}; font-weight:700;">${label}</div>
+      <div style="font-family:${SERIF}; font-size:20px; color:${colour}; margin-top:4px;">${value}</div>
+    </div></td>`;
+  const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
+  const unhappy = d.unhappy.length
+    ? d.unhappy.map((u) => `
+        <div style="border-top:1px solid ${C.rule}; padding:10px 0; font-family:${SANS}; font-size:13px; color:${C.ink};">
+          <span style="color:${C.chilliDark};">${stars(u.rating)}</span> &nbsp;${esc(u.when)} · ${esc(u.who)}
+          ${u.handled ? `<span style="color:${C.paid}; font-weight:700;"> · handled</span>` : `<span style="color:${C.chilliDark}; font-weight:700;"> · not followed up yet</span>`}
+          ${u.comment ? `<div style="color:${C.muted}; margin-top:4px;">“${esc(u.comment)}”</div>` : ""}
+        </div>`).join("")
+    : `<div style="font-family:${SANS}; font-size:13px; color:${C.muted};">No 1–3★ feedback last week.</div>`;
+  const list = (items: string[]) => (items.length ? esc(items.join(", ")) : "—");
+  const body = `
+    <tr><td style="padding:28px 26px 6px;">
+      ${cardLabel("Weekly report")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">Your week: ${esc(d.weekLabel)}</div>
+    </td></tr>
+    <tr><td style="padding:6px 20px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr>
+      ${tile("Sales", money(d.sales))}
+      ${tile("Costs", money(d.costs))}
+      ${tile("Profit", money(d.profit), d.profit < 0 ? C.chilliDark : C.paid)}
+    </tr></table></td></tr>
+    <tr><td style="padding:2px 26px 0; font-family:${SANS}; font-size:13px; color:${C.muted}; line-height:1.7;">
+      ${change == null ? "No sales the week before to compare with." : `${change >= 0 ? "▲" : "▼"} ${Math.abs(change)}% on the week before (${money(d.salesBefore!)}).`}
+      Daily accounts entered: <b style="color:${C.ink};">${d.daysEntered} of 7 days</b>.
+    </td></tr>
+    <tr><td style="padding:22px 26px 6px;">
+      ${cardLabel("What guests said")}
+      <div style="font-family:${SANS}; font-size:14px; color:${C.ink}; margin-top:8px; line-height:1.8;">
+        ${d.feedback.count ? `<b>${d.feedback.count}</b> responses · average <b>${d.feedback.average?.toFixed(1)} ★</b> · 5★ ${d.feedback.stars[4]} · 4★ ${d.feedback.stars[3]} · 3★ ${d.feedback.stars[2]} · 2★ ${d.feedback.stars[1]} · 1★ ${d.feedback.stars[0]}` : "No feedback last week. Put the table QR cards out to start collecting it."}<br/>
+        Loved: ${list(d.feedback.liked)}<br/>
+        Could be better: ${list(d.feedback.improve)}
+      </div>
+    </td></tr>
+    <tr><td style="padding:12px 26px 4px;">
+      ${cardLabel(`Unhappy guests${d.openToFollowUp ? ` · ${d.openToFollowUp} still to follow up` : ""}`)}
+      <div style="margin-top:6px;">${unhappy}</div>
+    </td></tr>
+    <tr><td align="center" style="padding:20px 26px 28px;">
+      ${button(d.dashboardUrl, "Open the dashboard")}
+      <div style="margin-top:12px;"><a href="${esc(d.feedbackUrl)}" style="font-family:${SANS}; font-size:13px; color:${C.chilliDark};">See all feedback</a></div>
+    </td></tr>`;
+  await sendBrevoEmail(to, `${brand?.name ?? "The Royal Chilli"}: your week ${d.weekLabel}`, shell(body, brand), undefined, brand);
+}

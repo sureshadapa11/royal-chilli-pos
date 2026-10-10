@@ -16,7 +16,7 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
   const yesterday = d.toISOString().slice(0, 10);
   const isManagement = isManagerRole(role);
 
-  const [ingredients, toApprove, leave, corrections, openDay, dailyAccounts] = await Promise.all([
+  const [ingredients, toApprove, leave, corrections, openDay, dailyAccounts, unhappy] = await Promise.all([
     canAccess(role, "inventory") ? db.from("ingredients").select("name, current_stock, reorder_level").eq("active", 1) : null,
     canEdit(role, "approve_purchase_orders")
       ? db.from("purchase_orders").select("id", { count: "exact", head: true }).eq("status", "awaiting_approval") : null,
@@ -28,6 +28,8 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
       ? db.from("work_periods").select("id", { count: "exact", head: true }).eq("status", "open").lt("opened_at", tradingRangeUtc(today).start) : null,
     canAccess(role, "daily_accounts")
       ? db.from("daily_accounts").select("status").eq("trading_date", yesterday).maybeSingle() : null,
+    canAccess(role, "customers")
+      ? db.from("guest_feedback").select("id", { count: "exact", head: true }).lte("rating", 3).is("handled_at", null) : null,
   ]);
 
   const out: HubNotice[] = [];
@@ -57,6 +59,15 @@ export async function getHubNotifications(businessId: number, role: StaffRole): 
       text: dailyAccounts.data ? "Submit yesterday's daily accounts" : "Enter yesterday's daily accounts",
       sub: dailyAccounts.data ? "Saved as a draft, not submitted" : "The day-end sheet",
       href: `/staff/daily-accounts?date=${yesterday}`,
+    });
+  }
+  const toCall = unhappy?.error ? 0 : unhappy?.count ?? 0;
+  if (toCall > 0) {
+    out.push({
+      icon: "💬",
+      text: toCall === 1 ? "1 unhappy guest to follow up" : `${toCall} unhappy guests to follow up`,
+      sub: "1–3★ feedback not marked as handled",
+      href: "/staff/customers?tab=feedback",
     });
   }
   return out;
