@@ -4,6 +4,7 @@ import { roleLabel } from "@/lib/roles";
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { Staff } from "@/lib/types";
+import { hoursMinutes } from "@/lib/utils";
 import { firstOfMonthStr, londonDateStr } from "@/lib/london-date";
 
 type Payslip = {
@@ -116,7 +117,7 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
       {created && (
         <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
           <p className="text-emerald-700 font-semibold">✓ {created.name} created</p>
-          <p className="text-muted-foreground mt-1">{created.hours_worked}h × £{Number(created.pay_rate).toFixed(2)} = <span className="text-foreground font-semibold">{fmtMoney(created.total_amount)}</span></p>
+          <p className="text-muted-foreground mt-1">{hoursMinutes(created.hours_worked)} × £{Number(created.pay_rate).toFixed(2)} = <span className="text-foreground font-semibold">{fmtMoney(created.total_amount)}</span></p>
         </div>
       )}
     </div>
@@ -186,7 +187,7 @@ function PayslipHistory({ staff }: { staff: Staff }) {
                 <tr key={p.id} className="bg-background">
                   <td className="px-4 py-3 text-foreground font-medium">{p.name}</td>
                   <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{fmtDate(p.period_start)} → {fmtDate(p.period_end)}</td>
-                  <td className="px-4 py-3 text-right text-foreground">{p.hours_worked}</td>
+                  <td className="px-4 py-3 text-right text-foreground">{hoursMinutes(p.hours_worked)}</td>
                   <td className="px-4 py-3 text-right text-foreground">£{Number(p.pay_rate).toFixed(2)}</td>
                   <td className="px-4 py-3 text-right text-foreground font-semibold">{fmtMoney(p.total_amount)}</td>
                   <td className="px-4 py-3 text-center">

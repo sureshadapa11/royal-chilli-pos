@@ -4,7 +4,7 @@ import { roleLabel } from "@/lib/roles";
 import { useCallback, useEffect, useState } from "react";
 import { useBrand } from "@/components/pos/useBrand";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, hoursMinutes } from "@/lib/utils";
 import { firstOfMonthStr, tradingDayStr } from "@/lib/london-date";
 
 export default function StaffReportsView() {
@@ -529,7 +529,7 @@ function SalesReport() {
 // Was the standalone Staff Reports screen — hours worked, late count and
 // labour cost per employee, for any date range.
 
-type StaffRow = { staff_id: number; name: string; role: string; hours_worked: number; late_count: number; pay_rate: number; labour_cost: number };
+type StaffRow = { staff_id: number; name: string; role: string; hours_worked: number; minutes_worked: number; late_count: number; pay_rate: number; labour_cost: number };
 
 function firstOfMonth() {
   return firstOfMonthStr(tradingDayStr());
@@ -543,14 +543,14 @@ function StaffLabourReport() {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
   const [rows, setRows] = useState<StaffRow[]>([]);
-  const [totals, setTotals] = useState({ hours: 0, cost: 0 });
+  const [totals, setTotals] = useState({ hours: 0, minutes: 0, cost: 0 });
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/staff-reports?from=${from}&to=${to}`);
     const data = await res.json();
     setRows(data.rows || []);
-    setTotals(data.totals || { hours: 0, cost: 0 });
+    setTotals(data.totals || { hours: 0, minutes: 0, cost: 0 });
     setLoading(false);
   }, [from, to]);
 
@@ -585,7 +585,7 @@ function StaffLabourReport() {
       </div>
 
       <p className="mt-3 text-muted-foreground text-sm">
-        Total hours: <span className="text-foreground font-semibold">{totals.hours.toFixed(2)}</span> · Total labour cost:{" "}
+        Total hours: <span className="text-foreground font-semibold">{hoursMinutes(totals.minutes / 60)}</span> · Total labour cost:{" "}
         <span className="text-foreground font-semibold">£{totals.cost.toFixed(2)}</span>
       </p>
       <p className="mt-1 text-muted-foreground text-xs print:hidden">
@@ -612,7 +612,7 @@ function StaffLabourReport() {
                 <tr key={r.staff_id} className="bg-background">
                   <td className="px-4 py-3 text-foreground font-medium">{r.name}</td>
                   <td className="px-4 py-3 text-foreground capitalize">{roleLabel(r.role)}</td>
-                  <td className="px-4 py-3 text-right text-foreground">{r.hours_worked.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right text-foreground">{hoursMinutes(r.minutes_worked / 60)}</td>
                   <td className="px-4 py-3 text-right text-foreground">{r.late_count}</td>
                   <td className="px-4 py-3 text-right text-foreground">£{r.pay_rate.toFixed(2)}/hr</td>
                   <td className="px-4 py-3 text-right text-foreground">£{r.labour_cost.toFixed(2)}</td>
