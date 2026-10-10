@@ -120,6 +120,7 @@ export const SECTIONS: SectionDef[] = [
       { key: "vat_registered", label: "VAT registered", kind: "bool" },
       { key: "vat_number", label: "VAT number", kind: "text", check: checks.vatNumber },
       { key: "vat_rate", label: "VAT rate on food", kind: "rate", hint: "0.20 for 20%", check: checks.rate },
+      { key: "card_fee_rate", label: "Card fee rate", kind: "rate", hint: "0.0169 for 1.69% (SumUp). Used for the card charge in Daily accounts and All businesses", check: checks.rate },
       { key: "vat_scheme", label: "VAT scheme", kind: "text", hint: "e.g. Standard, Flat Rate, Cash Accounting" },
       { key: "utr", label: "Company UTR", kind: "text", check: checks.utr },
       { key: "paye_reference", label: "PAYE reference", kind: "text", check: checks.paye },

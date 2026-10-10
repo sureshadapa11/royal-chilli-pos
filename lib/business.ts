@@ -47,6 +47,7 @@ export type Business = {
   trading_address?: unknown;
   vat_registered?: boolean;
   vat_rate?: number;
+  card_fee_rate?: number;
   vat_scheme?: string | null;
   utr?: string | null;
   paye_reference?: string | null;
