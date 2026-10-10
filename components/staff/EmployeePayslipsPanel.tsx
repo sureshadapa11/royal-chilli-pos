@@ -68,16 +68,43 @@ function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSele
 }
 
 // ── Create Payslip ────────────────────────────────────────────────────────
+// Pick a date range, see every closed shift with its hours and the pay rate,
+// then save. HR only: staff don't see payslips in the attendance app.
+type PreviewDay = { date: string; clock_in: string; clock_out: string; seconds: number };
+type Preview = { days: PreviewDay[]; total_seconds: number; hours_worked: number; pay_rate: number; total_amount: number };
+
+const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+const dayLabel = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
 function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => void }) {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
   const [created, setCreated] = useState<Payslip | null>(null);
 
+  // A new range or person needs a fresh look at the hours.
+  useEffect(() => { setPreview(null); setCreated(null); }, [from, to, staff.id]);
+
+  async function showHours() {
+    setLoading(true);
+    setCreated(null);
+    try {
+      const res = await fetch(`/api/employee-payslips?preview=1&staff_id=${staff.id}&from=${from}&to=${to}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Couldn't load the hours");
+      setPreview(data.preview);
+    } catch (err) {
+      toast({ variant: "destructive", title: "Couldn't load the hours", description: err instanceof Error ? err.message : "Something went wrong" });
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function create() {
     setSaving(true);
-    setCreated(null);
     try {
       const res = await fetch("/api/employee-payslips", {
         method: "POST", headers: { "Content-Type": "application/json" },
@@ -86,6 +113,7 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create payslip");
       setCreated(data.payslip);
+      setPreview(null);
       onCreated();
     } catch (err) {
       toast({ variant: "destructive", title: "Couldn't create payslip", description: err instanceof Error ? err.message : "Something went wrong" });
@@ -96,24 +124,76 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
 
   return (
     <div className="rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] p-4">
-      <h3 className="text-foreground font-bold text-sm">Create Payslip for {staff.name}</h3>
+      <h3 className="text-foreground font-bold text-sm">New payslip for {staff.name}</h3>
       <p className="text-muted-foreground text-xs mt-1">
-        Hours are pulled live from clocked-in-and-out shifts in this range, at their current rate of £{Number(staff.pay_rate).toFixed(2)}/hr.
-        A shift still open (no clock-out yet) doesn&apos;t count until it&apos;s closed.
+        Pick the dates, check the hours, then create the payslip. Hours come from their clocked shifts (the same as Timesheets);
+        a shift still open (no clock-out yet) doesn&apos;t count until it&apos;s closed.
       </p>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-3 flex flex-wrap items-end gap-2">
         <div>
-          <label className="block text-muted-foreground text-xs mb-1">From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+          <label htmlFor="payslip-from" className="block text-muted-foreground text-xs mb-1">From</label>
+          <input id="payslip-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         </div>
         <div>
-          <label className="block text-muted-foreground text-xs mb-1">To</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+          <label htmlFor="payslip-to" className="block text-muted-foreground text-xs mb-1">To</label>
+          <input id="payslip-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         </div>
-        <button onClick={create} disabled={saving} className="mt-5 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg">
-          {saving ? "Calculating…" : "Create Payslip"}
+        <button onClick={showHours} disabled={loading || to < from} className="px-4 py-2 border border-border bg-surface-hover hover:bg-elevated disabled:opacity-50 text-foreground text-sm font-semibold rounded-lg">
+          {loading ? "Loading…" : "Show hours"}
         </button>
       </div>
+
+      {preview && (
+        <div className="mt-4">
+          {preview.days.length === 0 ? (
+            <p className="text-muted-foreground text-sm">No closed shifts for {staff.name} between {fmtDate(from)} and {fmtDate(to)}.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-hover text-muted-foreground text-xs">
+                  <tr>
+                    <th className="text-left px-3 py-2">Date</th>
+                    <th className="text-left px-3 py-2">Clocked</th>
+                    <th className="text-right px-3 py-2">Hours</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {preview.days.map((d, i) => (
+                    <tr key={i}>
+                      <td className="px-3 py-2 text-foreground whitespace-nowrap">{dayLabel(d.date)}</td>
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">{clock(d.clock_in)} – {clock(d.clock_out)}</td>
+                      <td className="px-3 py-2 text-right text-foreground tabular-nums">{hoursMinutes(d.seconds / 3600)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t-2 border-border">
+                  <tr>
+                    <td className="px-3 py-2 font-semibold text-foreground" colSpan={2}>Total hours</td>
+                    <td className="px-3 py-2 text-right font-semibold text-foreground tabular-nums">{hoursMinutes(preview.total_seconds / 3600)}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 text-muted-foreground" colSpan={2}>Pay rate</td>
+                    <td className="px-3 py-2 text-right text-foreground tabular-nums">£{preview.pay_rate.toFixed(2)}/hr</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 font-bold text-foreground" colSpan={2}>Total pay</td>
+                    <td className="px-3 py-2 text-right font-bold text-foreground tabular-nums">{fmtMoney(preview.total_amount)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+          {preview.pay_rate === 0 && preview.days.length > 0 && (
+            <p className="mt-2 text-amber-700 text-xs">{staff.name} has no pay rate yet, so this payslip would be £0.00. Add their pay rate in their details first.</p>
+          )}
+          {preview.days.length > 0 && (
+            <button onClick={create} disabled={saving} className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg">
+              {saving ? "Creating…" : `Create payslip · ${fmtMoney(preview.total_amount)}`}
+            </button>
+          )}
+        </div>
+      )}
+
       {created && (
         <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-3 text-sm">
           <p className="text-emerald-700 font-semibold">✓ {created.name} created</p>

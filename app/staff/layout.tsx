@@ -79,7 +79,7 @@ export default async function StaffHubLayout({
     ["menu", ["/staff/menu"]], ["tables", ["/staff/tables"]], ["inventory", ["/staff/inventory"]],
     ["drivers", ["/staff/drivers"]],
     ["daily_accounts", ["/staff/daily-accounts"]], ["website", ["/staff/website"]],
-    ["hr", ["/staff/hr", "/staff/payroll"]], ["customers", ["/staff/customers"]],
+    ["hr", ["/staff/hr"]], ["customers", ["/staff/customers"]],
     ["analytics", ["/staff/analytics"]], ["reports", ["/staff/reports"]], ["finance", ["/staff/finance"]],
     ["audit", ["/staff/audit-log"]], ["settings", ["/staff/settings"]],
   ];

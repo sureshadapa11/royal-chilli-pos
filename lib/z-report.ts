@@ -21,7 +21,7 @@ export type ZReport = {
   sales_total: number; // incl. taxes, tips and discounts
   refunds_count: number;
   refunds_total: number; // positive number
-  net_sales: number;
+  net_sales: number; // sales_total − tips − refunds: tips belong to staff, not sales
 
   discount_count: number;
   discount_total: number; // positive number
@@ -103,6 +103,7 @@ export function computeZReport(input: {
   const salesOrderIds = new Set(sales.map((p) => p.order_id));
   const salesTotal = sales.reduce((s, p) => s + gross(p), 0);
   const refundsTotal = refunds.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
+  const tipsTotal = sales.reduce((s, p) => s + Number(p.tip_amount || 0), 0);
 
   let discountCount = 0;
   let discountTotal = 0;
@@ -161,14 +162,14 @@ export function computeZReport(input: {
     sales_total: r2(salesTotal),
     refunds_count: refunds.length,
     refunds_total: r2(refundsTotal),
-    net_sales: r2(salesTotal - refundsTotal),
+    net_sales: r2(salesTotal - tipsTotal - refundsTotal),
 
     discount_count: discountCount,
     discount_total: r2(discountTotal),
     loyalty_count: loyaltyCount,
     loyalty_total: r2(loyaltyTotal),
 
-    tips_total: r2(sales.reduce((s, p) => s + Number(p.tip_amount || 0), 0)),
+    tips_total: r2(tipsTotal),
 
     payments: { card: r2(byMethod.card), cash: r2(byMethod.cash), online: r2(byMethod.online) },
 
@@ -251,9 +252,10 @@ export function zReportLines(r: ZReport, counted: number | null = r.cash.counted
   L.push({ kind: "gap" });
   L.push({ kind: "row", label: "Number of refunds", value: String(r.refunds_count) });
   L.push({ kind: "row", label: "Total refunds amount", value: zMoney(r.refunds_total) });
+  L.push({ kind: "row", label: "Tips (staff's, not sales)", value: zMoney(-r.tips_total) });
   L.push({ kind: "divider" });
   L.push({ kind: "row", label: "Total net sales", value: zMoney(r.net_sales), bold: true });
-  L.push({ kind: "text", text: "Incl. taxes, tips and discounts", muted: true });
+  L.push({ kind: "text", text: "Incl. taxes and discounts, tips not included", muted: true });
   L.push({ kind: "gap" });
 
   L.push({ kind: "heading", text: "Discounts" });

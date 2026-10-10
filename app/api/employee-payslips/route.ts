@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
-import { computeHoursForPeriod } from "@/lib/payroll";
+import { payslipDays, payslipTotals } from "@/lib/payroll";
 
 // GET ?staff_id=123 — one employee's payslip history, latest first.
+// GET ?staff_id=123&from=&to=&preview=1 — what a payslip for that range would
+// be: every closed shift, total time and pay, before HR saves it.
+// Payslips are HR's only: staff don't see them in the attendance app.
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session || !areaAllows(session.role, "hr", req.method)) {
@@ -16,6 +19,16 @@ export async function GET(req: NextRequest) {
   const staffId = searchParams.get("staff_id");
   if (!staffId) return NextResponse.json({ error: "staff_id is required" }, { status: 400 });
 
+  if (searchParams.get("preview")) {
+    const from = searchParams.get("from") ?? "";
+    const to = searchParams.get("to") ?? "";
+    if (!from || !to || to < from) return NextResponse.json({ error: "Pick a date range" }, { status: 400 });
+    const { data: staff } = await db.from("staff").select("id, pay_rate").eq("id", Number(staffId)).maybeSingle();
+    if (!staff) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    const days = await payslipDays(session.businessId, staff.id, from, to);
+    return NextResponse.json({ preview: payslipTotals(days, Number(staff.pay_rate || 0)) });
+  }
+
   const { data, error } = await db
     .from("employee_payslips")
     .select("*")
@@ -25,9 +38,9 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ payslips: data });
 }
 
-// POST { staff_id, period_start, period_end } — pulls hours from locked
-// timesheets (same source as the period-based Payroll) and the employee's
-// current pay_rate, computes the total, and auto-names the payslip
+// POST { staff_id, period_start, period_end } — hours from closed shifts in
+// the range (same as the preview and Timesheets) × the employee's current
+// pay_rate, worked out to the minute, and auto-names the payslip
 // "<Month> <Year> - Payslip #<n>" where n counts this employee's payslips
 // already created that month.
 export async function POST(req: NextRequest) {
@@ -48,10 +61,8 @@ export async function POST(req: NextRequest) {
   const { data: staff, error: staffErr } = await db.from("staff").select("id, name, pay_rate").eq("id", staff_id).single();
   if (staffErr || !staff) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
 
-  const hoursByStaff = await computeHoursForPeriod(session.businessId, period_start, period_end);
-  const hoursWorked = Math.round((hoursByStaff.get(staff.id) || 0) * 100) / 100;
-  const payRate = Number(staff.pay_rate || 0);
-  const totalAmount = Math.round(hoursWorked * payRate * 100) / 100;
+  const pay = payslipTotals(await payslipDays(session.businessId, staff.id, period_start, period_end), Number(staff.pay_rate || 0));
+  const { hours_worked: hoursWorked, pay_rate: payRate, total_amount: totalAmount } = pay;
 
   // Auto-name: "<Month> <Year> - Payslip #<n>" — n = how many this employee
   // already has whose period_end falls in the same calendar month.

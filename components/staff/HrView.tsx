@@ -973,13 +973,13 @@ const TABS = [
 
 const SECTIONS = [
   { id: "employee", label: "Employee" },
-  { id: "payroll", label: "Payroll" },
+  { id: "payroll", label: "Payslips" },
   { id: "privacy", label: "Privacy & Retention" },
 ] as const;
 
 const SECTION_SUB = {
   employee: "Employee directory, onboarding, right-to-work verification and new-starter checklist",
-  payroll: "Select an employee to create a payslip or view their payment history.",
+  payroll: "Select an employee, pick the dates and check their hours to create a payslip. Only HR sees payslips.",
   privacy: "What's collected, why, and how long it's kept.",
 };
 
