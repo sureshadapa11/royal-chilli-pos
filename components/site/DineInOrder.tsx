@@ -198,13 +198,17 @@ export default function DineInOrder({
           <p className="mt-2 text-sm text-muted-foreground">Browse the menu, add items, and send your order straight to the kitchen.</p>
         </div>
 
-        <div className="mt-6 flex justify-center gap-3">
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
           <button onClick={() => sendRequest("waiter")} className="border border-border px-4 py-2 text-xs uppercase tracking-[0.1em] hover:border-primary hover:text-primary">
             🙋 Call Waiter
           </button>
           <button onClick={() => sendRequest("bill")} className="border border-border px-4 py-2 text-xs uppercase tracking-[0.1em] hover:border-primary hover:text-primary">
             🧾 Request Bill
           </button>
+          <a href={`/feedback?table=${encodeURIComponent(tableNumber)}${businessParam ? `&b=${encodeURIComponent(businessParam)}` : ""}`}
+            className="border border-border px-4 py-2 text-xs uppercase tracking-[0.1em] hover:border-primary hover:text-primary">
+            ⭐ How was it?
+          </a>
         </div>
         {requestMsg && <p className="mt-3 text-center text-sm text-primary">{requestMsg}</p>}
 

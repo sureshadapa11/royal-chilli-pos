@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast";
 import RewardsRules from "@/components/staff/RewardsRules";
 import ClubReport from "@/components/staff/ClubReport";
 import DuplicatesPanel from "@/components/staff/DuplicatesPanel";
+import FeedbackInbox from "@/components/staff/FeedbackInbox";
 
 type Segment = "NEW" | "FIRST_TIME" | "RETURNING" | "REGULAR" | "LAPSED";
 type Customer = {
@@ -253,8 +254,12 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
   );
 }
 
-export default function CustomersView({ isManager }: { isManager: boolean }) {
-  const [tab, setTab] = useState<"customers" | "report" | "rewards" | "rules" | "tiers" | "redemptions">("customers");
+export default function CustomersView({ isManager, businessName = "The Royal Chilli" }: { isManager: boolean; businessName?: string }) {
+  const [tab, setTab] = useState<"customers" | "feedback" | "report" | "rewards" | "rules" | "tiers" | "redemptions">("customers");
+  // A link like /staff/customers?tab=feedback (from Notifications) opens that tab.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("tab") === "feedback") setTab("feedback");
+  }, []);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [search, setSearch] = useState("");
   const [segmentFilter, setSegmentFilter] = useState<Segment | "all">("all");
@@ -356,6 +361,7 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
 
           <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
             <button onClick={() => setTab("customers")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "customers" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Customers</button>
+            <button onClick={() => setTab("feedback")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "feedback" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Feedback</button>
             <button onClick={() => setTab("report")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "report" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Club Report</button>
             <button onClick={() => setTab("rewards")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "rewards" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Rewards Catalog</button>
             <button onClick={() => setTab("rules")} className={`px-4 py-1.5 rounded-lg text-sm font-semibold ${tab === "rules" ? "bg-red-500 text-white" : "text-muted-foreground"}`}>Rewards Rules</button>
@@ -475,6 +481,8 @@ export default function CustomersView({ isManager }: { isManager: boolean }) {
             </div>
           </div>
         )}
+
+        {tab === "feedback" && <FeedbackInbox businessName={businessName} />}
 
         {tab === "report" && <div className="mt-5"><ClubReport /></div>}
 
