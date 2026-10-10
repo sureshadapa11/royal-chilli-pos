@@ -3,7 +3,7 @@ import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { chunked } from "@/lib/finance";
 import { issueRedemption } from "@/lib/loyalty";
-import { sendWinBackWhyEmail } from "@/lib/email";
+import { sendComeBackOfferEmail, sendWinBackWhyEmail } from "@/lib/email";
 import { unsubscribeUrl } from "@/lib/unsubscribe";
 import { tradingDayStr } from "@/lib/london-date";
 import { SITE_URL } from "@/lib/site-url";
@@ -133,10 +133,26 @@ export async function answerWinBack(token: string, reason: WinBackReason, commen
     return { ok: false, error: issued.error };
   }
   await supabase.from("winback_requests").update({ redemption_id: issued.redemption.id }).eq("id", req.id);
-  return {
-    ok: true,
-    offer: { code: issued.redemption.code, rewardName: issued.rewardName, description: null, expiresAt: String(issued.redemption.expires_at), reason },
-  };
+  const offer: WinBackOffer = { code: issued.redemption.code, rewardName: issued.rewardName, description: null, expiresAt: String(issued.redemption.expires_at), reason };
+
+  // Their code by email too, so it's in their inbox (and in their account under Rewards).
+  // Awaited: on Vercel a send left running after the response may never happen.
+  try {
+    const [{ data: customer }, { data: rw }] = await Promise.all([
+      supabase.from("customers").select("name, email").eq("id", req.customerId).maybeSingle(),
+      supabase.from("loyalty_rewards").select("description").eq("id", reward.id).maybeSingle(),
+    ]);
+    offer.description = rw?.description ?? null;
+    if (customer?.email) {
+      await sendComeBackOfferEmail(customer.email, {
+        businessId: req.businessId, customerName: customer.name, offer: offer.rewardName.replace(/^Come-back:\s*/i, ""),
+        description: offer.description, code: offer.code, expiresAt: offer.expiresAt, accountUrl: `${SITE_URL}/account/loyalty`,
+      });
+    }
+  } catch (err) {
+    console.error(`Come-back offer email failed (request ${req.id}):`, err);
+  }
+  return { ok: true, offer };
 }
 
 export type WinBackStats = {
