@@ -10,7 +10,7 @@ export default function GroupOverview({ data, current }: { data: Data; current: 
     <section className="mb-6 rounded-2xl border border-border bg-white p-4 shadow-[0_1px_2px_rgba(32,27,24,0.04)]">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-[17px] font-semibold text-foreground">All businesses</h2>
-        <p className="text-[12.5px] text-muted-foreground">{data.from} to {data.to} · same sums as each business&apos;s Daily accounts month sheet</p>
+        <p className="text-[12.5px] text-muted-foreground">{data.from} to {data.to} · same figures as each business&apos;s dashboard, Finance and Daily accounts</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-[13.5px]">
@@ -53,8 +53,8 @@ export default function GroupOverview({ data, current }: { data: Data; current: 
         </table>
       </div>
       <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
-        <b>Total sales</b> = Z report + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · <b>Ex-VAT</b> = Total sales ÷ 1.2 ·{" "}
-        <b>All costs</b> = stock received + expenses + card fee + till paid out + staff wages + platform commission · <b>Profit</b> = Ex-VAT − All costs
+        <b>Total sales</b> = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · <b>Ex-VAT</b> = Total sales ÷ 1.2 ·{" "}
+        <b>All costs</b> = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + platform commission · <b>Profit</b> = Ex-VAT − All costs
       </p>
     </section>
   );

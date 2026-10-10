@@ -94,9 +94,10 @@ function SummaryCard({ initialSummary }: { initialSummary: AdminSummary }) {
     ["Staff pay", summary.costs.staff],
     ["Marketing", marketing],
     ["Other expenses", otherExpenses],
-    ["Ingredients & supplies", summary.costs.ingredients],
+    ["Stock received", summary.costs.ingredients],
     ["Platform commission", summary.costs.commission],
-    ["Card fees (est.)", summary.costs.cardFees],
+    ["Card fees", summary.costs.cardFees],
+    ["Till paid out", summary.costs.paidOut],
   ];
 
   return (
@@ -130,7 +131,7 @@ function SummaryCard({ initialSummary }: { initialSummary: AdminSummary }) {
           <span className="border-t border-[#ECE5D6] pt-1 font-semibold text-foreground">Total costs</span>
           <span className="border-t border-[#ECE5D6] pt-1 text-right font-semibold tabular-nums text-foreground">{gbp2(summary.costs.total)}</span>
         </div>
-        <p className="mt-2 text-[12px] text-muted-foreground">Profit = sales ex VAT − costs. Staff pay is from clocked-out shifts × pay rate.</p>
+        <p className="mt-2 text-[12px] text-muted-foreground">Total sales = Z report (tips not included) + delivery platforms + catering. Profit = sales ÷ 1.2 − costs. Staff pay is clocked-out hours × pay rate. Same figures as Finance and All businesses.</p>
       </div>
     </Card>
   );

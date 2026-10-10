@@ -24,8 +24,8 @@ const LEAD: { key: "total_sales" | "ex_vat" | "money_out" | "net_total"; label: 
   { key: "net_total", label: "Net total" },
 ];
 
-const FORMULA = "Total sales = Z report + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · Ex-VAT = Total sales ÷ 1.2 · "
-  + "Money out = stock received + expenses + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
+const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · Ex-VAT = Total sales ÷ 1.2 · "
+  + "Money out = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
   + "Variance = opening balance − closing balance · * no Z report on the sheet yet, the till's figure is used";
 
 const moneyOutTitle = (f: DayFigures) =>

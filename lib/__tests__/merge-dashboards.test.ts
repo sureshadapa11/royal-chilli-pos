@@ -16,7 +16,7 @@ const dash = (o: { today: number; week: [number, number][]; dish: [string, numbe
   },
   summary: {
     range: "this_week", from: "2026-09-28", to: "2026-10-04", totalSales: 100, exVat: 80,
-    costs: { ingredients: 5, staff: o.staff, expenses: o.rent, expenseLines: [{ key: "rent", label: "Rent", amount: o.rent }], commission: 2, cardFees: 1, total: 10 },
+    costs: { ingredients: 5, staff: o.staff, expenses: o.rent, expenseLines: [{ key: "rent", label: "Rent", amount: o.rent }], commission: 2, cardFees: 1, paidOut: 0, total: 10 },
     profit: o.profit,
   },
 });

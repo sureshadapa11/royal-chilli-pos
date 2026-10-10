@@ -1,6 +1,7 @@
 jest.mock("../supabase", () => ({ __esModule: true, default: {} }));
 
-import { buildPnl, extractVat, type SalesData } from "@/lib/finance";
+import { buildPnl, extractVat } from "@/lib/finance";
+import { totalFigures, type FiguresTotal } from "@/lib/daily-figures";
 import { recipeUsage, type RecipeBook } from "@/lib/recipes";
 
 describe("extractVat", () => {
@@ -25,54 +26,45 @@ describe("extractVat", () => {
 });
 
 describe("buildPnl", () => {
-  // Worked by hand:
-  //   own gross 120 + 60 = 180, refund 30 (VAT 30 × 10/60 = 5) → own 150
-  //   platforms 240 → total 390
-  //   VAT: own 20 + 10 − 5 = 25, platforms 240 × 0.2/1.2 = 40 → 65; ex-VAT 325
-  //   expenses 36 of which 24 VAT-applicable → input VAT 4 → expenses ex-VAT 32
-  //   costs 50 + 40 + 32 + 60 commission + 1.75 card fees (1.75% of 100) = 183.75
-  //   profit 325 − 183.75 = 141.25; VAT due 65 − 4 = 61; recipe basis 141.25 + 50 − 30 = 161.25
-  const sales: SalesData = {
-    orders: [
-      { id: 1, total: 120, tax: 20, order_type: "dine_in", created_at: "2026-09-01T12:00:00Z" },
-      { id: 2, total: 60, tax: 10, order_type: "takeaway", created_at: "2026-09-01T13:00:00Z" },
-    ],
-    refunds: [{ order_id: 2, amount: 30, vat: 5, order_type: "takeaway", created_at: "2026-09-02T12:00:00Z" }],
-    cardTaken: 100,
-    platforms: [{ sales_date: "2026-09-01", platform: "deliveroo", orders: 10, sales: 240, commission: 60 }],
+  // Day-by-day sums for a period (lib/daily-figures.ts), worked by hand:
+  //   sales: Z report 600 + platforms 240 + catering 60 = 900 → ex-VAT 750, VAT 150
+  //   costs: stock 50 + expenses 32 (36, of which 24 VAT-applicable → 4 claimed back)
+  //          + card fee 1.69 + till paid out 10 + wages 40 + commission 60 = 193.69
+  //   profit 750 − 193.69 = 556.31; VAT due 150 − 4 = 146; recipe basis 556.31 + 50 − 30 = 576.31
+  const figures: FiguresTotal = {
+    total_sales: 900, ex_vat: 750, money_out: 193.69, net_total: 556.31, variance: null,
+    sales: { till: 600, platforms: 240, catering: 60 },
+    out: { stock: 50, expenses: 32, card_fee: 1.69, paid_out: 10, wages: 40, commission: 60 },
   };
   const p = buildPnl({
-    from: "2026-09-01", to: "2026-09-30", vatRate: 0.2, sales,
-    ingredients: 50, staff: 40, expenses: { total: 36, vatApplicableTotal: 24 }, recipe: { cogs: 30, coveragePct: 75 },
+    from: "2026-09-01", to: "2026-09-30", vatRate: 0.2, figures,
+    expenses: { total: 36, vatApplicableTotal: 24 }, recipe: { cogs: 30, coveragePct: 75 },
   });
 
-  it("works out sales and VAT", () => {
-    expect(p.sales).toEqual({
-      own_gross: 180, refunds: 30, own: 150, platforms: 240, total: 390,
-      vat_own: 25, vat_platforms: 40, vat: 65, ex_vat: 325,
-    });
+  it("sales are Z report + platforms + catering, VAT is ÷ 1.2", () => {
+    expect(p.sales).toEqual({ till: 600, platforms: 240, catering: 60, total: 900, vat: 150, ex_vat: 750 });
   });
 
-  it("works out costs and profit ex-VAT", () => {
-    expect(p.costs).toMatchObject({ ingredients: 50, staff: 40, expenses: 32, commission: 60, card_fees: 1.75, total: 183.75 });
+  it("costs are every bit of money out; profit is ex-VAT sales less costs", () => {
+    expect(p.costs).toMatchObject({ ingredients: 50, staff: 40, expenses: 32, commission: 60, card_fees: 1.69, paid_out: 10, total: 193.69 });
     // No category split given: the whole amount shows as "Other expenses", and every line is listed.
     expect(p.costs.expense_lines.map((l) => l.key)).toEqual(["rent", "utilities", "marketing", "equipment", "professional_fees", "other"]);
     expect(p.costs.expense_lines.find((l) => l.key === "other")?.amount).toBe(32);
-    expect(p.profit).toBe(141.25);
+    expect(p.profit).toBe(556.31);
   });
 
   it("VAT return figures agree with the P&L", () => {
-    expect(p.vat).toEqual({ output: 65, vat_applicable_expenses: 24, input: 4, net_due: 61 });
+    expect(p.vat).toEqual({ output: 150, vat_applicable_expenses: 24, input: 4, net_due: 146 });
   });
 
   it("recipe basis swaps purchases for recipe cost", () => {
-    expect(p.recipe).toEqual({ cogs: 30, coverage_pct: 75, profit: 161.25 });
+    expect(p.recipe).toEqual({ cogs: 30, coverage_pct: 75, profit: 576.31 });
   });
 
   it("is all zero with no data", () => {
     const z = buildPnl({
-      from: "2026-09-01", to: "2026-09-01", vatRate: 0.2, sales: { orders: [], refunds: [], cardTaken: 0, platforms: [] },
-      ingredients: 0, staff: 0, expenses: { total: 0, vatApplicableTotal: 0 }, recipe: { cogs: 0, coveragePct: 0 },
+      from: "2026-09-01", to: "2026-09-01", vatRate: 0.2, figures: totalFigures([]),
+      expenses: { total: 0, vatApplicableTotal: 0 }, recipe: { cogs: 0, coveragePct: 0 },
     });
     expect(z.profit).toBe(0);
     expect(z.vat.net_due).toBe(0);
@@ -99,8 +91,9 @@ describe("recipeUsage", () => {
 describe("buildPnl expense categories", () => {
   it("lists every category, ex reclaimable VAT, adding up to the expenses total", () => {
       const split = buildPnl({
-        from: "2026-09-01", to: "2026-09-30", vatRate: 0.2, sales: { orders: [], refunds: [], cardTaken: 0, platforms: [] },
-        ingredients: 50, staff: 40, expenses: { total: 36, vatApplicableTotal: 24, byCategory: { rent: { total: 24, vatApplicableTotal: 24 }, other: { total: 12, vatApplicableTotal: 0 } } }, recipe: { cogs: 30, coveragePct: 75 },
+        from: "2026-09-01", to: "2026-09-30", vatRate: 0.2,
+        figures: { ...totalFigures([]), out: { stock: 50, expenses: 32, card_fee: 0, paid_out: 0, wages: 40, commission: 0 } },
+        expenses: { total: 36, vatApplicableTotal: 24, byCategory: { rent: { total: 24, vatApplicableTotal: 24 }, other: { total: 12, vatApplicableTotal: 0 } } }, recipe: { cogs: 30, coveragePct: 75 },
       });
     const lines = Object.fromEntries(split.costs.expense_lines.map((l) => [l.key, l.amount]));
     expect(lines).toEqual({ rent: 20, utilities: 0, marketing: 0, equipment: 0, professional_fees: 0, other: 12 });

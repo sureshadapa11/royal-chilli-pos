@@ -27,7 +27,7 @@ export type AdminSummary = {
   to: string;
   totalSales: number;
   exVat: number;
-  costs: { ingredients: number; staff: number; expenses: number; expenseLines: { key: string; label: string; amount: number }[]; commission: number; cardFees: number; total: number };
+  costs: { ingredients: number; staff: number; expenses: number; expenseLines: { key: string; label: string; amount: number }[]; commission: number; cardFees: number; paidOut: number; total: number };
   profit: number;
 };
 
@@ -90,6 +90,7 @@ function summaryFromPnl(range: RangeKey, pnl: Awaited<ReturnType<typeof getPnl>>
       expenseLines: pnl.costs.expense_lines,
       commission: pnl.costs.commission,
       cardFees: pnl.costs.card_fees,
+      paidOut: pnl.costs.paid_out,
       total: pnl.costs.total,
     },
     profit: pnl.profit,
@@ -118,6 +119,7 @@ export function mergeAdminSummaries(list: AdminSummary[]): AdminSummary {
       })),
       commission: sum((s) => s.costs.commission),
       cardFees: sum((s) => s.costs.cardFees),
+      paidOut: sum((s) => s.costs.paidOut),
       total: sum((s) => s.costs.total),
     },
     profit: sum((s) => s.profit),

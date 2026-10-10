@@ -19,7 +19,7 @@ jest.mock("../supabase", () => ({
   },
 }));
 
-import { computeGrossPay, computeHoursForPeriod } from "@/lib/payroll";
+import { payslipTotals, computeGrossPay, computeHoursForPeriod } from "@/lib/payroll";
 
 describe("computeGrossPay", () => {
   it("adds bonuses, tips and holiday pay, and subtracts deductions", () => {
@@ -65,5 +65,19 @@ describe("computeHoursForPeriod", () => {
   it("only counts shifts worked at the business being paid", async () => {
     await computeHoursForPeriod(2, "2026-01-01", "2026-01-07");
     expect(businessFilter).toBe(2);
+  });
+});
+
+describe("payslipTotals", () => {
+  const day = (date: string, seconds: number) => ({ date, clock_in: `${date}T10:00:00Z`, clock_out: `${date}T20:00:00Z`, seconds });
+  it("adds exact minutes and pays hours × rate", () => {
+    // 9h 49m + 7h 30m = 17h 19m = 17.3167h × £11.44 = £198.10
+    const p = payslipTotals([day("2026-10-09", 9 * 3600 + 49 * 60), day("2026-10-10", 7.5 * 3600)], 11.44);
+    expect(p.total_seconds).toBe(17 * 3600 + 19 * 60);
+    expect(p.hours_worked).toBe(17.32);
+    expect(p.total_amount).toBe(198.1);
+  });
+  it("no pay rate means £0", () => {
+    expect(payslipTotals([day("2026-10-09", 3600)], 0).total_amount).toBe(0);
   });
 });

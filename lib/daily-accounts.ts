@@ -23,6 +23,7 @@ export function fromZReports(reports: ZReport[]): Partial<DailyValues> {
     z_report: sum((z) => z.net_sales),
     card: sum((z) => z.payments.card),
     cash: sum((z) => z.payments.cash),
+    tips: sum((z) => z.tips_total),
     pending: sum((z) => z.other.pending_bills.reduce((s, b) => s + b.balance, 0)),
     opening_balance: r2(reports[0].cash.opening),
     closing_balance: last.cash.counted != null ? r2(last.cash.counted) : r2(last.cash.expected),

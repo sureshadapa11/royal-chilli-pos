@@ -23,8 +23,8 @@ const LEAD = [
   { key: "net_total", label: "Net total" },
 ] as const;
 
-const FORMULA = "Total sales = Z report + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · Ex-VAT = Total sales ÷ 1.2 · "
-  + "Money out = stock received + expenses + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
+const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · Ex-VAT = Total sales ÷ 1.2 · "
+  + "Money out = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
   + "Variance = opening balance − closing balance · * no Z report on the sheet yet, the till's figure is used";
 
 type Cell = string | number | null;
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
   const outHead = ["Date", ...MONEY_OUT_PARTS.map((p) => p.label), "Money out"];
   const breakdown: Cell[][] = [
     [`${name} — Money out by day`],
-    [`${monthName(month)} · stock = deliveries received · expenses = full amount · card fee = card × card fee rate · till paid out = cash taken out of the till · staff wages = hours × pay rate`],
+    [`${monthName(month)} · stock = deliveries received · expenses = VAT claimed back taken off · card fee = card × card fee rate · till paid out = cash taken out of the till · staff wages = hours × pay rate`],
     [],
     outHead,
     ...days.map((f) => [dayName(f.date), ...MONEY_OUT_PARTS.map((p) => f.out[p.key]), f.money_out]),

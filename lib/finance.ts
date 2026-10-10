@@ -4,26 +4,22 @@ import { tradingRangeUtc } from "@/lib/london-date";
 import type { PlatformKey } from "@/lib/platforms";
 import { loadRecipeBook, recipeUsage } from "@/lib/recipes";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
+import { accountsByDay, totalFigures, type FiguresTotal } from "@/lib/daily-figures";
 
-// The one place money figures are worked out — always for one business
-// (each is its own company, with its own P&L and VAT).
-// Finance → Profit & Loss,
-// Finance → VAT and the admin dashboard's summary all read getPnl(), so the
-// same date range always shows the same numbers on every screen.
-//
-// Rules:
-//   • Own sales (till, QR, website) = paid orders by order date, VAT included,
-//     after discounts, minus refunds on the day the refund was given (same as
-//     the Z report and the accountant export).
-//   • Delivery platforms = the daily totals saved in Daily Accounts.
-//   • Profit is worked out ex-VAT: VAT on sales belongs to HMRC, and VAT on
-//     expenses marked "VAT applicable" is reclaimed, so neither is profit or cost.
-//   • Ingredient cost = purchase orders received in the period (cash basis).
-
-// Card fees aren't itemised anywhere we can read, so estimate them from the
-// card + online takings (tips included — the fee is charged on the whole
-// amount) at a typical blended rate (SumUp ~1.69%, Stripe 1.5% + 20p).
-export const CARD_FEE_RATE = 0.0175;
+// Money figures for one business (each is its own company, with its own P&L
+// and VAT). Finance → Profit & Loss, Finance → VAT, the dashboard's Summary
+// card, the All businesses table and the Daily accounts month sheet all come
+// from the same day-by-day sums in lib/daily-figures.ts, so the same date range
+// shows the same numbers on every screen. Accountant rules:
+//   • Sales = Z report net sales (tips not included) + delivery platforms +
+//     catering paid, from Daily accounts (the till's payments on a day with
+//     no sheet figure). VAT is Sales ÷ 1.2.
+//   • Costs = stock received + expenses (VAT claimed back taken off) + card
+//     fee (Settings rate, 1.69%) + cash paid out of the till + staff wages
+//     (hours × pay rate) + platform commission.
+//   • Profit = Sales ex-VAT − Costs.
+// getSalesData (bills by order date) is still used for the dashboard charts,
+// recipe cost and stock usage.
 
 export const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -70,7 +66,7 @@ export async function getSalesData(businessId: number, from: string, to: string)
       db.from("orders").select("id, total, tax, order_type, created_at").eq("is_paid", true)
         .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
     allRows<{ order_id: number; amount: number; created_at: string; orders: unknown }>((a, b) =>
-      db.from("payments").select("order_id, amount, created_at, orders(total, tax, order_type)").lt("amount", 0)
+      db.from("payments").select("order_id, amount, created_at, orders(total, tax, order_type, is_paid)").lt("amount", 0)
         .gte("created_at", start).lte("created_at", end).order("id").range(a, b)),
     allRows<{ amount: number; tip_amount: number | null }>((a, b) =>
       db.from("payments").select("amount, tip_amount").in("method", ["card", "card_online"]).gt("amount", 0)
@@ -78,7 +74,10 @@ export async function getSalesData(businessId: number, from: string, to: string)
     getPlatformSales(businessId, from, to),
   ]);
 
-  const refunds: Refund[] = refundRows.map((p) => {
+  // A refund on an order that no longer counts as a sale (fully refunded, then
+  // cancelled) is already out of sales — taking it off again would count it twice.
+  const counted = refundRows.filter((p) => (p.orders as { is_paid?: boolean } | null)?.is_paid !== false);
+  const refunds: Refund[] = counted.map((p) => {
     const o = p.orders as { total: number; tax: number; order_type: string } | null;
     const amount = -Number(p.amount);
     const total = Number(o?.total ?? 0);
@@ -215,24 +214,22 @@ export type Pnl = {
   to: string;
   vat_rate: number;
   sales: {
-    own_gross: number;     // paid own orders, incl. VAT, after discounts
-    refunds: number;       // refunds given in the period
-    own: number;           // own_gross - refunds
-    platforms: number;     // delivery platforms' gross sales
-    total: number;         // own + platforms (incl. VAT)
-    vat_own: number;
-    vat_platforms: number;
-    vat: number;           // output VAT
-    ex_vat: number;        // total - vat
+    till: number;          // Z report net sales, tips not included
+    platforms: number;     // delivery platforms' sales, commission included
+    catering: number;      // catering paid
+    total: number;         // incl. VAT
+    vat: number;           // total − ex_vat
+    ex_vat: number;        // total ÷ 1.2
   };
   costs: {
-    ingredients: number;   // purchase orders received
-    staff: number;
-    expenses: number;      // other expenses, ex reclaimable VAT
+    ingredients: number;   // stock deliveries received
+    staff: number;         // hours worked × pay rate
+    expenses: number;      // other expenses, VAT claimed back taken off
     /** The same, per expense category — every category, £0 included; adds up to `expenses`. */
     expense_lines: { key: string; label: string; amount: number }[];
     commission: number;    // delivery platform commission
-    card_fees: number;     // estimate
+    card_fees: number;     // card taken × card fee rate
+    paid_out: number;      // cash paid out of the till
     total: number;
   };
   profit: number;
@@ -244,9 +241,7 @@ export type PnlInputs = {
   from: string;
   to: string;
   vatRate: number;
-  sales: SalesData;
-  ingredients: number;
-  staff: number;
+  figures: FiguresTotal;
   expenses: ExpenseTotals & { byCategory?: Record<string, ExpenseTotals> };
   recipe: { cogs: number; coveragePct: number };
 };
@@ -269,53 +264,34 @@ function expenseLines(i: PnlInputs, expensesExVat: number): Pnl["costs"]["expens
   return lines;
 }
 
-/** Pure: every P&L and VAT figure from the raw inputs. */
+/** Pure: every P&L and VAT figure from the period's day-by-day sums. */
 export function buildPnl(i: PnlInputs): Pnl {
-  const ownGross = i.sales.orders.reduce((s, o) => s + o.total, 0);
-  const refunds = i.sales.refunds.reduce((s, r) => s + r.amount, 0);
-  const own = ownGross - refunds;
-  const platforms = i.sales.platforms.reduce((s, p) => s + p.sales, 0);
-  const total = own + platforms;
-
-  const vatOwn = i.sales.orders.reduce((s, o) => s + o.tax, 0) - i.sales.refunds.reduce((s, r) => s + r.vat, 0);
-  const vatPlatforms = platforms * (i.vatRate / (1 + i.vatRate));
-  const outputVat = r2(vatOwn + vatPlatforms);
-  const exVat = r2(total - outputVat);
-
+  const f = i.figures;
+  const outputVat = r2(f.total_sales - f.ex_vat);
   const inputVat = extractVat(i.expenses.vatApplicableTotal, i.vatRate);
-  const expensesExVat = r2(i.expenses.total - inputVat);
-  const commission = r2(i.sales.platforms.reduce((s, p) => s + p.commission, 0));
-  const cardFees = r2(i.sales.cardTaken * CARD_FEE_RATE);
-  const costTotal = r2(i.ingredients + i.staff + expensesExVat + commission + cardFees);
-  const profit = r2(exVat - costTotal);
-
   return {
     from: i.from,
     to: i.to,
     vat_rate: i.vatRate,
-    sales: {
-      own_gross: r2(ownGross), refunds: r2(refunds), own: r2(own), platforms: r2(platforms), total: r2(total),
-      vat_own: r2(vatOwn), vat_platforms: r2(vatPlatforms), vat: outputVat, ex_vat: exVat,
-    },
+    sales: { till: f.sales.till, platforms: f.sales.platforms, catering: f.sales.catering, total: f.total_sales, vat: outputVat, ex_vat: f.ex_vat },
     costs: {
-      ingredients: r2(i.ingredients), staff: r2(i.staff), expenses: expensesExVat,
-      expense_lines: expenseLines(i, expensesExVat), commission, card_fees: cardFees, total: costTotal,
+      ingredients: f.out.stock, staff: f.out.wages, expenses: f.out.expenses,
+      expense_lines: expenseLines(i, f.out.expenses), commission: f.out.commission,
+      card_fees: f.out.card_fee, paid_out: f.out.paid_out, total: f.money_out,
     },
-    profit,
+    profit: f.net_total,
     vat: { output: outputVat, vat_applicable_expenses: r2(i.expenses.vatApplicableTotal), input: inputVat, net_due: r2(outputVat - inputVat) },
     // Same bottom line, with recipe cost of what was sold in place of what was bought.
-    recipe: { cogs: i.recipe.cogs, coverage_pct: i.recipe.coveragePct, profit: r2(profit + i.ingredients - i.recipe.cogs) },
+    recipe: { cogs: i.recipe.cogs, coverage_pct: i.recipe.coveragePct, profit: r2(f.net_total + f.out.stock - i.recipe.cogs) },
   };
 }
 
 export async function getPnl(businessId: number, from: string, to: string): Promise<Pnl> {
-  const [sales, ingredients, staff, expenses, vatRate] = await Promise.all([
-    getSalesData(businessId, from, to),
-    getIngredientPurchases(businessId, from, to),
-    getLabourCost(businessId, from, to),
+  const [{ days, vatRate }, expenses, sales] = await Promise.all([
+    accountsByDay(businessId, from, to),
     getOtherExpenses(businessId, from, to),
-    getVatRate(businessId),
+    getSalesData(businessId, from, to),
   ]);
   const recipe = await getRecipeCogs(businessId, sales.orders.map((o) => o.id));
-  return buildPnl({ from, to, vatRate, sales, ingredients, staff, expenses, recipe });
+  return buildPnl({ from, to, vatRate, figures: totalFigures(days), expenses, recipe });
 }

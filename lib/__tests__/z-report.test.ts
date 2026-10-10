@@ -46,7 +46,7 @@ describe("computeZReport", () => {
     expect(r.sales_count).toBe(12);
     expect(r.sales_total).toBe(578.98);
     expect(r.refunds_count).toBe(0);
-    expect(r.net_sales).toBe(578.98);
+    expect(r.net_sales).toBe(576.52); // tips (£2.46) are staff's, not sales
     expect(r.discount_count).toBe(4);
     expect(r.discount_total).toBe(19.89);
     expect(r.tips_total).toBe(2.46);

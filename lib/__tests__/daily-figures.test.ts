@@ -50,3 +50,12 @@ describe("daily figures", () => {
     expect(d[30]).toBe("2026-10-31");
   });
 });
+
+describe("sales split", () => {
+  it("till, platforms and catering add up to Total sales", () => {
+    const f = dayFigures("d", { ...blank, z_report: 500, just_eat: 40, deliveroo: 30, uber_eats: 20, hiest: 10, catering_paid: 100 }, 0.2, 0.0169);
+    expect(f.sales).toEqual({ till: 500, platforms: 100, catering: 100 });
+    expect(f.total_sales).toBe(700);
+    expect(totalFigures([f, f]).sales).toEqual({ till: 1000, platforms: 200, catering: 200 });
+  });
+});

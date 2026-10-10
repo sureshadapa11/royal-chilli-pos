@@ -30,8 +30,8 @@ function DateRangePicker({ from, to, setFrom, setTo }: { from: string; to: strin
 // Same shape as lib/finance.ts Pnl — the admin dashboard summary reads the same numbers.
 type Pnl = {
   vat_rate: number;
-  sales: { own_gross: number; refunds: number; own: number; platforms: number; total: number; vat_own: number; vat_platforms: number; vat: number; ex_vat: number };
-  costs: { ingredients: number; staff: number; expenses: number; commission: number; card_fees: number; total: number };
+  sales: { till: number; platforms: number; catering: number; total: number; vat: number; ex_vat: number };
+  costs: { ingredients: number; staff: number; expenses: number; commission: number; card_fees: number; paid_out: number; total: number };
   profit: number;
   vat: { output: number; vat_applicable_expenses: number; input: number; net_due: number };
   recipe: { cogs: number; coverage_pct: number; profit: number };
@@ -66,25 +66,26 @@ function PnlTab() {
       {data && (
         <>
           <div className={cardClass}>
-            <Row label="Own sales (till, QR, website)" value={data.sales.own_gross} />
-            {data.sales.refunds > 0 && <Row label="Less refunds" value={-data.sales.refunds} />}
+            <Row label="Z report net sales (till, QR, website)" value={data.sales.till} />
             <Row label="Delivery platforms" value={data.sales.platforms} />
+            {data.sales.catering > 0 && <Row label="Catering paid" value={data.sales.catering} />}
             <Row label="Total sales (incl. VAT)" value={data.sales.total} bold />
-            <Row label="Less VAT on sales" value={-data.sales.vat} />
+            <Row label="Less VAT on sales (÷ 1.2)" value={-data.sales.vat} />
             <Row label="Sales ex-VAT" value={data.sales.ex_vat} bold />
           </div>
           <div className={cardClass}>
-            <Row label="Ingredients (purchase orders received)" value={-data.costs.ingredients} />
+            <Row label="Stock received (purchase orders)" value={-data.costs.ingredients} />
             <Row label="Staff (hours worked × pay rate)" value={-data.costs.staff} />
-            <Row label="Other expenses (ex reclaimable VAT)" value={-data.costs.expenses} />
+            <Row label="Other expenses (VAT claimed back taken off)" value={-data.costs.expenses} />
             <Row label="Delivery platform commission" value={-data.costs.commission} />
-            <Row label="Card fees (estimate)" value={-data.costs.card_fees} />
+            <Row label="Card fees" value={-data.costs.card_fees} />
+            <Row label="Cash paid out of the till" value={-data.costs.paid_out} />
             <Row label="Total costs" value={-data.costs.total} />
             <Row label="Net Profit" value={data.profit} bold />
           </div>
           <p className="mt-3 text-muted-foreground text-xs">
-            Same figures as the admin dashboard. Own sales are paid orders on the day ordered (after discounts, tips excluded); refunds count on the day given.
-            Ingredient cost is what was received on purchase orders in the period, not a stock valuation. Card fees are estimated at 1.75% of card and online takings.
+            Same figures as the dashboard, All businesses and the Daily accounts month sheet. Sales are the Z report&apos;s net sales (tips are staff&apos;s, not sales) plus delivery platforms and catering from Daily accounts.
+            Stock is what was received on purchase orders in the period, not a stock valuation. Card fees use the rate in Settings → Business setup (1.69%).
           </p>
 
           <div className="mt-6 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-4">
@@ -129,17 +130,14 @@ function VatTab() {
       {error && <p className="mt-4 text-red-600 text-sm">{error}</p>}
       {data && (
         <div className={cardClass}>
-          <Row label="Own sales after refunds (incl. VAT)" value={data.sales.own} />
-          <Row label="VAT on own sales" value={data.sales.vat_own} />
-          <Row label="Delivery platform sales (incl. VAT)" value={data.sales.platforms} />
-          <Row label="VAT on platform sales" value={data.sales.vat_platforms} />
-          <Row label="Output VAT (on sales)" value={data.vat.output} bold />
+          <Row label="Total sales (incl. VAT)" value={data.sales.total} />
+          <Row label="Output VAT (Total sales ÷ 1.2 × 0.2)" value={data.vat.output} bold />
           <Row label="Expenses with VAT" value={data.vat.vat_applicable_expenses} />
           <Row label="Input VAT (reclaimable)" value={-data.vat.input} />
           <Row label="Net VAT Due" value={data.vat.net_due} bold />
         </div>
       )}
-      <p className="mt-3 text-amber-600 text-xs">⚠ Estimate only — assumes standard-rated sales (own VAT is what each bill actually charged; platform VAT is worked out from their gross sales), raw ingredient purchases zero-rated, and no VAT reclaimed on platform commission. Verify with your accountant before filing.</p>
+      <p className="mt-3 text-amber-600 text-xs">⚠ Estimate only — assumes every sale is standard-rated at 20%, raw ingredient purchases zero-rated, and no VAT reclaimed on platform commission. Verify with your accountant before filing.</p>
     </div>
   );
 }
