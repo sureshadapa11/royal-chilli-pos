@@ -10,14 +10,14 @@ export default function GroupOverview({ data, current }: { data: Data; current: 
     <section className="mb-6 rounded-2xl border border-border bg-white p-4 shadow-[0_1px_2px_rgba(32,27,24,0.04)]">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
         <h2 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-[17px] font-semibold text-foreground">All businesses</h2>
-        <p className="text-[12.5px] text-muted-foreground">{data.from} to {data.to} · same figures as each business&apos;s Finance → Profit &amp; Loss</p>
+        <p className="text-[12.5px] text-muted-foreground">{data.from} to {data.to} · same sums as each business&apos;s Daily accounts month sheet</p>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-[13.5px]">
           <thead className="text-[11.5px] uppercase tracking-[0.06em] text-muted-foreground">
             <tr>
               <th className="px-3 py-2 text-left font-semibold">Business</th>
-              <th className="px-3 py-2 text-right font-semibold">Sales</th>
+              <th className="px-3 py-2 text-right font-semibold">Total sales</th>
               <th className="px-3 py-2 text-right font-semibold">Ex-VAT</th>
               <th className="px-3 py-2 text-right font-semibold">Staff cost</th>
               <th className="px-3 py-2 text-right font-semibold">All costs</th>
@@ -52,6 +52,10 @@ export default function GroupOverview({ data, current }: { data: Data; current: 
           </tfoot>
         </table>
       </div>
+      <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+        <b>Total sales</b> = Z report + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · <b>Ex-VAT</b> = Total sales ÷ 1.2 ·{" "}
+        <b>All costs</b> = stock received + expenses + card fee + till paid out + staff wages + platform commission · <b>Profit</b> = Ex-VAT − All costs
+      </p>
     </section>
   );
 }

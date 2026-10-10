@@ -15,7 +15,7 @@ import { encryptSecret, secretsConfigured } from "@/lib/secrets";
 
 const PUBLIC_COLUMNS = [
   "id", "slug", "name", "tagline", "legal_name", "company_number", "phone", "email", "website", "custom_domain", "logo_url", "brand_colour",
-  "trading_address", "registered_address", "vat_registered", "vat_number", "vat_rate", "vat_scheme", "utr",
+  "trading_address", "registered_address", "vat_registered", "vat_number", "vat_rate", "card_fee_rate", "vat_scheme", "utr",
   "paye_reference", "year_end", "accounts_email", "receipt_header", "receipt_footer", "order_prefix", "po_prefix",
   "modules", "privacy_policy", "terms", "refund_policy", "active",
 ].join(", ");
@@ -114,7 +114,7 @@ export async function PUT(req: NextRequest) {
         patch[k] = upper(v) || null;
       } else if (k === "custom_domain") {
         patch[k] = typeof v === "string" ? (v.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "") || null) : null;
-      } else if (k === "vat_rate") {
+      } else if (k === "vat_rate" || k === "card_fee_rate") {
         patch[k] = Number(v);
       } else {
         patch[k] = clean(v);

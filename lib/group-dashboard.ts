@@ -1,19 +1,22 @@
 import { listBusinesses } from "@/lib/business";
-import { getPnl, r2 } from "@/lib/finance";
+import { r2 } from "@/lib/finance";
 import { rangeDates, type RangeKey } from "@/lib/admin-dashboard";
 import { tradingDayStr } from "@/lib/london-date";
+import { accountsByDay, totalFigures } from "@/lib/daily-figures";
 
-// The group owner's view across every business: the same P&L each business
-// sees in Finance (lib/finance.ts getPnl), side by side, plus the total.
+// The group owner's view across every business, side by side, plus the total.
+// Same sums as each business's Daily accounts month sheet (lib/daily-figures.ts):
+// Total sales = Z report + delivery platforms + catering paid; Ex-VAT = ÷ 1.2;
+// All costs = every bit of money out; Profit = Ex-VAT − All costs.
 
 export type GroupRow = {
   id: number;
   name: string;
   active: boolean;
-  totalSales: number;   // incl. VAT, own + delivery platforms
+  totalSales: number;
   exVat: number;
-  staff: number;
-  costs: number;
+  staff: number;   // staff wages (part of costs)
+  costs: number;   // all money out
   profit: number;
 };
 
@@ -24,10 +27,10 @@ export async function getGroupOverview(range: RangeKey): Promise<GroupOverview> 
   const businesses = await listBusinesses();
   const rows = await Promise.all(
     businesses.map(async (b): Promise<GroupRow> => {
-      const p = await getPnl(b.id, from, to);
+      const t = totalFigures((await accountsByDay(b.id, from, to)).days);
       return {
         id: b.id, name: b.name, active: b.active,
-        totalSales: p.sales.total, exVat: p.sales.ex_vat, staff: p.costs.staff, costs: p.costs.total, profit: p.profit,
+        totalSales: t.total_sales, exVat: t.ex_vat, staff: t.out.wages, costs: t.money_out, profit: t.net_total,
       };
     }),
   );
