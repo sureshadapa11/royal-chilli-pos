@@ -13,7 +13,7 @@ type Redemption = {
   issued_at: string;
   expires_at: string;
   valid_from?: string | null;
-  reward: { name: string; discount_amount: number | null; discount_pct?: number | null; max_discount?: number | null; order_types?: string[] | null } | null;
+  reward: { name: string; description?: string | null; discount_amount: number | null; discount_pct?: number | null; max_discount?: number | null; order_types?: string[] | null } | null;
 };
 type ReferralVoucher = { id: number; status: "locked" | "issued"; code: string | null; expires_at: string | null; friend: string };
 type LoyaltyData = {
@@ -21,6 +21,7 @@ type LoyaltyData = {
   rewards: Reward[];
   activeRedemption: Redemption | null;
   welcomeVoucher: Redemption | null;
+  comeBackVouchers?: Redemption[];
   referralCode: string | null;
   shareMessage?: string | null;
   referralVouchers: ReferralVoucher[];
@@ -51,6 +52,26 @@ function WelcomeVoucher({ voucher }: { voucher: Redemption }) {
           {new Date(voucher.valid_from).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
         </div>
       )}
+      <div className="mt-1 text-xs text-amber-600">Expires {expiryLabel(voucher.expires_at)}</div>
+    </div>
+  );
+}
+
+// A come-back offer from the "why did you stop coming?" email: shown on the
+// Overview with its code, like the welcome gift — no cancel button.
+function ComeBackVoucher({ voucher }: { voucher: Redemption }) {
+  const r = voucher.reward;
+  const title = (r?.name ?? "Come-back offer").replace(/^Come-back:\s*/i, "");
+  const where = r?.order_types?.length === 1 ? (r.order_types[0] === "delivery" ? " on a delivery order" : r.order_types[0] === "dine_in" ? " when you dine in" : "") : "";
+  return (
+    <div className="mt-3.5 rounded-2xl border-2 border-dashed border-primary bg-surface px-4 py-5 text-center shadow-sm">
+      <div className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">Welcome back gift</div>
+      <div className="mt-1 font-[family-name:var(--font-playfair)] text-xl first-letter:uppercase">{title}</div>
+      {r?.description && <div className="text-xs text-muted-foreground">{r.description}</div>}
+      <div className="mx-auto my-3 rounded-2xl bg-primary px-2 py-4 font-[family-name:var(--font-playfair)] text-2xl tracking-[3px] text-primary-foreground sm:text-3xl sm:tracking-[6px]">
+        {spacedCode(voucher.code)}
+      </div>
+      <div className="text-xs text-muted-foreground">Show this code to staff when you order or pay{where}. One use.</div>
       <div className="mt-1 text-xs text-amber-600">Expires {expiryLabel(voucher.expires_at)}</div>
     </div>
   );
@@ -279,6 +300,7 @@ function LoyaltyInner() {
       <h1 className="font-[family-name:var(--font-playfair)] text-2xl">Loyalty</h1>
 
       {data.welcomeVoucher && <WelcomeVoucher voucher={data.welcomeVoucher} />}
+      {(data.comeBackVouchers ?? []).map((v) => <ComeBackVoucher key={v.id} voucher={v} />)}
       <ReferralVouchers vouchers={data.referralVouchers ?? []} />
 
       <div className="mt-3.5 rounded-2xl border border-border bg-surface shadow-sm">

@@ -15,15 +15,15 @@ export async function POST(req: NextRequest) {
     if (!reward_id) return NextResponse.json({ error: "reward_id is required" }, { status: 400 });
 
     // Only one active points voucher at a time — matches "one reward per
-    // transaction". The welcome and Bring a Friend vouchers don't count.
+    // transaction". The welcome, Bring a Friend and come-back vouchers don't count.
     const { data: issued } = await supabase
       .from("loyalty_redemptions")
-      .select("id, reward:loyalty_rewards(is_welcome_reward, is_referral_reward)")
+      .select("id, reward:loyalty_rewards(is_welcome_reward, is_referral_reward, winback_reason)")
       .eq("customer_id", session.id)
       .eq("status", "issued");
     const existing = (issued ?? []).find((r) => {
-      const f = (r.reward as unknown as { is_welcome_reward?: boolean; is_referral_reward?: boolean } | null) ?? {};
-      return !f.is_welcome_reward && !f.is_referral_reward;
+      const f = (r.reward as unknown as { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null } | null) ?? {};
+      return !f.is_welcome_reward && !f.is_referral_reward && !f.winback_reason;
     });
     if (existing) {
       return NextResponse.json({ error: "You already have an active voucher — cancel it first to redeem a different reward" }, { status: 409 });

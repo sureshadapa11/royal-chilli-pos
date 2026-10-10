@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
 
   const { data: issued } = await supabase
     .from("loyalty_redemptions")
-    .select("id, code, status, points_spent, issued_at, expires_at, valid_from, referred_customer_id, reward:loyalty_rewards(name, discount_amount, discount_pct, max_discount, order_types, is_welcome_reward, is_referral_reward)")
+    .select("id, code, status, points_spent, issued_at, expires_at, valid_from, referred_customer_id, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, is_welcome_reward, is_referral_reward, winback_reason)")
     .eq("customer_id", session.id)
     .in("status", ["issued", "locked"])
     .order("issued_at", { ascending: false });
@@ -42,10 +42,12 @@ export async function GET(req: NextRequest) {
   const expired = (issued ?? []).filter((r) => new Date(r.expires_at) < now);
   for (const r of expired) await supabase.from("loyalty_redemptions").update({ status: "expired" }).eq("id", r.id);
   const live = (issued ?? []).filter((r) => new Date(r.expires_at) >= now);
-  type Flags = { is_welcome_reward?: boolean; is_referral_reward?: boolean } | null;
+  type Flags = { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null } | null;
   const flags = (r: (typeof live)[number]) => (r.reward as unknown as Flags) ?? {};
   const isWelcome = (r: (typeof live)[number]) => !!flags(r).is_welcome_reward;
   const isReferral = (r: (typeof live)[number]) => !!flags(r).is_referral_reward;
+  // Come-back offers ("why did you stop coming?") sit beside the points voucher, never instead of it.
+  const isComeBack = (r: (typeof live)[number]) => !!flags(r).winback_reason;
 
   // Bring a Friend vouchers: a locked one hides its code (it can't be used
   // yet) and shows the friend's first name instead.
@@ -59,7 +61,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     points: customer?.loyalty_points ?? 0,
     rewards: rewards || [],
-    activeRedemption: live.find((r) => !isWelcome(r) && !isReferral(r) && r.status === "issued") ?? null,
+    activeRedemption: live.find((r) => !isWelcome(r) && !isReferral(r) && !isComeBack(r) && r.status === "issued") ?? null,
+    comeBackVouchers: live.filter((r) => isComeBack(r) && r.status === "issued"),
     welcomeVoucher: live.find((r) => isWelcome(r) && r.status === "issued") ?? null,
     referralCode: customer?.referral_code ?? null,
     shareMessage: typeof shareSetting?.value === "string" ? shareSetting.value : null,

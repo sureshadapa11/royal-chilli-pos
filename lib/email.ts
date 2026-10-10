@@ -928,3 +928,27 @@ export async function sendWinBackWhyEmail(
     </td></tr>`;
   await sendBrevoEmail(to, `We miss you at ${name}. Can we ask why?`, shell(body, brand), d.unsubscribeUrl, brand);
 }
+
+// ---------- The come-back offer they just chose (their own reward: no consent needed) ----------
+
+export async function sendComeBackOfferEmail(
+  to: string,
+  d: { businessId: number; customerName: string; offer: string; description: string | null; code: string; expiresAt: string; accountUrl: string },
+) {
+  const brand = await getEmailBrand(d.businessId);
+  const name = brand?.name ?? "The Royal Chilli";
+  const body = `
+    <tr><td style="padding:28px 32px 8px; text-align:center;">
+      ${cardLabel("Welcome back gift")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">Thank you, ${firstName(d.customerName)}. ${esc(d.offer)} is on us</div>
+      ${d.description ? `<div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px;">${esc(d.description)}</div>` : ""}
+    </td></tr>
+    <tr><td align="center" style="padding:14px 32px 6px;">
+      <div style="display:inline-block; background:${C.chilli}; color:#fff; font-family:${SERIF}; font-size:28px; letter-spacing:6px; padding:16px 26px; border-radius:12px;">${esc(d.code)}</div>
+      <div style="font-family:${SANS}; font-size:13px; color:${C.muted}; margin-top:12px; line-height:1.6;">
+        Show this code when you order or pay. One use, valid until ${esc(ukDate(d.expiresAt))}.<br/>It's also saved in your account under Rewards.
+      </div>
+    </td></tr>
+    <tr><td align="center" style="padding:16px 32px 30px;">${button(d.accountUrl, "See it in my account")}</td></tr>`;
+  await sendBrevoEmail(to, `Your welcome back gift from ${name}: ${d.code}`, shell(body, brand), undefined, brand);
+}
