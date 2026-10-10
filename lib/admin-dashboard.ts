@@ -3,6 +3,7 @@ import { tradingDayStr } from "@/lib/london-date";
 import { PLATFORMS } from "@/lib/platforms";
 import { chunked, getPnl, getSalesData, labourCostByDay, r2 } from "@/lib/finance";
 import { savedDays, summarise, type DailySummary } from "@/lib/daily-accounts";
+import { getDashboardCards, mergeDashboardCards, type DashboardCards } from "@/lib/dashboard-cards";
 
 // Admin dashboard figures (Staff Hub home, admin only). Revenue = our own paid
 // orders (till, QR, website) after discounts, VAT included, minus refunds on
@@ -43,6 +44,10 @@ export type AdminDashboard = {
   topDishes: { name: string; revenue: number; qty: number }[];
   dailyAccounts: DailySummary;
   summary: AdminSummary;
+  /** Cards from Daily accounts, Expenses and Attendance (work without the till). */
+  cards: DashboardCards;
+  /** Real till orders in the last two weeks: show the till-only cards (by hour, channels, dishes, spend). */
+  hasTill: boolean;
 };
 
 
@@ -145,11 +150,12 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
   const weekRange = rangeDates("this_week", today);
 
   // One fetch covering last week → this week.
-  const [sales14, costByDay, summary, dailyRows] = await Promise.all([
+  const [sales14, costByDay, summary, dailyRows, cards] = await Promise.all([
     getSalesData(businessId, lastMon, sun),
     labourCostByDay(businessId, mon, sun),
     getAdminSummary(businessId, range),
     savedDays(businessId, weekRange.from, weekRange.to),
+    getDashboardCards(businessId, range, rangeDates(range, today), today),
   ]);
   const plat14 = sales14.platforms;
 
@@ -234,6 +240,8 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
     summary: {
       ...summary,
     },
+    cards,
+    hasTill: sales14.orders.length > 0,
   };
 }
 
@@ -291,5 +299,7 @@ export function mergeDashboards(list: { name: string; data: AdminDashboard }[]):
       missing: [],
     },
     summary: mergeAdminSummaries(sm),
+    cards: mergeDashboardCards(list.map((l) => l.data.cards)),
+    hasTill: list.some((l) => l.data.hasTill),
   };
 }

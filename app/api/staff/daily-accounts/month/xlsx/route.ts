@@ -4,7 +4,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { canManageDailyAccounts } from "@/lib/permissions";
 import { getBusiness } from "@/lib/business";
 import { columnTotals } from "@/lib/daily-accounts";
-import { DAILY_FIELDS } from "@/lib/daily-accounts-fields";
+import { SHEET_FIELDS } from "@/lib/daily-accounts-fields";
 import { accountsByDay, MONEY_OUT_PARTS, totalFigures } from "@/lib/daily-figures";
 
 // GET ?month=YYYY-MM → the month's Daily Accounts Report as a real Excel file:
@@ -25,7 +25,7 @@ const LEAD = [
 
 const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · Ex-VAT = Total sales ÷ 1.2 · "
   + "Money out = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
-  + "Variance = opening balance − closing balance · * no Z report on the sheet yet, the till's figure is used";
+  + "Commission & card fees = platform commissions + card fee · Variance = closing balance − opening balance · * no Z report on the sheet yet, the till's figure is used";
 
 type Cell = string | number | null;
 
@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
   const name = business?.name ?? "Daily accounts";
 
   // Sheet 1: the Daily Accounts Report.
-  const head = ["Date", ...LEAD.map((c) => c.label), ...DAILY_FIELDS.map((f) => f.label), "Variance", "Notes", "Status"];
+  const head = ["Date", ...LEAD.map((c) => c.label), ...SHEET_FIELDS.map((f) => f.label), "Variance", "Notes", "Status"];
   const report: Cell[][] = [
     [`${name} — Daily Accounts Report`],
     [`Reporting month: ${monthName(month)} · amounts in £ · the total adds up each column on its own`],
@@ -78,18 +78,18 @@ export async function GET(req: NextRequest) {
       return [
         dayName(f.date) + (f.till_fallback ? " *" : ""),
         ...LEAD.map((c) => f[c.key]),
-        ...DAILY_FIELDS.map((x) => num(r?.[x.key])),
+        ...SHEET_FIELDS.map((x) => (x.key === "commission" ? (f.out.commission || f.out.card_fee ? Math.round((f.out.commission + f.out.card_fee) * 100) / 100 : num(r?.commission)) : num(r?.[x.key]))),
         f.variance,
         r?.notes ?? "",
         r ? (r.status === "submitted" ? "Submitted" : "Draft") : "",
       ];
     }),
-    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...DAILY_FIELDS.map((x) => totals[x.key]), ft.variance, "", ""],
+    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_FIELDS.map((x) => (x.key === "commission" ? Math.round((ft.out.commission + ft.out.card_fee) * 100) / 100 : totals[x.key])), ft.variance, "", ""],
     [],
     [FORMULA],
   ];
-  const ws1 = sheet(report, 3, LEAD.length + DAILY_FIELDS.length + 1,
-    [16, ...LEAD.map((c) => Math.max(12, c.label.length + 2)), ...DAILY_FIELDS.map((f) => Math.max(11, f.label.length + 2)), 11, 40, 11]);
+  const ws1 = sheet(report, 3, LEAD.length + SHEET_FIELDS.length + 1,
+    [16, ...LEAD.map((c) => Math.max(12, c.label.length + 2)), ...SHEET_FIELDS.map((f) => Math.max(11, f.label.length + 2)), 11, 40, 11]);
 
   // Sheet 2: what's in each day's Money out.
   const outHead = ["Date", ...MONEY_OUT_PARTS.map((p) => p.label), "Money out"];

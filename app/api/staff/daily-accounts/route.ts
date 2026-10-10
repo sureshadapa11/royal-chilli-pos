@@ -3,7 +3,8 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { tillFigures } from "@/lib/daily-accounts";
-import { DAILY_KEYS } from "@/lib/daily-accounts-fields";
+import { DAILY_KEYS, isComputedField, platformCommission } from "@/lib/daily-accounts-fields";
+import { getCardFeeRate } from "@/lib/daily-figures";
 
 // The manager's day-end accounts sheet (Staff Hub → Daily accounts), one per
 // business per trading day. Anyone with the Finance tab enters it; once
@@ -22,13 +23,14 @@ export async function GET(req: NextRequest) {
   if (!DATE.test(date)) return NextResponse.json({ error: "Pick a date" }, { status: 400 });
 
   const db = bizDb(session.businessId);
-  const [{ data: saved, error }, till] = await Promise.all([
+  const [{ data: saved, error }, till, cardFeeRate] = await Promise.all([
     db.from("daily_accounts").select(COLUMNS).eq("trading_date", date).maybeSingle(),
     tillFigures(session.businessId, date),
+    getCardFeeRate(session.businessId),
   ]);
   if (error) return NextResponse.json({ error: "Couldn't load the day" }, { status: 500 });
   const submitted = (saved as { status?: string } | null)?.status === "submitted";
-  return NextResponse.json({ date, saved, till, locked: submitted && !canUnlock(session), canUnlock: canUnlock(session) });
+  return NextResponse.json({ date, saved, till, cardFeeRate, locked: submitted && !canUnlock(session), canUnlock: canUnlock(session) });
 }
 
 /** PUT { date, values: { z_report: 123.45, … }, notes, submit } — save a draft, or submit. */
@@ -47,6 +49,7 @@ export async function PUT(req: NextRequest) {
 
   const values: Record<string, number | null> = {};
   for (const k of DAILY_KEYS) {
+    if (isComputedField(k)) continue;
     const raw = body?.values?.[k];
     if (raw === null || raw === undefined || raw === "") { values[k] = null; continue; }
     const n = Number(raw);
@@ -55,6 +58,8 @@ export async function PUT(req: NextRequest) {
     }
     values[k] = Math.round(n * 100) / 100;
   }
+  // Saved as the platforms' commission total; the card fee is added when shown.
+  values.commission = platformCommission(values);
   const notes = typeof body?.notes === "string" ? body.notes.trim().slice(0, 1000) || null : null;
   const submit = body?.submit === true;
   const now = new Date().toISOString();

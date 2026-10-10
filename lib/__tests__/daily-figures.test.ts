@@ -21,8 +21,9 @@ describe("daily figures", () => {
     expect(f.net_total).toBe(393.1);
   });
 
-  it("Variance = opening − closing, and only when both are known", () => {
-    expect(dayFigures("d", { ...blank, opening: 150, closing: 120.5 }, 0.2, 0.0169).variance).toBe(29.5);
+  it("Variance = closing − opening, and only when both are known", () => {
+    expect(dayFigures("d", { ...blank, opening: 150, closing: 120.5 }, 0.2, 0.0169).variance).toBe(-29.5);
+    expect(dayFigures("d", { ...blank, opening: 77, closing: 195.7 }, 0.2, 0.0169).variance).toBe(118.7);
     expect(dayFigures("d", { ...blank, opening: 150 }, 0.2, 0.0169).variance).toBeNull();
   });
 
@@ -40,7 +41,7 @@ describe("daily figures", () => {
     expect(t.out.card_fee).toBe(1.69);
     expect(t.money_out).toBe(41.69);
     expect(t.net_total).toBe(258.31);
-    expect(t.variance).toBe(10);
+    expect(t.variance).toBe(-10);
     expect(totalFigures([b]).variance).toBeNull();
   });
 
