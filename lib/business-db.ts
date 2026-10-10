@@ -24,6 +24,8 @@ export const BUSINESS_TABLES = new Set([
   "daily_accounts",
   // 126: guest feedback ("How was your meal?")
   "guest_feedback",
+  // 127: "why did you stop coming?" emails
+  "winback_requests",
   // 104: website traffic and gallery
   "page_views", "website_gallery",
   // 079: every business independent

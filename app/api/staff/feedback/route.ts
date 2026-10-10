@@ -3,6 +3,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { summariseFeedback, NEEDS_CALL_BACK, type FeedbackRow } from "@/lib/feedback";
+import { winBackStats } from "@/lib/winback";
 
 // Staff Hub → Customers → Feedback.
 // GET ?days=30 — the period's feedback (newest first) and its summary, plus
@@ -17,13 +18,14 @@ export async function GET(req: NextRequest) {
   const days = Math.min(365, Math.max(1, Number(req.nextUrl.searchParams.get("days")) || 30));
   const since = new Date(Date.now() - days * 86_400_000).toISOString();
   const db = bizDb(session.businessId);
-  const [{ data: rows, error }, { data: open }] = await Promise.all([
+  const [{ data: rows, error }, { data: open }, winBack] = await Promise.all([
     db.from("guest_feedback").select(COLUMNS).gte("created_at", since).order("created_at", { ascending: false }).limit(500),
     db.from("guest_feedback").select(COLUMNS).lte("rating", NEEDS_CALL_BACK).is("handled_at", null).order("created_at", { ascending: false }).limit(200),
+    winBackStats(session.businessId, since),
   ]);
   if (error) return NextResponse.json({ error: "Couldn't load feedback" }, { status: 500 });
   const list = (rows ?? []) as FeedbackRow[];
-  return NextResponse.json({ days, rows: list, open: open ?? [], summary: summariseFeedback(list) });
+  return NextResponse.json({ days, rows: list, open: open ?? [], summary: summariseFeedback(list), winBack });
 }
 
 export async function PATCH(req: NextRequest) {
