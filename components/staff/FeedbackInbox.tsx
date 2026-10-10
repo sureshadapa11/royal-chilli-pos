@@ -5,12 +5,13 @@ import QRCode from "qrcode";
 import { useToast } from "@/hooks/use-toast";
 import { topicLabel, type FeedbackRow, type FeedbackSummary } from "@/lib/feedback";
 import { SITE_URL } from "@/lib/site-url";
+import type { WinBackStats } from "@/lib/winback";
 
 // Staff Hub → Customers → Feedback: what guests said on "How was your meal?".
 // 1–3★ wait under "To follow up" until someone marks them handled (with a
 // note of what was done). The table QR card prints the feedback link.
 
-type Data = { days: number; rows: FeedbackRow[]; open: FeedbackRow[]; summary: FeedbackSummary };
+type Data = { days: number; rows: FeedbackRow[]; open: FeedbackRow[]; summary: FeedbackSummary; winBack: WinBackStats };
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
@@ -171,6 +172,44 @@ export default function FeedbackInbox({ businessName }: { businessName: string }
             {data.open.length === 0
               ? <p className="mt-2 rounded-xl bg-[#FBF8F1] px-3 py-4 text-sm text-muted-foreground">Nothing waiting. Every unhappy guest has been followed up.</p>
               : <div className="mt-2 space-y-2.5">{data.open.map((r) => <FollowUp key={r.id} row={r} onDone={load} />)}</div>}
+          </section>
+
+          <section>
+            <h2 className="text-[15px] font-semibold">Come-back emails <span className="text-muted-foreground font-normal">· &ldquo;why did you stop coming?&rdquo; after 21 days away, last {data.days} days</span></h2>
+            <div className="mt-2 grid gap-3 md:grid-cols-[1fr_2fr]">
+              <div className="rounded-xl border border-border bg-white p-3.5">
+                <div className="flex gap-6">
+                  <div><span className="block text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Sent</span><b style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-[22px] font-bold">{data.winBack.sent}</b></div>
+                  <div><span className="block text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Answered</span><b style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-[22px] font-bold">{data.winBack.answered}</b></div>
+                </div>
+                {data.winBack.reasons.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {data.winBack.reasons.map((r) => (
+                      <div key={r.key} className="grid grid-cols-[1fr_auto] items-center gap-2 text-[13px]">
+                        <div><span>{r.label}</span><div className="mt-0.5 h-1.5 rounded-full bg-[#F3EEE3]"><div className="h-full rounded-full bg-[#B4532A]" style={{ width: `${(r.count / data.winBack.reasons[0].count) * 100}%` }} /></div></div>
+                        <span className="tabular-nums text-muted-foreground">{r.count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="mt-3 text-[12px] text-muted-foreground">Sent once a day to Rewards Club members who said yes to offers. Each reason gives its own offer: edit them in Rewards Catalog (&ldquo;Come-back: …&rdquo;).</p>
+              </div>
+              <div className="rounded-xl border border-border bg-white">
+                {data.winBack.recent.length === 0 ? <p className="px-3.5 py-4 text-sm text-muted-foreground">No answers yet.</p> : (
+                  <div className="divide-y divide-border">
+                    {data.winBack.recent.map((r, i) => (
+                      <div key={i} className="px-3.5 py-2.5 text-[13.5px]">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span><b className="font-semibold">{r.name}</b> · {r.reason}</span>
+                          <span className="text-[12.5px] text-muted-foreground">{when(r.answeredAt)}{r.code ? ` · ${r.code}` : ""}{r.used ? " · used ✓" : ""}</span>
+                        </div>
+                        {r.comment && <p className="mt-1 text-muted-foreground">&ldquo;{r.comment}&rdquo;</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </section>
 
           <section>

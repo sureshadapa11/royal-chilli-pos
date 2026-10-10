@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
     .eq("active", 1)
     .eq("is_welcome_reward", false)
     .eq("is_referral_reward", false)
+    .is("winback_reason", null)
     .order("points_cost", { ascending: true });
 
   const { data: issued } = await supabase

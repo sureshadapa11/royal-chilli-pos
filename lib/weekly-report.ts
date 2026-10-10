@@ -6,6 +6,7 @@ import { summariseFeedback, topicLabel, NEEDS_CALL_BACK, type FeedbackRow } from
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import { sendWeeklyReportEmail, type WeeklyReportData } from "@/lib/email";
 import { PORTAL_HOSTS } from "@/lib/app-hosts";
+import { winBackStats } from "@/lib/winback";
 
 // Every Monday morning: last week (Mon–Sun) for each open business, emailed to
 // the business's own address and its accounts address (Settings → Business
@@ -27,7 +28,7 @@ export async function buildWeeklyReport(businessId: number, today = tradingDaySt
   const week = lastWeek(today);
   const before = { from: addDays(week.from, -7), to: addDays(week.to, -7) };
   const { start, end } = tradingRangeUtc(week.from, week.to);
-  const [pnl, pnlBefore, sheets, { data: fb }, { count: open }] = await Promise.all([
+  const [pnl, pnlBefore, sheets, { data: fb }, { count: open }, winBack] = await Promise.all([
     getPnl(businessId, week.from, week.to),
     getPnl(businessId, before.from, before.to),
     savedDays(businessId, week.from, week.to),
@@ -35,6 +36,7 @@ export async function buildWeeklyReport(businessId: number, today = tradingDaySt
       .select("id, created_at, rating, liked, improve, comment, name, phone, email, contact_ok, customer_id, source, table_label, handled_at, handled_note")
       .gte("created_at", start).lte("created_at", end).order("created_at"),
     bizDb(businessId).from("guest_feedback").select("id", { count: "exact", head: true }).lte("rating", NEEDS_CALL_BACK).is("handled_at", null),
+    winBackStats(businessId, start, end),
   ]);
   const rows = (fb ?? []) as FeedbackRow[];
   const s = summariseFeedback(rows);
@@ -53,6 +55,7 @@ export async function buildWeeklyReport(businessId: number, today = tradingDaySt
       handled: !!r.handled_at,
     })),
     openToFollowUp: open ?? 0,
+    winBack: { sent: winBack.sent, answered: winBack.answered, reasons: winBack.reasons.map((r) => `${r.label} (${r.count})`) },
     // The shared staff sign-in works for every business, whatever its DNS.
     dashboardUrl: `https://${PORTAL_HOSTS[0]}/staff`,
     feedbackUrl: `https://${PORTAL_HOSTS[0]}/staff/customers?tab=feedback`,

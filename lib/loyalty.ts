@@ -249,13 +249,14 @@ export const orderTypesLabel = (types: string[]) => types.map((t) => ORDER_TYPE_
 
 /**
  * Rewards that are only ever given automatically — the welcome voucher on
- * joining and the Bring a Friend £5 — can't be issued by hand, by staff or
+ * joining, the Bring a Friend £5 and the come-back offers — can't be issued by hand, by staff or
  * by the customer; they cost 0 points, so a button for them would hand out
  * free vouchers. Returns an error message for those, else null.
  */
 export async function manualIssueBlocked(rewardId: number): Promise<string | null> {
-  const { data } = await supabase.from("loyalty_rewards").select("is_welcome_reward, is_referral_reward").eq("id", rewardId).maybeSingle();
+  const { data } = await supabase.from("loyalty_rewards").select("is_welcome_reward, is_referral_reward, winback_reason").eq("id", rewardId).maybeSingle();
   if (data?.is_welcome_reward) return "The welcome voucher is given automatically when someone joins";
+  if (data?.winback_reason) return "Come-back offers are only given by the \"why did you stop coming?\" email";
   if (data?.is_referral_reward) return "Bring a Friend vouchers are given automatically when a friend joins with a member's link";
   return null;
 }

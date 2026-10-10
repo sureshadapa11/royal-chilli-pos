@@ -839,6 +839,7 @@ export type WeeklyReportData = {
   feedback: { count: number; average: number | null; stars: number[]; liked: string[]; improve: string[] };
   unhappy: { when: string; rating: number; who: string; comment: string | null; handled: boolean }[];
   openToFollowUp: number;
+  winBack: { sent: number; answered: number; reasons: string[] };
   dashboardUrl: string;
   feedbackUrl: string;
 };
@@ -887,9 +888,43 @@ export async function sendWeeklyReportEmail(to: string, d: WeeklyReportData) {
       ${cardLabel(`Unhappy guests${d.openToFollowUp ? ` · ${d.openToFollowUp} still to follow up` : ""}`)}
       <div style="margin-top:6px;">${unhappy}</div>
     </td></tr>
+    <tr><td style="padding:16px 26px 4px;">
+      ${cardLabel("Come-back emails")}
+      <div style="font-family:${SANS}; font-size:13.5px; color:${C.ink}; margin-top:6px; line-height:1.7;">
+        ${d.winBack.sent ? `${d.winBack.sent} sent · ${d.winBack.answered} answered${d.winBack.reasons.length ? ` · why: ${esc(d.winBack.reasons.join(", "))}` : ""}` : "None sent last week."}
+      </div>
+    </td></tr>
     <tr><td align="center" style="padding:20px 26px 28px;">
       ${button(d.dashboardUrl, "Open the dashboard")}
       <div style="margin-top:12px;"><a href="${esc(d.feedbackUrl)}" style="font-family:${SANS}; font-size:13px; color:${C.chilliDark};">See all feedback</a></div>
     </td></tr>`;
   await sendBrevoEmail(to, `${brand?.name ?? "The Royal Chilli"}: your week ${d.weekLabel}`, shell(body, brand), undefined, brand);
+}
+
+// ---------- "Why did you stop coming?" (marketing: opted-in only) ----------
+
+export async function sendWinBackWhyEmail(
+  to: string,
+  d: { businessId: number; customerName: string; reasons: { label: string; url: string }[]; unsubscribeUrl: string },
+) {
+  const brand = await getEmailBrand(d.businessId);
+  const name = brand?.name ?? "The Royal Chilli";
+  const options = d.reasons.map((r) => `
+      <tr><td style="padding:5px 0;">
+        <a href="${esc(r.url)}" style="display:block; background:${C.card}; border:1px solid ${C.rule}; border-radius:8px; padding:13px 16px; font-family:${SANS}; font-size:14.5px; color:${C.ink}; text-decoration:none;">${esc(r.label)} &nbsp;<span style="color:${C.chilliDark};">&rsaquo;</span></a>
+      </td></tr>`).join("");
+  const body = `
+    <tr><td style="padding:28px 32px 6px;">
+      ${cardLabel("We miss you")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">It's been a while, ${firstName(d.customerName)}</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">
+        We haven't seen you at ${esc(name)} for a few weeks, and we'd really like to know why. Tap the one that fits best. Whatever the reason, there's a little something on us for your next visit.
+      </div>
+    </td></tr>
+    <tr><td style="padding:10px 32px 4px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${options}</table></td></tr>
+    <tr><td align="center" style="padding:10px 32px 28px;">
+      <div style="font-family:${SANS}; font-size:12.5px; color:${C.muted};">It takes one tap, and your answer goes straight to our manager.</div>
+      ${unsubscribeFooter(d.unsubscribeUrl)}
+    </td></tr>`;
+  await sendBrevoEmail(to, `We miss you at ${name}. Can we ask why?`, shell(body, brand), d.unsubscribeUrl, brand);
 }

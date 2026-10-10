@@ -17,7 +17,7 @@ type Reward = {
   id: number; name: string; description: string | null; points_cost: number;
   discount_amount: number | null; min_spend: number; eligible_tier_name: string | null;
   valid_days: number; per_customer_limit: number | null; is_birthday_reward?: boolean;
-  is_welcome_reward?: boolean; is_referral_reward?: boolean;
+  is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null;
 };
 type Birthday = { id: number; name: string; phone: string; days_away: number };
 
@@ -214,8 +214,8 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
         <div className="mt-4">
           <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Issue a Reward Code</h3>
           <div className="mt-2 flex flex-wrap gap-2">
-            {/* welcome + Bring a Friend are automatic-only (0 pts — a button would give them away) */}
-            {rewards.filter((r) => !r.is_welcome_reward && !r.is_referral_reward).map((r) => (
+            {/* welcome, Bring a Friend and come-back offers are automatic-only (0 pts — a button would give them away) */}
+            {rewards.filter((r) => !r.is_welcome_reward && !r.is_referral_reward && !r.winback_reason).map((r) => (
               <button key={r.id} onClick={() => issueReward(r.id, r.name)} disabled={c.loyalty_points < r.points_cost}
                 className="px-3 py-1.5 bg-surface-hover hover:bg-elevated disabled:opacity-40 text-foreground text-xs font-semibold rounded-lg border border-border">
                 {r.name} · {r.points_cost}pts
