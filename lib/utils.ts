@@ -9,6 +9,16 @@ export function formatCurrency(amount: number): string {
   return `£${amount.toFixed(2)}`;
 }
 
+// Staff hours always read as hours and minutes ("9h 49m"), never 9.82 —
+// the same everywhere in the Staff Hub and the attendance app.
+export function hoursMinutes(hours: number | null | undefined): string {
+  const mins = Math.round((Number(hours) || 0) * 60);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m}m`;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
+}
+
 // UK mobile numbers only: starts with 07, 11 digits total (e.g. 07123456789).
 // Strips spaces/dashes before checking, so "07123 456789" also passes.
 export function isValidUkMobile(phone: string): boolean {

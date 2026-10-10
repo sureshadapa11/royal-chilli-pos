@@ -37,12 +37,15 @@ export async function GET(req: NextRequest) {
   // even with real hours and a real rate sitting right next to it).
   const rows = (staff || []).map((s) => {
     const hoursWorked = Math.round((hoursByStaff.get(s.id) || 0) * 100) / 100;
+    // Exact minutes, so the screen shows "9h 49m" and totals add up to the minute.
+    const minutesWorked = Math.round((hoursByStaff.get(s.id) || 0) * 60);
     const payRate = Number(s.pay_rate ?? 0);
     return {
       staff_id: s.id,
       name: s.name,
       role: s.role,
       hours_worked: hoursWorked,
+      minutes_worked: minutesWorked,
       late_count: lateByStaff.get(s.id) || 0,
       pay_rate: payRate,
       labour_cost: Math.round(hoursWorked * payRate * 100) / 100,
@@ -50,8 +53,8 @@ export async function GET(req: NextRequest) {
   });
 
   const totals = rows.reduce(
-    (acc, r) => ({ hours: acc.hours + r.hours_worked, cost: acc.cost + r.labour_cost }),
-    { hours: 0, cost: 0 }
+    (acc, r) => ({ hours: acc.hours + r.hours_worked, minutes: acc.minutes + r.minutes_worked, cost: acc.cost + r.labour_cost }),
+    { hours: 0, minutes: 0, cost: 0 }
   );
 
   return NextResponse.json({ rows, totals });

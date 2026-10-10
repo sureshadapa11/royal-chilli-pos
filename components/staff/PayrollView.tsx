@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { PayrollPeriod, PayrollEntry } from "@/lib/types";
+import { hoursMinutes } from "@/lib/utils";
 
 const statusBadge: Record<string, string> = {
   pending: "bg-amber-100 text-amber-700",
@@ -170,7 +171,7 @@ export function PayrollBody() {
                       <div className="flex items-center justify-between flex-wrap gap-2">
                         <div>
                           <p className="text-foreground font-semibold">{e.staff_name}</p>
-                          <p className="text-muted-foreground text-xs">{e.hours_worked}h × £{Number(e.pay_rate).toFixed(2)} = £{Number(e.base_pay).toFixed(2)} base</p>
+                          <p className="text-muted-foreground text-xs">{hoursMinutes(e.hours_worked)} × £{Number(e.pay_rate).toFixed(2)} = £{Number(e.base_pay).toFixed(2)} base</p>
                         </div>
                         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${statusBadge[e.status]}`}>{e.status.replace("_", " ")}</span>
                       </div>
