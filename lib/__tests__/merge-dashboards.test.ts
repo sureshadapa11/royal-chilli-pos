@@ -1,4 +1,13 @@
 import { mergeDashboards, type AdminDashboard } from "@/lib/admin-dashboard";
+import type { CardDay } from "@/lib/dashboard-cards";
+
+const cardDay = (total: number, jeCommission: number, variance: number | null, sheet: boolean): CardDay => ({
+  date: "2026-10-03", sheet, tillOnly: false, total, exVat: total / 1.2, net: total / 2, moneyOut: total / 2,
+  out: { stock: 1, expenses: 2, card_fee: 0, paid_out: 0, wages: 3, commission: jeCommission },
+  variance, till: total, catering: 0,
+  platforms: { just_eat: { sales: 10, commission: jeCommission }, deliveroo: { sales: 0, commission: 0 }, uber_eats: { sales: 0, commission: 0 }, hiest: { sales: 0, commission: 0 } },
+  card: 60, cash: 40, bankIn: 30, tips: 2, hours: 8,
+});
 
 const dash = (o: { today: number; week: [number, number][]; dish: [string, number]; channel: number; staff: number; profit: number; rent: number; bank: number; submitted: number }): AdminDashboard => ({
   today: "2026-10-03",
@@ -19,12 +28,28 @@ const dash = (o: { today: number; week: [number, number][]; dish: [string, numbe
     costs: { ingredients: 5, staff: o.staff, expenses: o.rent, expenseLines: [{ key: "rent", label: "Rent", amount: o.rent }], commission: 2, cardFees: 1, paidOut: 0, total: 10 },
     profit: o.profit,
   },
+  cards: {
+    range: "this_week", today: "2026-10-03",
+    cur: { from: "2026-10-03", to: "2026-10-03", days: [cardDay(o.today, o.staff / 10, o.bank > 20 ? 5 : null, o.bank > 20)] },
+    prev: { from: "2026-09-26", to: "2026-09-26", days: [cardDay(0, 0, null, false)] },
+  },
+  hasTill: o.bank > 20,
 });
 
 describe("owner's All businesses dashboard", () => {
   const rc = dash({ today: 120, week: [[100, 80], [120, 100], [0, 50]], dish: ["Chicken Biryani", 90], channel: 200, staff: 10, profit: 70, rent: 20, bank: 30, submitted: 5 });
   const mh = dash({ today: 30, week: [[50, 20], [30, 50], [0, 10]], dish: ["Cheese Melt", 40], channel: 80, staff: 5, profit: 20, rent: 0, bank: 10, submitted: 2 });
   const m = mergeDashboards([{ name: "Royal Chilli", data: rc }, { name: "Melt House", data: mh }]);
+
+  it("adds the hand-entered cards day by day", () => {
+    const d = m.cards.cur.days[0];
+    expect(d.total).toBe(150);
+    expect(d.platforms.just_eat).toEqual({ sales: 20, commission: 1.5 });
+    expect(d.variance).toBe(5);
+    expect(d.hours).toBe(16);
+    expect(d.sheet).toBe(true);
+    expect(m.hasTill).toBe(true);
+  });
 
   it("adds up every figure", () => {
     expect(m.todayRevenue).toBe(150);

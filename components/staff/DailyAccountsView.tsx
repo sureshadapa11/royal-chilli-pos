@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { DAILY_FIELDS, type DailyFieldKey, type DailyValues } from "@/lib/daily-accounts-fields";
+import { DAILY_FIELDS, isComputedField, platformCommission, type DailyFieldKey, type DailyValues } from "@/lib/daily-accounts-fields";
 
 // Staff Hub → Daily accounts: the manager's day-end sheet (the paper "Daily
 // Accounts Report"). Till figures come pre-filled and stay editable; bank in,
@@ -14,7 +14,7 @@ const gbp = (n: number) => `£${n.toFixed(2)}`;
 const toText = (n: number | null | undefined) => (n == null ? "" : String(Number(n)));
 
 type Saved = (Partial<DailyValues> & { notes: string | null; status: "draft" | "submitted"; submitted_at: string | null }) | null;
-type Day = { saved: Saved; till: DailyValues; locked: boolean; canUnlock: boolean };
+type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; locked: boolean; canUnlock: boolean };
 
 export default function DailyAccountsView({ today, start }: { today: string; start: string }) {
   const { toast } = useToast();
@@ -79,6 +79,26 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
             <>
               <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
                 {DAILY_FIELDS.map((f) => {
+                  if (isComputedField(f.key)) {
+                    // Commission & card fees: typed platform commissions + the card fee, never typed itself.
+                    const platforms = platformCommission(values) ?? 0;
+                    const cardFee = Math.round(Number(values.card || 0) * day.cardFeeRate * 100) / 100;
+                    return (
+                      <div key={f.key} className="block">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="text-[13.5px] font-semibold">{f.label}</span>
+                          <span className="text-[11.5px] text-muted-foreground">Worked out</span>
+                        </span>
+                        <span className="mt-1 flex items-center gap-1.5">
+                          <span className="text-[13px] text-muted-foreground">£</span>
+                          <output className={`${input} block bg-[#F6F1E6]`} aria-live="polite">{(platforms + cardFee).toFixed(2)}</output>
+                        </span>
+                        <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                          Platforms {gbp(platforms)} + card fee {gbp(cardFee)} ({Math.round(day.cardFeeRate * 10000) / 100}% of card)
+                        </span>
+                      </div>
+                    );
+                  }
                   const till = day.till[f.key];
                   const differs = f.auto && till != null && values[f.key] !== "" && Number(values[f.key]) !== Number(till);
                   return (

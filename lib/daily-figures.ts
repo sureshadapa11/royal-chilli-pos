@@ -14,7 +14,7 @@ import { savedDays, type DailyRow } from "@/lib/daily-accounts";
 //   • Money out = stock received + expenses (VAT claimed back taken off) + card fee
 //                 + cash paid out of the till + staff wages + platform commission
 //   • Net total = Ex-VAT − Money out (the profit)
-//   • Variance  = opening balance − closing balance
+//   • Variance  = closing balance − opening balance
 // Figures come from the Daily accounts sheet. A day with no Z report or card
 // figure on its sheet uses the till's own payments, so it never counts as £0.
 // Supplier payments aren't counted: they pay for the stock deliveries already in.
@@ -70,7 +70,7 @@ export function dayFigures(date: string, i: DayInputs, vatRate: number, cardFeeR
   const moneyOut = r2(Object.values(out).reduce((s, n) => s + n, 0));
   return {
     date, total_sales: total, ex_vat: exVat, money_out: moneyOut, net_total: r2(exVat - moneyOut),
-    variance: i.opening != null && i.closing != null ? r2(i.opening - i.closing) : null,
+    variance: i.opening != null && i.closing != null ? r2(i.closing - i.opening) : null,
     sales, out, till_fallback: tillFallback,
   };
 }

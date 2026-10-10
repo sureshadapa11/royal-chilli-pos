@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DAILY_FIELDS } from "@/lib/daily-accounts-fields";
+import { SHEET_FIELDS, type DailyFieldKey } from "@/lib/daily-accounts-fields";
 import type { DailyRow } from "@/lib/daily-accounts";
 import type { DayFigures, FiguresTotal } from "@/lib/daily-figures";
 
@@ -26,7 +26,7 @@ const LEAD: { key: "total_sales" | "ex_vat" | "money_out" | "net_total"; label: 
 
 const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · Ex-VAT = Total sales ÷ 1.2 · "
   + "Money out = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
-  + "Variance = opening balance − closing balance · * no Z report on the sheet yet, the till's figure is used";
+  + "Commission & card fees = platform commissions + card fee · Variance = closing balance − opening balance · * no Z report on the sheet yet, the till's figure is used";
 
 const moneyOutTitle = (f: DayFigures) =>
   `Stock received £${f.out.stock.toFixed(2)}\nExpenses £${f.out.expenses.toFixed(2)}\nCard fee £${f.out.card_fee.toFixed(2)}\n`
@@ -44,6 +44,11 @@ function daysOf(from: string, to: string): string[] {
   }
   return out;
 }
+
+// "Commission & card fees" is worked out (platform commissions + card fee);
+// every other column is the saved figure.
+const cellOf = (key: DailyFieldKey, r: DailyRow | undefined, fig: DayFigures | undefined) =>
+  key === "commission" ? (fig && (fig.out.commission || fig.out.card_fee) ? fig.out.commission + fig.out.card_fee : r?.commission) : r?.[key];
 
 export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay }: {
   startMonth: string; businessName: string; onOpenDay: (date: string) => void;
@@ -77,15 +82,15 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
   function printSheet() {
     if (!data) return;
     const esc = (v: string) => v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    const head = `<tr><th class="l">Date</th>${LEAD.map((c) => `<th class="calc">${c.label}</th>`).join("")}${DAILY_FIELDS.map((f) => `<th>${esc(f.label)}</th>`).join("")}<th class="calc">Variance</th><th class="l notes">Notes</th></tr>`;
+    const head = `<tr><th class="l">Date</th>${LEAD.map((c) => `<th class="calc">${c.label}</th>`).join("")}${SHEET_FIELDS.map((f) => `<th>${esc(f.label)}</th>`).join("")}<th class="calc">Variance</th><th class="l notes">Notes</th></tr>`;
     const body = days.map((d) => {
       const r = byDate.get(d);
       const fig = figuresOf.get(d);
       const lead = LEAD.map((c) => `<td class="calc">${money(fig?.[c.key])}${c.key === "total_sales" && fig?.till_fallback ? "*" : ""}</td>`).join("");
-      return `<tr${r?.status === "draft" ? ' class="draft"' : ""}><td class="l">${dayName(d)}</td>${lead}${DAILY_FIELDS.map((f) => `<td>${money(r?.[f.key])}</td>`).join("")}<td class="calc">${money(fig?.variance)}</td><td class="l notes">${esc(r?.notes ?? "")}</td></tr>`;
+      return `<tr${r?.status === "draft" ? ' class="draft"' : ""}><td class="l">${dayName(d)}</td>${lead}${SHEET_FIELDS.map((f) => `<td>${money(cellOf(f.key, r, fig))}</td>`).join("")}<td class="calc">${money(fig?.variance)}</td><td class="l notes">${esc(r?.notes ?? "")}</td></tr>`;
     }).join("");
     const ft = data.figuresTotal;
-    const total = `<tr class="total"><td class="l">MONTH TOTAL</td>${LEAD.map((c) => `<td>${money(ft[c.key])}</td>`).join("")}${DAILY_FIELDS.map((f) => `<td>${money(data.totals[f.key])}</td>`).join("")}<td>${money(ft.variance)}</td><td></td></tr>`;
+    const total = `<tr class="total"><td class="l">MONTH TOTAL</td>${LEAD.map((c) => `<td>${money(ft[c.key])}</td>`).join("")}${SHEET_FIELDS.map((f) => `<td>${money(f.key === "commission" ? ft.out.commission + ft.out.card_fee : data.totals[f.key])}</td>`).join("")}<td>${money(ft.variance)}</td><td></td></tr>`;
     const title = `${esc(businessName)} — Daily Accounts Report`;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Daily accounts ${esc(businessName)} ${data.month}</title><style>
       @page { size: A3 landscape; margin: 8mm; }
@@ -142,7 +147,7 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
               <tr className="bg-[#1F4D3A] text-white">
                 <th className="border border-[#1F4D3A] px-1.5 py-1.5 text-left font-semibold">Date</th>
                 {LEAD.map((c) => <th key={c.key} className={calcHead}>{c.label}</th>)}
-                {DAILY_FIELDS.map((f) => <th key={f.key} className="border border-[#1F4D3A] px-1.5 py-1.5 font-semibold">{f.label}</th>)}
+                {SHEET_FIELDS.map((f) => <th key={f.key} className="border border-[#1F4D3A] px-1.5 py-1.5 font-semibold">{f.label}</th>)}
                 <th className={calcHead}>Variance</th>
                 <th className="border border-[#1F4D3A] px-1.5 py-1.5 text-left font-semibold">Notes</th>
               </tr>
@@ -163,7 +168,7 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
                         {money(fig?.[c.key])}{c.key === "total_sales" && fig?.till_fallback && <span className="text-amber-700">*</span>}
                       </td>
                     ))}
-                    {DAILY_FIELDS.map((f) => <td key={f.key} className={cell}>{money(r?.[f.key])}</td>)}
+                    {SHEET_FIELDS.map((f) => <td key={f.key} className={cell}>{money(cellOf(f.key, r, fig))}</td>)}
                     <td className={calcCell}>{money(fig?.variance)}</td>
                     <td className="max-w-[220px] truncate border border-[#D8CFBD] px-1.5 py-1 text-left" title={r?.notes ?? ""}>{r?.notes ?? ""}</td>
                   </tr>
@@ -172,7 +177,7 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
               <tr className="bg-[#EDE7DA] font-semibold">
                 <td className="border border-[#D8CFBD] px-1.5 py-1.5 text-left">MONTH TOTAL</td>
                 {LEAD.map((c) => <td key={c.key} className={`${cell} ${c.key === "net_total" && data.figuresTotal.net_total < 0 ? "text-[#C0392B]" : ""}`}>{money(data.figuresTotal[c.key])}</td>)}
-                {DAILY_FIELDS.map((f) => <td key={f.key} className={cell}>{money(data.totals[f.key])}</td>)}
+                {SHEET_FIELDS.map((f) => <td key={f.key} className={cell}>{money(f.key === "commission" ? data.figuresTotal.out.commission + data.figuresTotal.out.card_fee : data.totals[f.key])}</td>)}
                 <td className={cell}>{money(data.figuresTotal.variance)}</td>
                 <td className="border border-[#D8CFBD]" />
               </tr>
