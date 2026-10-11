@@ -26,7 +26,7 @@ export const MONEY_OUT_PARTS: { key: keyof MoneyOut; label: string }[] = [
   { key: "stock", label: "Stock received" },
   { key: "expenses", label: "Expenses" },
   { key: "card_fee", label: "Card fee" },
-  { key: "paid_out", label: "Till paid out" },
+  { key: "paid_out", label: "Cash paid out" },
   { key: "wages", label: "Staff wages" },
   { key: "commission", label: "Commission" },
 ];
@@ -128,7 +128,7 @@ async function tillByDay(businessId: number, from: string, to: string) {
   return { sales, card };
 }
 
-/** Stock, expenses (ex reclaimable VAT) and till paid-outs per day. */
+/** Stock, expenses (ex reclaimable VAT) and cash paid out (till + Cash In/Out link) per day. */
 async function costsByDay(businessId: number, from: string, to: string, vatRate: number) {
   const db = bizDb(businessId);
   const { start, end } = tradingRangeUtc(from, to);
@@ -158,6 +158,11 @@ async function costsByDay(businessId: number, from: string, to: string, vatRate:
     add(spent, e.expense_date, e.vat_applicable ? amount - extractVat(amount, vatRate) : amount);
   }
   for (const p of paidOuts) add(paidOut, shiftDay.get(p.work_period_id)!, Number(p.amount));
+  // Cash taken out of the drawer through the Cash In / Out link (129).
+  const cashOut = await allRows<{ amount: number; movement_date: string }>((a, b) =>
+    db.from("cash_movements").select("amount, movement_date").eq("direction", "out")
+      .gte("movement_date", from).lte("movement_date", to).order("id").range(a, b));
+  for (const c of cashOut) add(paidOut, c.movement_date, Number(c.amount));
   return { stock, spent, paidOut };
 }
 

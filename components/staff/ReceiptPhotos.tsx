@@ -8,7 +8,7 @@ import { useRef, useState } from "react";
 // one photo. (No glare check: screenshots of bank payments are mostly white.)
 
 export type Receipt = { id: number; preview: string };
-type Entity = "expense" | "supplier_payment" | "purchase_order";
+type Entity = "expense" | "supplier_payment" | "purchase_order" | "cash_movement" | "daily_account";
 
 const MAX_SIDE = 1600; // stored size: plenty to read a receipt, small to keep
 const MIN_SIDE = 600;  // smaller than this can't show a receipt's small print
@@ -77,11 +77,15 @@ function toJpeg(img: HTMLImageElement): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't read the photo"))), "image/jpeg", 0.85));
 }
 
-export default function ReceiptPhotos({ entity, value, onChange, label = "Receipt / invoice photo" }: {
+export default function ReceiptPhotos({ entity, value, onChange, label = "Receipt / invoice photo", uploadUrl = "/api/receipts", extraFields, required = true }: {
   entity: Entity;
   value: Receipt[];
   onChange: (next: Receipt[]) => void;
   label?: string;
+  /** The staff links upload through their own route (with the staff PIN). */
+  uploadUrl?: string;
+  extraFields?: Record<string, string>;
+  required?: boolean;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -105,7 +109,8 @@ export default function ReceiptPhotos({ entity, value, onChange, label = "Receip
       form.append("file", jpeg, "receipt.jpg");
       form.append("entity", entity);
       form.append("sharpness", String(Math.round(q.sharpness)));
-      const res = await fetch("/api/receipts", { method: "POST", body: form });
+      for (const [k, v] of Object.entries(extraFields ?? {})) form.append(k, v);
+      const res = await fetch(uploadUrl, { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { setProblem(data.error || "Couldn't add the photo. Please try again."); return; }
       onChange([...value, { id: data.receipt.id, preview: URL.createObjectURL(jpeg) }]);
@@ -121,7 +126,7 @@ export default function ReceiptPhotos({ entity, value, onChange, label = "Receip
   return (
     <div className="rounded-lg border border-dashed border-border bg-surface-hover/40 p-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-foreground text-sm font-semibold">{label} <span className="text-red-600">*</span></span>
+        <span className="text-foreground text-sm font-semibold">{label} {required && <span className="text-red-600">*</span>}</span>
         <button type="button" disabled={!!busy} onClick={() => cameraRef.current?.click()} className="px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-semibold disabled:opacity-50">📷 Take photo</button>
         <button type="button" disabled={!!busy} onClick={() => fileRef.current?.click()} className="px-3 py-1.5 rounded-lg border border-border text-foreground text-xs font-semibold disabled:opacity-50">Choose file</button>
         {busy && <span className="text-muted-foreground text-xs">{busy}</span>}

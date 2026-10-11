@@ -22,6 +22,8 @@ export const BUSINESS_TABLES = new Set([
   "audit_logs", "loyalty_transactions", "platform_sales", "staff_messages", "attendance_corrections",
   // 098: day-end accounts sheet
   "daily_accounts",
+  // 129: cash in/out from the staff links
+  "cash_movements",
   // 126: guest feedback ("How was your meal?")
   "guest_feedback",
   // 127: "why did you stop coming?" emails

@@ -19,8 +19,8 @@ export type MoneyOutRow = {
   photos: { id: number; filePath: string; fileName: string }[];
 };
 
-const TYPE_LABEL: Record<ReceiptEntity, string> = { expense: "Expense", supplier_payment: "Supplier payment", purchase_order: "Stock delivery" };
-const SHORT: Record<ReceiptEntity, string> = { expense: "expense", supplier_payment: "supplier-payment", purchase_order: "delivery" };
+const TYPE_LABEL: Record<ReceiptEntity, string> = { expense: "Expense", supplier_payment: "Supplier payment", purchase_order: "Stock delivery", cash_movement: "Cash paid out", daily_account: "Z report" };
+const SHORT: Record<ReceiptEntity, string> = { expense: "expense", supplier_payment: "supplier-payment", purchase_order: "delivery", cash_movement: "cash-out", daily_account: "z-report" };
 
 export async function moneyOutForMonth(db: BizDb, month: string): Promise<MoneyOutRow[]> {
   const [y, m] = month.split("-").map(Number);

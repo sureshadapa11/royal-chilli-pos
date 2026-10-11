@@ -7,6 +7,7 @@ import SettingsView from "@/components/staff/SettingsView";
 import BusinessSetupView from "@/components/staff/BusinessSetupView";
 import BusinessesView from "@/components/staff/BusinessesView";
 import TillDeviceCard from "@/components/staff/TillDeviceCard";
+import StaffLinksCard from "@/components/staff/StaffLinksCard";
 import { isManagerRole } from "@/lib/staff-pin";
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
@@ -65,6 +66,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
           {tab === "general" && (
             <>
               {(session.owner || isManagerRole(session.role)) && <TillDeviceCard />}
+              {(session.owner || isManagerRole(session.role)) && <StaffLinksCard />}
               <SettingsView section="general" canEditPermissions={false} />
             </>
           )}
