@@ -104,7 +104,7 @@ export async function copyRewardsScheme(fromId: number, toId: number): Promise<R
   }
 
   const { data: rewards } = await supabase.from("loyalty_rewards")
-    .select("name, description, points_cost, active, discount_amount, min_spend, eligible_tier_id, valid_days, per_customer_limit, start_date, end_date, is_birthday_reward, discount_pct, max_discount, order_types, is_welcome_reward, is_referral_reward, winback_reason")
+    .select("name, description, points_cost, active, discount_amount, min_spend, eligible_tier_id, valid_days, per_customer_limit, start_date, end_date, is_birthday_reward, discount_pct, max_discount, order_types, is_welcome_reward, is_referral_reward, winback_reason, is_apology_reward")
     .eq("business_id", fromId).order("id");
   const rewardRows = (rewards ?? []).map((r) => ({
     ...r,

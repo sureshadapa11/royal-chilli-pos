@@ -6,13 +6,14 @@ import { normalizeUkMobile } from "@/lib/phone";
 import { findByPhone } from "@/lib/customer-match";
 import { mergeCustomers } from "@/lib/customer-merge";
 import { CUSTOMER_SAFE_FIELDS } from "@/lib/customers";
+import { birthdayToDate } from "@/lib/birthday";
 
 export async function PATCH(req: NextRequest) {
   try {
     const session = await getCustomerSessionFromRequest(req);
     if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    const { name, phone, marketing_consent } = await req.json();
+    const { name, phone, marketing_consent, birthday } = await req.json();
     const updates: Record<string, unknown> = {};
 
     if (name !== undefined) {
@@ -39,6 +40,14 @@ export async function PATCH(req: NextRequest) {
         if (!merged.ok) return NextResponse.json({ error: merged.error }, { status: 500 });
       }
       updates.phone = cleanPhone;
+    }
+    if (birthday !== undefined) {
+      // Set once by the customer (so it can't be moved for another treat); staff can change it.
+      const dob = birthdayToDate(birthday?.day, birthday?.month);
+      if (!dob) return NextResponse.json({ error: "Please choose a day and month" }, { status: 400 });
+      const { data: me } = await supabase.from("customers").select("date_of_birth").eq("id", session.id).single();
+      if (me?.date_of_birth) return NextResponse.json({ error: "Your birthday is already saved. Call us if it needs changing." }, { status: 409 });
+      updates.date_of_birth = dob;
     }
     if (marketing_consent !== undefined) {
       updates.marketing_consent = !!marketing_consent;

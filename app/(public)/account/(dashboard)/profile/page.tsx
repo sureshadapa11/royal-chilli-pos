@@ -8,7 +8,7 @@ export default async function AccountProfilePage() {
 
   const { data: customer } = await supabase
     .from("customers")
-    .select("name, phone, email, marketing_consent")
+    .select("name, phone, email, marketing_consent, date_of_birth")
     .eq("id", session.id)
     .maybeSingle();
 
@@ -28,6 +28,7 @@ export default async function AccountProfilePage() {
       initialPhone={customer?.phone || ""}
       email={customer?.email || session.email}
       initialSubscribed={customer?.marketing_consent ?? true}
+      initialBirthday={customer?.date_of_birth ?? null}
       initialAddresses={addresses || []}
     />
   );

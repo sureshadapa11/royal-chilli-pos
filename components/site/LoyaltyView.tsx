@@ -13,6 +13,7 @@ type Redemption = {
   issued_at: string;
   expires_at: string;
   valid_from?: string | null;
+  kind?: "birthday" | "apology" | "comeback" | null;
   reward: { name: string; description?: string | null; discount_amount: number | null; discount_pct?: number | null; max_discount?: number | null; order_types?: string[] | null } | null;
 };
 type ReferralVoucher = { id: number; status: "locked" | "issued"; code: string | null; expires_at: string | null; friend: string };
@@ -57,15 +58,16 @@ function WelcomeVoucher({ voucher }: { voucher: Redemption }) {
   );
 }
 
-// A come-back offer from the "why did you stop coming?" email: shown on the
+// A gift — birthday treat, apology offer or come-back offer: shown on the
 // Overview with its code, like the welcome gift — no cancel button.
+const GIFT_HEADING = { birthday: "Birthday treat 🎂", apology: "With our apologies", comeback: "Welcome back gift" } as const;
 function ComeBackVoucher({ voucher }: { voucher: Redemption }) {
   const r = voucher.reward;
-  const title = (r?.name ?? "Come-back offer").replace(/^Come-back:\s*/i, "");
+  const title = (r?.name ?? "Your gift").replace(/^(Come-back|Birthday|Apology):\s*/i, "");
   const where = r?.order_types?.length === 1 ? (r.order_types[0] === "delivery" ? " on a delivery order" : r.order_types[0] === "dine_in" ? " when you dine in" : "") : "";
   return (
     <div className="mt-3.5 rounded-2xl border-2 border-dashed border-primary bg-surface px-4 py-5 text-center shadow-sm">
-      <div className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">Welcome back gift</div>
+      <div className="text-xs font-semibold uppercase tracking-[0.1em] text-primary">{GIFT_HEADING[voucher.kind ?? "comeback"]}</div>
       <div className="mt-1 font-[family-name:var(--font-playfair)] text-xl first-letter:uppercase">{title}</div>
       {r?.description && <div className="text-xs text-muted-foreground">{r.description}</div>}
       <div className="mx-auto my-3 rounded-2xl bg-primary px-2 py-4 font-[family-name:var(--font-playfair)] text-2xl tracking-[3px] text-primary-foreground sm:text-3xl sm:tracking-[6px]">

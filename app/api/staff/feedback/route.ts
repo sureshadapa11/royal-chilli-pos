@@ -10,7 +10,7 @@ import { winBackStats } from "@/lib/winback";
 //   every 1–3★ still waiting for a call back, however old.
 // PATCH { id, note } — mark a 1–3★ as called back / handled, with a note.
 
-const COLUMNS = "id, created_at, rating, liked, improve, comment, name, phone, email, contact_ok, customer_id, source, table_label, handled_at, handled_note";
+const COLUMNS = "id, created_at, rating, liked, improve, comment, name, phone, email, contact_ok, customer_id, source, table_label, handled_at, handled_note, apology_redemption_id";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);

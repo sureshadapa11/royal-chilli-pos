@@ -29,11 +29,13 @@ export async function GET(req: NextRequest) {
     .eq("is_welcome_reward", false)
     .eq("is_referral_reward", false)
     .is("winback_reason", null)
+    .eq("is_birthday_reward", false)
+    .eq("is_apology_reward", false)
     .order("points_cost", { ascending: true });
 
   const { data: issued } = await supabase
     .from("loyalty_redemptions")
-    .select("id, code, status, points_spent, issued_at, expires_at, valid_from, referred_customer_id, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, is_welcome_reward, is_referral_reward, winback_reason)")
+    .select("id, code, status, points_spent, issued_at, expires_at, valid_from, referred_customer_id, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, is_welcome_reward, is_referral_reward, winback_reason, is_birthday_reward, is_apology_reward)")
     .eq("customer_id", session.id)
     .in("status", ["issued", "locked"])
     .order("issued_at", { ascending: false });
@@ -42,12 +44,16 @@ export async function GET(req: NextRequest) {
   const expired = (issued ?? []).filter((r) => new Date(r.expires_at) < now);
   for (const r of expired) await supabase.from("loyalty_redemptions").update({ status: "expired" }).eq("id", r.id);
   const live = (issued ?? []).filter((r) => new Date(r.expires_at) >= now);
-  type Flags = { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null } | null;
+  type Flags = { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null; is_birthday_reward?: boolean; is_apology_reward?: boolean } | null;
   const flags = (r: (typeof live)[number]) => (r.reward as unknown as Flags) ?? {};
   const isWelcome = (r: (typeof live)[number]) => !!flags(r).is_welcome_reward;
   const isReferral = (r: (typeof live)[number]) => !!flags(r).is_referral_reward;
-  // Come-back offers ("why did you stop coming?") sit beside the points voucher, never instead of it.
-  const isComeBack = (r: (typeof live)[number]) => !!flags(r).winback_reason;
+  // Gifts — come-back, birthday and apology — sit beside the points voucher, never instead of it.
+  const giftKind = (r: (typeof live)[number]) => {
+    const f = flags(r);
+    return f.is_birthday_reward ? "birthday" : f.is_apology_reward ? "apology" : f.winback_reason ? "comeback" : null;
+  };
+  const isComeBack = (r: (typeof live)[number]) => giftKind(r) !== null;
 
   // Bring a Friend vouchers: a locked one hides its code (it can't be used
   // yet) and shows the friend's first name instead.
@@ -62,7 +68,7 @@ export async function GET(req: NextRequest) {
     points: customer?.loyalty_points ?? 0,
     rewards: rewards || [],
     activeRedemption: live.find((r) => !isWelcome(r) && !isReferral(r) && !isComeBack(r) && r.status === "issued") ?? null,
-    comeBackVouchers: live.filter((r) => isComeBack(r) && r.status === "issued"),
+    comeBackVouchers: live.filter((r) => isComeBack(r) && r.status === "issued").map((r) => ({ ...r, kind: giftKind(r) })),
     welcomeVoucher: live.find((r) => isWelcome(r) && r.status === "issued") ?? null,
     referralCode: customer?.referral_code ?? null,
     shareMessage: typeof shareSetting?.value === "string" ? shareSetting.value : null,

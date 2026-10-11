@@ -840,6 +840,7 @@ export type WeeklyReportData = {
   unhappy: { when: string; rating: number; who: string; comment: string | null; handled: boolean }[];
   openToFollowUp: number;
   winBack: { sent: number; answered: number; reasons: string[] };
+  birthdays: string[];               // this week's birthdays, e.g. "Priya · Fri 17 Oct"
   dashboardUrl: string;
   feedbackUrl: string;
 };
@@ -892,6 +893,12 @@ export async function sendWeeklyReportEmail(to: string, d: WeeklyReportData) {
       ${cardLabel("Come-back emails")}
       <div style="font-family:${SANS}; font-size:13.5px; color:${C.ink}; margin-top:6px; line-height:1.7;">
         ${d.winBack.sent ? `${d.winBack.sent} sent · ${d.winBack.answered} answered${d.winBack.reasons.length ? ` · why: ${esc(d.winBack.reasons.join(", "))}` : ""}` : "None sent last week."}
+      </div>
+    </td></tr>
+    <tr><td style="padding:16px 26px 4px;">
+      ${cardLabel("Birthdays this week")}
+      <div style="font-family:${SANS}; font-size:13.5px; color:${C.ink}; margin-top:6px; line-height:1.7;">
+        ${d.birthdays.length ? esc(d.birthdays.join(" · ")) + `<div style="color:${C.muted};">Their free dessert code is already in their account.</div>` : "No members' birthdays this week."}
       </div>
     </td></tr>
     <tr><td align="center" style="padding:20px 26px 28px;">
@@ -951,4 +958,56 @@ export async function sendComeBackOfferEmail(
     </td></tr>
     <tr><td align="center" style="padding:16px 32px 30px;">${button(d.accountUrl, "See it in my account")}</td></tr>`;
   await sendBrevoEmail(to, `Your welcome back gift from ${name}: ${d.code}`, shell(body, brand), undefined, brand);
+}
+
+
+// ---------- Gift emails: birthday treat and apology offer ----------
+
+function giftEmailBody(d: { label: string; heading: string; intro: string; code: string; expiresAt: string; accountUrl: string; unsubscribeUrl?: string }) {
+  return `
+    <tr><td style="padding:28px 32px 8px; text-align:center;">
+      ${cardLabel(d.label)}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:6px;">${d.heading}</div>
+      <div style="font-family:${SANS}; font-size:14px; color:${C.muted}; margin-top:8px; line-height:1.6;">${d.intro}</div>
+    </td></tr>
+    <tr><td align="center" style="padding:14px 32px 6px;">
+      <div style="display:inline-block; background:${C.chilli}; color:#fff; font-family:${SERIF}; font-size:28px; letter-spacing:6px; padding:16px 26px; border-radius:12px;">${esc(d.code)}</div>
+      <div style="font-family:${SANS}; font-size:13px; color:${C.muted}; margin-top:12px; line-height:1.6;">
+        Show this code when you dine in. One use, valid until ${esc(ukDate(d.expiresAt))}.<br/>It's also saved in your account under Rewards.
+      </div>
+    </td></tr>
+    <tr><td align="center" style="padding:16px 32px 30px;">
+      ${button(d.accountUrl, "See it in my account")}
+      ${d.unsubscribeUrl ? unsubscribeFooter(d.unsubscribeUrl) : ""}
+    </td></tr>`;
+}
+
+/** Birthday treat — marketing, so only to members who said yes to offers. */
+export async function sendBirthdayEmail(
+  to: string,
+  d: { businessId: number; customerName: string; birthday: string; offer: string; code: string; expiresAt: string; accountUrl: string; unsubscribeUrl: string },
+) {
+  const brand = await getEmailBrand(d.businessId);
+  const name = brand?.name ?? "The Royal Chilli";
+  const body = giftEmailBody({
+    label: "Birthday treat", heading: `Happy birthday, ${firstName(d.customerName)}! 🎂`,
+    intro: `Your birthday is coming up on ${esc(d.birthday)}, so ${esc(d.offer)} is on us. Come and celebrate with us any time in the next two weeks.`,
+    code: d.code, expiresAt: d.expiresAt, accountUrl: d.accountUrl, unsubscribeUrl: d.unsubscribeUrl,
+  });
+  await sendBrevoEmail(to, `Happy birthday from ${name}! A treat on us 🎂`, shell(body, brand), d.unsubscribeUrl, brand);
+}
+
+/** Apology offer — to a guest who left feedback; a reply to them, not marketing. */
+export async function sendApologyEmail(
+  to: string,
+  d: { businessId: number; customerName: string; offer: string; code: string; expiresAt: string; accountUrl: string },
+) {
+  const brand = await getEmailBrand(d.businessId);
+  const name = brand?.name ?? "The Royal Chilli";
+  const body = giftEmailBody({
+    label: "With our apologies", heading: `We're sorry, ${firstName(d.customerName)}`,
+    intro: `Thank you for telling us about your visit. It wasn't the experience we want for anyone, and we'd love the chance to make it right, so ${esc(d.offer)} is on us next time.`,
+    code: d.code, expiresAt: d.expiresAt, accountUrl: d.accountUrl,
+  });
+  await sendBrevoEmail(to, `We're sorry, and thank you for telling us (${name})`, shell(body, brand), undefined, brand);
 }

@@ -3,10 +3,12 @@ import { websiteBusinessId } from "@/lib/business";
 import { signupCustomer } from "@/lib/customers";
 import { createCustomerSession, getCustomerSessionCookieOptions } from "@/lib/customer-auth";
 import { isValidEmail } from "@/lib/utils";
+import supabase from "@/lib/supabase";
+import { birthdayToDate } from "@/lib/birthday";
 
 export async function POST(req: NextRequest) {
   try {
-    const { name, email, phone, password, marketingConsent, referralCode } = await req.json();
+    const { name, email, phone, password, marketingConsent, referralCode, birthday } = await req.json();
 
     if (!name?.trim() || !email?.trim() || !password) {
       return NextResponse.json({ error: "Name, email and password are required" }, { status: 400 });
@@ -22,6 +24,9 @@ export async function POST(req: NextRequest) {
     if (!result.ok) {
       return NextResponse.json({ error: result.error }, { status: 409 });
     }
+    // Optional birthday (day + month) for the birthday treat — never replaces one already on file.
+    const dob = birthdayToDate(birthday?.day, birthday?.month);
+    if (dob) await supabase.from("customers").update({ date_of_birth: dob }).eq("id", result.customer.id).is("date_of_birth", null);
 
     const token = await createCustomerSession({ id: result.customer.id, name: result.customer.name, email: result.customer.email! });
     const { name: cookieName, options } = getCustomerSessionCookieOptions();

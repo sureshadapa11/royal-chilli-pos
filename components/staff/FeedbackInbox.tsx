@@ -46,7 +46,18 @@ function Who({ row }: { row: FeedbackRow }) {
 function FollowUp({ row, onDone }: { row: FeedbackRow; onDone: () => void }) {
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
   const { toast } = useToast();
+  // One click: a free-dessert apology code for this guest, emailed if they can be contacted.
+  async function apologise() {
+    setSending(true);
+    const res = await fetch("/api/staff/feedback/apology", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id }) });
+    setSending(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return toast({ title: "Not sent", description: d.error ?? "Please try again", variant: "destructive" });
+    toast({ title: `Apology offer ${d.code} given`, description: d.emailed ? `Emailed to ${d.customerName ?? "the guest"}. It's also in their account.` : "They have no email we can use. Tell them the code when you call; it's also in their account." });
+    onDone();
+  }
   async function done() {
     setBusy(true);
     const res = await fetch("/api/staff/feedback", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: row.id, note }) });
@@ -67,6 +78,13 @@ function FollowUp({ row, onDone }: { row: FeedbackRow; onDone: () => void }) {
           {busy ? "Saving…" : "Mark as handled"}
         </button>
       </div>
+      {row.customer_id ? (
+        <button onClick={apologise} disabled={sending} className="mt-2 rounded-lg border border-red-300 px-3 py-1.5 text-[13px] font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">
+          {sending ? "Sending…" : "🍮 Send apology offer (free dessert)"}
+        </button>
+      ) : (
+        <p className="mt-2 text-[12px] text-muted-foreground">Not a Rewards Club member, so no apology offer can be sent. Call or email them if they left details.</p>
+      )}
     </div>
   );
 }
@@ -224,6 +242,7 @@ export default function FeedbackInbox({ businessName }: { businessName: string }
                     <Topics row={r} />
                     {r.comment && <p className="mt-2 whitespace-pre-wrap text-[14px]">&ldquo;{r.comment}&rdquo;</p>}
                     {r.handled_at && <p className="mt-2 text-[12.5px] text-emerald-700">✓ Handled {when(r.handled_at)}{r.handled_note ? `: ${r.handled_note}` : ""}</p>}
+                    {r.apology_redemption_id && !r.handled_note?.startsWith("Apology offer sent") && <p className="mt-1 text-[12.5px] text-emerald-700">🍮 Apology offer sent</p>}
                   </div>
                 ))}
               </div>
