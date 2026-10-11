@@ -20,7 +20,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!who.ok) return NextResponse.json({ error: who.error }, { status: who.status });
 
   const cat = cashCategory(String(body?.category ?? ""));
-  if (!cat) return NextResponse.json({ error: "Choose what it was for." }, { status: 400 });
+  if (!cat || cat.hidden) return NextResponse.json({ error: "Choose what it was for." }, { status: 400 });
   const amount = money(body?.amount);
   if (amount === "bad" || amount == null || amount <= 0) return NextResponse.json({ error: "Enter the amount.", field: "amount" }, { status: 400 });
   const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";

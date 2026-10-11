@@ -9,12 +9,13 @@ import { addDays } from "@/lib/admin-dashboard";
 // POST — the Day End link. One per trading day: once a day is submitted
 // (here or in the Staff Hub) it's locked, and only a manager can change it in
 // Staff Hub → Daily accounts. Nothing is read back: the reply is just "saved".
-// The opening cash is yesterday's closing (worked out here, never shown).
+// Opening, bank in and pending are typed (agreed 2026-10-11); if the opening
+// is left blank it's yesterday's counted closing.
 const FIELDS = [
   "z_report", "card", "cash", "tips",
   "just_eat", "just_eat_commission", "deliveroo", "deliveroo_commission",
   "uber_eats", "uber_eats_commission", "hiest", "hiest_commission",
-  "catering_paid", "catering_pending", "closing_balance",
+  "catering_paid", "catering_pending", "opening_balance", "closing_balance", "bank_in", "pending",
 ] as const;
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // so two people sending the same day at once can't both get through.
   const row = {
     trading_date: date, ...values,
-    opening_balance: before?.closing_balance ?? null,
+    opening_balance: values.opening_balance ?? before?.closing_balance ?? null,
     notes, status: "submitted", submitted_by: who.staff.id, submitted_at: now, submitted_via: "link",
     updated_by: who.staff.id, updated_at: now,
   };

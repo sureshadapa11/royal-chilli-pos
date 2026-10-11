@@ -8,6 +8,7 @@ import { tradingDayStr } from "@/lib/london-date";
 import { r2 } from "@/lib/finance";
 import { sendDayEndReportEmail } from "@/lib/email";
 import { cashCategoryLabel } from "@/lib/cash-categories";
+import { cashCheck } from "@/lib/daily-accounts-fields";
 
 // Every morning: yesterday's Day End and Cash In / Out (from the staff links,
 // lib/staff-links.ts), emailed to whoever is set in the business's
@@ -27,7 +28,7 @@ export type DayEndReport = {
     total_sales: number; net_total: number;
   } | null;
   notes: string | null;
-  drawer: { opening: number | null; cashSales: number; moneyIn: number; moneyOut: number; expected: number | null; counted: number | null; variance: number | null };
+  drawer: { opening: number | null; cashSales: number; moneyIn: number; moneyOut: number; bankIn: number; expected: number | null; counted: number | null; variance: number | null };
   cash: CashLine[];
   missingDays: string[];
 };
@@ -35,9 +36,8 @@ export type DayEndReport = {
 const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
 
 /** Expected cash in the drawer at close, and the difference to what was counted (pure). */
-export function drawerCheck(opening: number | null, cashSales: number, moneyIn: number, moneyOut: number, counted: number | null) {
-  const expected = opening == null ? null : r2(opening + cashSales + moneyIn - moneyOut);
-  return { expected, variance: expected == null || counted == null ? null : r2(counted - expected) };
+export function drawerCheck(opening: number | null, cashSales: number, moneyIn: number, moneyOut: number, counted: number | null, bankIn = 0) {
+  return cashCheck({ opening, cash: cashSales, moneyIn, moneyOut, bankIn, counted });
 }
 
 export async function buildDayEndReport(businessId: number, business: string, date: string): Promise<DayEndReport> {
@@ -77,7 +77,11 @@ export async function buildDayEndReport(businessId: number, business: string, da
       total_sales: day?.total_sales ?? 0, net_total: day?.net_total ?? 0,
     } : null,
     notes: row?.notes ?? null,
-    drawer: { opening, cashSales, moneyIn, moneyOut, counted, ...drawerCheck(opening, cashSales, moneyIn, moneyOut, counted) },
+    // Same sum as the screens (daily-figures): money out includes the till's Cash Out.
+    drawer: {
+      opening, cashSales, moneyIn, moneyOut: r2(moneyOut + (day?.out.paid_out ?? 0)), bankIn: n(row?.bank_in) ?? 0, counted,
+      expected: day?.expected ?? null, variance: day?.variance ?? null,
+    },
     cash,
     missingDays,
   };

@@ -3,6 +3,7 @@ import { dayFigures, totalFigures, daysBetween, type DayInputs } from "@/lib/dai
 const blank: DayInputs = {
   z_report: 0, card: 0, commission: 0, catering_paid: 0, just_eat: 0, deliveroo: 0, uber_eats: 0, hiest: 0,
   opening: null, closing: null, stock: 0, expenses: 0, paid_out: 0, wages: 0,
+  cash: 0, bank_in: 0, cash_in: 0, cash_out: 0,
 };
 
 describe("daily figures", () => {
@@ -21,9 +22,22 @@ describe("daily figures", () => {
     expect(f.net_total).toBe(393.1);
   });
 
-  it("Variance = closing − opening, and only when both are known", () => {
-    expect(dayFigures("d", { ...blank, opening: 150, closing: 120.5 }, 0.2, 0.0169).variance).toBe(-29.5);
-    expect(dayFigures("d", { ...blank, opening: 77, closing: 195.7 }, 0.2, 0.0169).variance).toBe(118.7);
+  it("Variance = cash counted − cash expected (the owner's example: £15.89 missing)", () => {
+    // opening £100 + cash sales £35.89 → expected £135.89; counted £120
+    const f = dayFigures("d", { ...blank, opening: 100, cash: 35.89, closing: 120 }, 0.2, 0.0169);
+    expect(f.expected).toBe(135.89);
+    expect(f.variance).toBe(-15.89);
+  });
+
+  it("money in, money out (link + till Cash Out) and bank in all move the expected cash", () => {
+    // 200 + 265.40 cash + 100 in − 40 link out − 10 till cash out − 100 bank in = 415.40
+    const f = dayFigures("d", { ...blank, opening: 200, cash: 265.4, cash_in: 100, cash_out: 40, paid_out: 10, bank_in: 100, closing: 415.4 }, 0.2, 0.0169);
+    expect(f.expected).toBe(415.4);
+    expect(f.variance).toBe(0);
+  });
+
+  it("no opening or nothing counted: can't say", () => {
+    expect(dayFigures("d", { ...blank, closing: 120 }, 0.2, 0.0169).variance).toBeNull();
     expect(dayFigures("d", { ...blank, opening: 150 }, 0.2, 0.0169).variance).toBeNull();
   });
 
@@ -33,7 +47,7 @@ describe("daily figures", () => {
   });
 
   it("month total adds up every column", () => {
-    const a = dayFigures("a", { ...blank, z_report: 120, opening: 100, closing: 90, wages: 10 }, 0.2, 0.0169);
+    const a = dayFigures("a", { ...blank, z_report: 120, opening: 100, closing: 90, wages: 10 }, 0.2, 0.0169); // expected 100, counted 90
     const b = dayFigures("b", { ...blank, z_report: 240, card: 100, stock: 30 }, 0.2, 0.0169);
     const t = totalFigures([a, b]);
     expect(t.total_sales).toBe(360);

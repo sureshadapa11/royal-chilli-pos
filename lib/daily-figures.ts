@@ -1,4 +1,5 @@
 import supabase from "@/lib/supabase";
+import { cashCheck } from "@/lib/daily-accounts-fields";
 import { bizDb } from "@/lib/business-db";
 import { allRows, extractVat, getVatRate, labourCostByDay, r2 } from "@/lib/finance";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
@@ -14,7 +15,8 @@ import { savedDays, type DailyRow } from "@/lib/daily-accounts";
 //   • Money out = stock received + expenses (VAT claimed back taken off) + card fee
 //                 + cash paid out of the till + staff wages + platform commission
 //   • Net total = Ex-VAT − Money out (the profit)
-//   • Variance  = closing balance − opening balance
+//   • Variance  = cash counted − cash expected (opening + cash sales + money in
+//                 − money out − bank in; lib/daily-accounts-fields.ts cashCheck)
 // Figures come from the Daily accounts sheet. A day with no Z report or card
 // figure on its sheet uses the till's own payments, so it never counts as £0.
 // Supplier payments aren't counted: they pay for the stock deliveries already in.
@@ -37,6 +39,8 @@ export type DayInputs = {
   z_report: number; card: number; commission: number; catering_paid: number;
   just_eat: number; deliveroo: number; uber_eats: number; hiest: number;
   opening: number | null; closing: number | null;
+  // cash drawer: sheet cash, bank in, and cash in / out (staff link + till Cash Out is paid_out)
+  cash: number; bank_in: number; cash_in: number; cash_out: number;
   stock: number; expenses: number; paid_out: number; wages: number; // expenses already ex reclaimable VAT
 };
 
@@ -46,13 +50,16 @@ export type DayFigures = {
   ex_vat: number;
   money_out: number;
   net_total: number;
+  /** Cash expected in the drawer at close (lib/daily-accounts-fields.ts cashCheck). */
+  expected: number | null;
+  /** Counted − expected: minus = missing, plus = extra. */
   variance: number | null;
   sales: SalesParts;
   out: MoneyOut;
   till_fallback: boolean; // Z report / card taken from the till, not the sheet
 };
 
-export type FiguresTotal = Omit<DayFigures, "date" | "till_fallback">;
+export type FiguresTotal = Omit<DayFigures, "date" | "till_fallback" | "expected">;
 
 /** One day's sums (pure, so it can be tested). */
 export function dayFigures(date: string, i: DayInputs, vatRate: number, cardFeeRate: number, tillFallback = false): DayFigures {
@@ -70,7 +77,7 @@ export function dayFigures(date: string, i: DayInputs, vatRate: number, cardFeeR
   const moneyOut = r2(Object.values(out).reduce((s, n) => s + n, 0));
   return {
     date, total_sales: total, ex_vat: exVat, money_out: moneyOut, net_total: r2(exVat - moneyOut),
-    variance: i.opening != null && i.closing != null ? r2(i.closing - i.opening) : null,
+    ...cashCheck({ opening: i.opening, cash: i.cash, moneyIn: i.cash_in, moneyOut: i.cash_out + i.paid_out, bankIn: i.bank_in, counted: i.closing }),
     sales, out, till_fallback: tillFallback,
   };
 }
@@ -159,7 +166,15 @@ async function costsByDay(businessId: number, from: string, to: string, vatRate:
     add(spent, e.expense_date, e.vat_applicable ? amount - extractVat(amount, vatRate) : amount);
   }
   for (const p of paidOuts) add(paidOut, shiftDay.get(p.work_period_id)!, Number(p.amount));
-  return { stock, spent, paidOut };
+  // The staff link's Cash In / Out: not costs here (each has its own home),
+  // but they move cash in and out of the drawer for the cash check.
+  const moves = await allRows<{ direction: string; amount: number; movement_date: string }>((a, b) =>
+    db.from("cash_movements").select("direction, amount, movement_date")
+      .gte("movement_date", from).lte("movement_date", to).order("id").range(a, b));
+  const cashIn = new Map<string, number>();
+  const cashOut = new Map<string, number>();
+  for (const m of moves) add(m.direction === "in" ? cashIn : cashOut, m.movement_date, Number(m.amount));
+  return { stock, spent, paidOut, cashIn, cashOut };
 }
 
 /** Every day from..to with its sums, plus the sheet rows they came from. */
@@ -187,6 +202,8 @@ export async function accountsByDay(businessId: number, from: string, to: string
       just_eat: num(r?.just_eat) ?? 0, deliveroo: num(r?.deliveroo) ?? 0,
       uber_eats: num(r?.uber_eats) ?? 0, hiest: num(r?.hiest) ?? 0,
       opening: num(r?.opening_balance), closing: num(r?.closing_balance),
+      cash: num(r?.cash) ?? 0, bank_in: num(r?.bank_in) ?? 0,
+      cash_in: costs.cashIn.get(d) ?? 0, cash_out: costs.cashOut.get(d) ?? 0,
       stock: costs.stock.get(d) ?? 0, expenses: costs.spent.get(d) ?? 0,
       paid_out: costs.paidOut.get(d) ?? 0, wages: wages.get(d) ?? 0,
     }, vatRate, cardFeeRate, (z == null && till.sales.has(d)) || (card == null && till.card.has(d)));

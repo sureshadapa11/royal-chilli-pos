@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { tradingRangeUtc } from "@/lib/london-date";
 import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
@@ -24,14 +25,19 @@ export async function GET(req: NextRequest) {
   if (!DATE.test(date)) return NextResponse.json({ error: "Pick a date" }, { status: 400 });
 
   const db = bizDb(session.businessId);
-  const [{ data: saved, error }, till, cardFeeRate] = await Promise.all([
+  const [{ data: saved, error }, till, cardFeeRate, { data: moves }, tillOut] = await Promise.all([
     db.from("daily_accounts").select(COLUMNS).eq("trading_date", date).maybeSingle(),
     tillFigures(session.businessId, date),
     getCardFeeRate(session.businessId),
+    db.from("cash_movements").select("direction, amount").eq("movement_date", date),
+    tillPaidOutOn(session.businessId, date),
   ]);
+  // Cash in / out of the drawer that day (staff link + the till's Cash Out), for the cash check.
+  const sum = (dir: string) => Math.round((moves ?? []).filter((m) => m.direction === dir).reduce((s, m) => s + Number(m.amount), 0) * 100) / 100;
+  const cashMoves = { moneyIn: sum("in"), moneyOut: Math.round((sum("out") + tillOut) * 100) / 100 };
   if (error) return NextResponse.json({ error: "Couldn't load the day" }, { status: 500 });
   const submitted = (saved as { status?: string } | null)?.status === "submitted";
-  return NextResponse.json({ date, saved, till, cardFeeRate, locked: submitted && !canUnlock(session), canUnlock: canUnlock(session) });
+  return NextResponse.json({ date, saved, till, cardFeeRate, cashMoves, locked: submitted && !canUnlock(session), canUnlock: canUnlock(session) });
 }
 
 /** PUT { date, values: { z_report: 123.45, … }, notes, submit } — save a draft, or submit. */
@@ -80,4 +86,14 @@ export async function PUT(req: NextRequest) {
     changes: { date, values, notes },
   });
   return NextResponse.json({ ok: true, status: row.status });
+}
+
+/** The till's Cash Out on that trading day's shifts (0 while the till isn't used). */
+async function tillPaidOutOn(businessId: number, date: string): Promise<number> {
+  const db = bizDb(businessId);
+  const { start, end } = tradingRangeUtc(date);
+  const { data: periods } = await db.from("work_periods").select("id").gte("opened_at", start).lte("opened_at", end);
+  if (!periods?.length) return 0;
+  const { data } = await db.from("cash_paid_outs").select("amount").in("work_period_id", periods.map((p) => p.id));
+  return Math.round((data ?? []).reduce((s, p) => s + Number(p.amount), 0) * 100) / 100;
 }
