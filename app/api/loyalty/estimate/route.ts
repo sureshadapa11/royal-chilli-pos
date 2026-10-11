@@ -3,7 +3,7 @@ import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { estimatePurchasePoints } from "@/lib/customers";
-import { getCashCreditInfo } from "@/lib/loyalty";
+import { getCashCreditInfo, rewardMinSpend } from "@/lib/loyalty";
 import { upcomingVisitBonus } from "@/lib/visits";
 
 // Read-only preview for the payment screen: how many points this order
@@ -25,8 +25,11 @@ export async function GET(req: NextRequest) {
   if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
 
   const estimate = await estimatePurchasePoints(customerId, amount);
+  const minSpend = await rewardMinSpend(session.businessId);
   const cashCredit = await getCashCreditInfo(session.businessId, customer.loyalty_points);
-  const visitBonus = await upcomingVisitBonus(customerId);
+  // A bill with nothing to pay earns no points, so no visit bonus either
+  // (the bonus follows the purchase points).
+  const visitBonus = amount > 0.009 ? await upcomingVisitBonus(customerId) : { visit: 0, points: 0 };
   // Points and vouchers are dine-in only (Rewards Club)
   let canSpend = true;
   if (orderId) {
@@ -43,6 +46,7 @@ export async function GET(req: NextRequest) {
     tier_name: estimate.tierName,
     double_day: estimate.doubleDay,
     can_spend: canSpend,
+    reward_min_spend: minSpend,
     cash_credit: cashCredit,
   });
 }

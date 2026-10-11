@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
-import { notYetValidMessage, orderTypesLabel, rewardAllowsOrderType, rewardDiscount, type RewardTerms } from "@/lib/loyalty";
+import { billRewardProblem, minSpendProblem, notYetValidMessage, orderTypesLabel, rewardAllowsOrderType, rewardDiscount, rewardMinSpend, type RewardTerms } from "@/lib/loyalty";
 
 // Applies an issued redemption to a specific order at the till — any staff
 // member can (the "Loyalty Reward Code" box in the payment screen); codes
@@ -64,23 +64,19 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    if (reward.min_spend && Number(order.total) < Number(reward.min_spend)) {
-      return NextResponse.json(
-        { error: "MINIMUM_SPEND_NOT_MET", message: `This reward needs a spend of at least £${Number(reward.min_spend).toFixed(2)}` },
-        { status: 400 }
-      );
-    }
+    // One reward per bill — a free-item code counts too, not only £ off.
+    const already = await billRewardProblem(session.businessId, order);
+    if (already) return NextResponse.json({ error: "ONE_REWARD_PER_BILL", message: already }, { status: 409 });
 
     // A % reward is fixed to £ here (capped), from the bill as it stands now
-    // — recalculated first so every item on it counts.
+    // — recalculated first so every item on it counts. The minimum spend is
+    // on that same food total, before the reward.
     const current = await recalcTotals(String(order_id), session.businessId);
+    const short = minSpendProblem(await rewardMinSpend(session.businessId, reward.min_spend), Number(current.subtotal));
+    if (short) return NextResponse.json(short, { status: 400 });
     const discount = rewardDiscount(reward, current.subtotal);
     let updatedBill = null;
     if (discount > 0) {
-      // One loyalty reward per bill (it has one loyalty line) — never swap one out unseen.
-      if (Number(order.loyalty_discount) > 0) {
-        return NextResponse.json({ error: `This bill already has a loyalty reward (${order.loyalty_reason ?? "loyalty"})` }, { status: 409 });
-      }
       await db
         .from("orders")
         .update({

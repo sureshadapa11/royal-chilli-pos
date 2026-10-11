@@ -377,6 +377,39 @@ export function notYetValidMessage(validFrom: string | null | undefined, now: Da
  * Why a reward code can't be used right now, or null if it can — the same
  * checks wherever a code is looked up (till and Staff Hub). Pure.
  */
+// ---------- using rewards on a bill ----------
+
+// Every reward (codes and "Use £x of points") needs the bill's food to come
+// to at least this much before the reward (Settings → Rewards rules). A
+// reward's own minimum, if higher, wins.
+export const DEFAULT_REWARD_MIN_SPEND = 15;
+
+export async function rewardMinSpend(businessId: number, rewardMin?: number | string | null): Promise<number> {
+  const rule = await getLoyaltySetting(businessId, "loyalty_reward_min_spend", DEFAULT_REWARD_MIN_SPEND);
+  return Math.max(rule, Number(rewardMin) || 0);
+}
+
+/** Refusal when `spend` (the bill before the reward) is under `minSpend`. */
+export function minSpendProblem(minSpend: number, spend: number): { error: string; message: string } | null {
+  if (minSpend <= 0 || spend >= minSpend - 0.005) return null;
+  return {
+    error: "MINIMUM_SPEND_NOT_MET",
+    message: `Rewards need a spend of at least £${minSpend.toFixed(2)}: this bill is £${spend.toFixed(2)}`,
+  };
+}
+
+/** One reward per bill: a £-off reward/points (its loyalty line) or a free-item code already used on it. */
+export async function billRewardProblem(
+  businessId: number,
+  order: { id: number | string; loyalty_discount: number | string | null; loyalty_reason: string | null },
+): Promise<string | null> {
+  if (Number(order.loyalty_discount) > 0) return `This bill already has a loyalty reward (${order.loyalty_reason ?? "loyalty"})`;
+  const { data } = await bizDb(businessId).from("loyalty_redemptions")
+    .select("code, reward:loyalty_rewards(name)").eq("redeemed_order_id", Number(order.id)).limit(1);
+  const used = data?.[0] as unknown as { code: string; reward: { name: string } | null } | undefined;
+  return used ? `This bill already has a loyalty reward (${used.reward?.name ?? used.code})` : null;
+}
+
 export function redemptionProblem(
   r: { status: string; valid_from?: string | null; expires_at: string },
   now: Date = new Date(),

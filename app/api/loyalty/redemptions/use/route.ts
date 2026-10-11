@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { orderTypesLabel, redemptionProblem, rewardAllowsOrderType, rewardDiscount, type RewardTerms } from "@/lib/loyalty";
+import { minSpendProblem, orderTypesLabel, redemptionProblem, rewardAllowsOrderType, rewardDiscount, rewardMinSpend, type RewardTerms } from "@/lib/loyalty";
 
 // Staff Hub → Customers → Redemptions → "Check & use a code": for codes shown
 // while the till isn't being used. Same checks as the till's code box.
@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   const terms = {
     name: reward.name, description: reward.description,
     orderTypes: reward.order_types?.length ? orderTypesLabel(reward.order_types) : null,
-    minSpend: reward.min_spend ? Number(reward.min_spend) : null,
+    minSpend: (await rewardMinSpend(session.businessId, reward.min_spend)) || null,
     expiresAt: r.expires_at,
   };
   const customer = r.customer as unknown as { name: string; phone: string | null } | null;
@@ -41,7 +41,9 @@ export async function POST(req: NextRequest) {
 
   const problem = redemptionProblem(r)
     ?? (orderType && !rewardAllowsOrderType(reward, orderType) ? { error: "WRONG_ORDER_TYPE", message: `This voucher is for ${terms.orderTypes} orders only` } : null)
-    ?? (bill != null && terms.minSpend && bill < terms.minSpend ? { error: "MINIMUM_SPEND_NOT_MET", message: `This reward needs a spend of at least £${terms.minSpend.toFixed(2)}` } : null);
+    ?? (bill != null && terms.minSpend ? minSpendProblem(terms.minSpend, bill) : null)
+    // Marking it used needs the bill, so the minimum spend is checked.
+    ?? (body?.confirm && bill == null && terms.minSpend ? { error: "BILL_NEEDED", message: `Enter the bill amount first: rewards need a spend of at least £${terms.minSpend.toFixed(2)}` } : null);
   if (problem) return NextResponse.json({ ...base, ...problem, usable: false }, { status: 400 });
 
   const discount = bill != null ? rewardDiscount(reward, bill) : null;

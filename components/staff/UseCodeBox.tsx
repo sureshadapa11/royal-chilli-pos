@@ -55,7 +55,7 @@ export default function UseCodeBox({ onUsed }: { onUsed: () => void }) {
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-[11.5px] font-semibold text-muted-foreground">Bill £ (optional)</span>
+          <span className="text-[11.5px] font-semibold text-muted-foreground">Bill £ (needed to use)</span>
           <input value={bill} onChange={(e) => { setBill(e.target.value.replace(/[^0-9.]/g, "")); setResult(null); }} inputMode="decimal" placeholder="0.00"
             className="w-28 rounded-lg border border-border bg-background px-3 py-2 text-right text-sm tabular-nums" />
         </label>
