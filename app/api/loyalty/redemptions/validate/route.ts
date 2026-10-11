@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
 
   const { data: redemption, error } = await db
     .from("loyalty_redemptions")
-    .select("*, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, min_spend), customer:customers(name, phone)")
+    .select("*, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, min_spend), customer:customers!loyalty_redemptions_customer_id_fkey(name, phone)")
     .eq("code", String(code).trim().toUpperCase())
     .maybeSingle();
   if (error || !redemption) return NextResponse.json({ error: "INVALID_CODE", message: "No reward found with that code" }, { status: 404 });

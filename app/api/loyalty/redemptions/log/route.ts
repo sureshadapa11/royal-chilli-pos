@@ -18,7 +18,9 @@ export async function GET(req: NextRequest) {
   const to = req.nextUrl.searchParams.get("to");
   let query = db
     .from("loyalty_redemptions")
-    .select("id, code, status, points_spent, issued_at, expires_at, redeemed_at, reward:loyalty_rewards(name), customer:customers(name, phone)")
+    // The code's owner — a redemption also links to a customer as the Bring a
+    // Friend "friend", so the link must be named or the query fails.
+    .select("id, code, status, points_spent, issued_at, expires_at, redeemed_at, reward:loyalty_rewards(name), customer:customers!loyalty_redemptions_customer_id_fkey(name, phone)")
     .order("issued_at", { ascending: false })
     .limit(100);
   if (to) {
