@@ -4,6 +4,7 @@ import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
 import { getOpeningHours, summarizeOpeningHours } from "@/lib/opening-hours";
 import { pageBusinessId } from "@/lib/business";
+import { DEFAULT_REWARD_MIN_SPEND, getLoyaltySetting, moneyShort } from "@/lib/loyalty";
 
 export const metadata: Metadata = {
   title: "FAQ — The Royal Chilli",
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
 // Only questions with a confirmed, real answer are included here; group
 // bookings, corkage and dietary/vegan claims are left out until there's an
 // actual policy to state rather than a guessed one.
-function buildFaqs(hoursText: string) {
+function buildFaqs(hoursText: string, rewardMin: number) {
   return [
     { q: "Is The Royal Chilli Halal?", a: "Yes — The Royal Chilli is fully Halal." },
     { q: "Is there parking available?", a: "Yes, we have our own free car park on-site for customers." },
@@ -28,6 +29,10 @@ function buildFaqs(hoursText: string) {
       a: "Yes, from family celebrations to corporate catering and private functions — get in touch and our team can put together a menu to suit the occasion.",
     },
     { q: "Can I book a table in advance?", a: "Yes — you can book online any time, or call us directly." },
+    {
+      q: "How do I use my Rewards Club vouchers and points?",
+      a: `Show your voucher code, or ask to use your points, when you pay for a dine-in meal. One reward, voucher or points discount can be used per bill${rewardMin > 0 ? `, on a bill of ${moneyShort(rewardMin)} or more before the reward` : ""}. Your codes are saved in your account under Rewards.`,
+    },
   ];
 }
 
@@ -36,7 +41,7 @@ export default async function FaqPage() {
   const hoursText = summary.length === 1
     ? `${summary[0].day.toLowerCase()}, ${summary[0].time}`
     : summary.map((h) => `${h.day} ${h.time}`).join(", ");
-  const faqs = buildFaqs(hoursText);
+  const faqs = buildFaqs(hoursText, await getLoyaltySetting(await pageBusinessId(), "loyalty_reward_min_spend", DEFAULT_REWARD_MIN_SPEND));
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-16">

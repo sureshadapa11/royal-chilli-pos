@@ -3,6 +3,7 @@ import { siteContent } from "@/lib/site-content";
 import { pageBusinessId, getBusiness } from "@/lib/business";
 import { addressOneLine, type Address } from "@/lib/business-setup";
 import Reveal from "@/components/site/Reveal";
+import { DEFAULT_REWARD_MIN_SPEND, getLoyaltySetting, moneyShort } from "@/lib/loyalty";
 
 export async function generateMetadata(): Promise<Metadata> {
   const businessId = await pageBusinessId().catch(() => 1);
@@ -15,6 +16,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function TermsPage() {
+  const rewardMin = await getLoyaltySetting(await pageBusinessId(), "loyalty_reward_min_spend", DEFAULT_REWARD_MIN_SPEND);
   const businessId = await pageBusinessId().catch(() => 1);
   const business = await getBusiness(businessId).catch(() => null);
 
@@ -94,7 +96,7 @@ export default async function TermsPage() {
     {
       heading: "Loyalty programme",
       body: [
-        "Our Rewards Club has its own terms — how points are earned and used, vouchers, Bring a Friend and emails. In short: points have no cash value, are non-transferable, and are used when you dine in. We may amend or end the Rewards Club at any time; points already earned will still be honoured for a reasonable period after any such change is announced.",
+        `Our Rewards Club has its own terms — how points are earned and used, vouchers, Bring a Friend and emails. In short: points have no cash value, are non-transferable, and are used when you dine in; only one reward, voucher or points discount can be used per bill${rewardMin > 0 ? `, on a bill of ${moneyShort(rewardMin)} or more before the reward` : ""}. We may amend or end the Rewards Club at any time; points already earned will still be honoured for a reasonable period after any such change is announced.`,
       ],
     },
     {

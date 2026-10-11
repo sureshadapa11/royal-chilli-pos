@@ -364,7 +364,7 @@ function LoyaltyInner() {
               <li>🍛 <b>10 points for every £1</b> you spend — dine-in, collection or delivery</li>
               <li>⭐ <b>Double points Tuesday to Thursday</b></li>
               <li>🎁 <b>100 points = £1 off</b> — use up to £10 of points per visit</li>
-              <li>🍽️ Points and vouchers can be used when you <b>dine in</b></li>
+              <li>🍽️ Points and vouchers can be used when you <b>dine in</b>{data.rewardMinSpend ? <> on a bill of <b>£{data.rewardMinSpend % 1 ? data.rewardMinSpend.toFixed(2) : data.rewardMinSpend} or more</b></> : null}, <b>one reward per bill</b></li>
               <li>⏳ Points expire 12 months after you earn them</li>
             </ul>
           </div>
@@ -375,8 +375,8 @@ function LoyaltyInner() {
           <p className="mb-3 px-0.5 text-[13.5px] text-muted-foreground">Simple steps to redeem your points at checkout.</p>
           <div className="rounded-2xl border border-border bg-surface shadow-sm">
             {[
-              { n: 1, t: "Apply a reward at checkout", d: "When you have enough points, choose a reward to apply toward your order total during checkout." },
-              { n: 2, t: "One reward per transaction", d: "Only one reward may be redeemed per transaction. If the reward doesn't cover the full total, complete the payment using your card for the remaining balance. You may also apply a reward with a value larger than the order total." },
+              { n: 1, t: "Show your code at the till", d: "When you pay for a dine-in meal, show your voucher code from this page, or ask to use your points (100 points = £1 off)." },
+              { n: 2, t: "One reward per bill", d: `Only one reward, voucher or points discount can be used per bill${data.rewardMinSpend ? `, and the bill must come to at least £${data.rewardMinSpend % 1 ? data.rewardMinSpend.toFixed(2) : data.rewardMinSpend} before the reward` : ""}. If the reward doesn't cover the whole bill, pay the rest by card or cash.` },
               { n: 3, t: "No cash value & enjoy", d: "Loyalty rewards have no cash value and cannot be redeemed for cash. Once your points are successfully redeemed, enjoy the discount, free item, or perk — and make the most of your loyalty benefit." },
             ].map((s) => (
               <div key={s.n} className="flex gap-3.5 border-b border-border px-4 py-4 last:border-b-0">

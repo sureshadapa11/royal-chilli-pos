@@ -389,6 +389,16 @@ export async function rewardMinSpend(businessId: number, rewardMin?: number | st
   return Math.max(rule, Number(rewardMin) || 0);
 }
 
+/** "£15" (or "£12.50") for customer-facing wording. */
+export function moneyShort(n: number): string {
+  return `£${n % 1 ? n.toFixed(2) : n}`;
+}
+
+/** The rule as customers read it, e.g. "Use on a bill of £15 or more · one reward per bill". */
+export function rewardRuleText(minSpend: number): string {
+  return `${minSpend > 0 ? `Use on a bill of ${moneyShort(minSpend)} or more · ` : ""}one reward per bill`;
+}
+
 /** Refusal when `spend` (the bill before the reward) is under `minSpend`. */
 export function minSpendProblem(minSpend: number, spend: number): { error: string; message: string } | null {
   if (minSpend <= 0 || spend >= minSpend - 0.005) return null;
