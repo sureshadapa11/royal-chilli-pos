@@ -18,12 +18,12 @@ export async function POST(req: NextRequest) {
     // transaction". The welcome, Bring a Friend and come-back vouchers don't count.
     const { data: issued } = await supabase
       .from("loyalty_redemptions")
-      .select("id, reward:loyalty_rewards(is_welcome_reward, is_referral_reward, winback_reason)")
+      .select("id, reward:loyalty_rewards(is_welcome_reward, is_referral_reward, winback_reason, is_birthday_reward, is_apology_reward)")
       .eq("customer_id", session.id)
       .eq("status", "issued");
     const existing = (issued ?? []).find((r) => {
-      const f = (r.reward as unknown as { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null } | null) ?? {};
-      return !f.is_welcome_reward && !f.is_referral_reward && !f.winback_reason;
+      const f = (r.reward as unknown as { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null; is_birthday_reward?: boolean; is_apology_reward?: boolean } | null) ?? {};
+      return !f.is_welcome_reward && !f.is_referral_reward && !f.winback_reason && !f.is_birthday_reward && !f.is_apology_reward;
     });
     if (existing) {
       return NextResponse.json({ error: "You already have an active voucher — cancel it first to redeem a different reward" }, { status: 409 });

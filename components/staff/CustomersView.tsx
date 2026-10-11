@@ -7,6 +7,7 @@ import ClubReport from "@/components/staff/ClubReport";
 import DuplicatesPanel from "@/components/staff/DuplicatesPanel";
 import FeedbackInbox from "@/components/staff/FeedbackInbox";
 import UseCodeBox from "@/components/staff/UseCodeBox";
+import { MONTHS, birthdayLabel, birthdayToDate } from "@/lib/birthday";
 
 type Segment = "NEW" | "FIRST_TIME" | "RETURNING" | "REGULAR" | "LAPSED";
 type Customer = {
@@ -18,7 +19,7 @@ type Reward = {
   id: number; name: string; description: string | null; points_cost: number;
   discount_amount: number | null; min_spend: number; eligible_tier_name: string | null;
   valid_days: number; per_customer_limit: number | null; is_birthday_reward?: boolean;
-  is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null;
+  is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null; is_apology_reward?: boolean;
 };
 type Birthday = { id: number; name: string; phone: string; days_away: number };
 
@@ -87,6 +88,44 @@ function AddCustomerModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
           <button onClick={save} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Save</button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Staff can add or change a customer's birthday (day + month) for the birthday treat.
+function BirthdayRow({ customerId, dob, onSaved }: { customerId: number; dob: string | null; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [day, setDay] = useState(dob ? String(Number(dob.slice(8, 10))) : "");
+  const [month, setMonth] = useState(dob ? String(Number(dob.slice(5, 7))) : "");
+  const { toast } = useToast();
+  async function save() {
+    const date = birthdayToDate(day, month);
+    if (!date) return toast({ variant: "destructive", title: "Choose a real day and month" });
+    const res = await fetch(`/api/customers/${customerId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ date_of_birth: date }) });
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't save the birthday" });
+    toast({ variant: "success", title: "Birthday saved", description: "Their free dessert will be sent a week before." });
+    setEditing(false);
+    onSaved();
+  }
+  if (!editing) {
+    return (
+      <p className="mt-1 text-xs text-muted-foreground">
+        🎂 Birthday: {birthdayLabel(dob) ?? "not given"}{" "}
+        <button onClick={() => setEditing(true)} className="font-semibold text-red-600 hover:underline">{dob ? "Change" : "Add"}</button>
+      </p>
+    );
+  }
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+      <span className="text-muted-foreground">🎂 Birthday</span>
+      <select aria-label="Birthday day" value={day} onChange={(e) => setDay(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1">
+        <option value="">Day</option>{Array.from({ length: 31 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+      </select>
+      <select aria-label="Birthday month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-lg border border-border bg-background px-2 py-1">
+        <option value="">Month</option>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+      </select>
+      <button onClick={save} className="rounded-lg bg-red-600 px-3 py-1 font-semibold text-white">Save</button>
+      <button onClick={() => setEditing(false)} className="text-muted-foreground">Cancel</button>
     </div>
   );
 }
@@ -181,6 +220,7 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
         {c.favourite_dish && <p className="mt-2 text-sm text-muted-foreground">⭐ Favourite: {c.favourite_dish}</p>}
         {c.referral_code && <p className="mt-1 text-xs text-muted-foreground">Referral code: <span className="text-red-600">{c.referral_code}</span></p>}
         {c.last_visit && <p className="mt-1 text-xs text-muted-foreground">Last visit: {new Date(c.last_visit).toLocaleDateString("en-GB")}</p>}
+        <BirthdayRow customerId={customerId} dob={c.date_of_birth} onSaved={load} />
 
         {isManager && (
           <label className="mt-2 flex items-center gap-2 text-xs text-muted-foreground">
@@ -215,8 +255,8 @@ function CustomerDetailModal({ customerId, rewards, isManager, onClose, onChange
         <div className="mt-4">
           <h3 className="text-muted-foreground text-xs font-bold uppercase tracking-widest">Issue a Reward Code</h3>
           <div className="mt-2 flex flex-wrap gap-2">
-            {/* welcome, Bring a Friend and come-back offers are automatic-only (0 pts — a button would give them away) */}
-            {rewards.filter((r) => !r.is_welcome_reward && !r.is_referral_reward && !r.winback_reason).map((r) => (
+            {/* welcome, Bring a Friend, come-back, birthday and apology offers are automatic-only (0 pts — a button would give them away) */}
+            {rewards.filter((r) => !r.is_welcome_reward && !r.is_referral_reward && !r.winback_reason && !r.is_birthday_reward && !r.is_apology_reward).map((r) => (
               <button key={r.id} onClick={() => issueReward(r.id, r.name)} disabled={c.loyalty_points < r.points_cost}
                 className="px-3 py-1.5 bg-surface-hover hover:bg-elevated disabled:opacity-40 text-foreground text-xs font-semibold rounded-lg border border-border">
                 {r.name} · {r.points_cost}pts

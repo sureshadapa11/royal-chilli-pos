@@ -254,9 +254,11 @@ export const orderTypesLabel = (types: string[]) => types.map((t) => ORDER_TYPE_
  * free vouchers. Returns an error message for those, else null.
  */
 export async function manualIssueBlocked(rewardId: number): Promise<string | null> {
-  const { data } = await supabase.from("loyalty_rewards").select("is_welcome_reward, is_referral_reward, winback_reason").eq("id", rewardId).maybeSingle();
+  const { data } = await supabase.from("loyalty_rewards").select("is_welcome_reward, is_referral_reward, winback_reason, is_birthday_reward, is_apology_reward").eq("id", rewardId).maybeSingle();
   if (data?.is_welcome_reward) return "The welcome voucher is given automatically when someone joins";
   if (data?.winback_reason) return "Come-back offers are only given by the \"why did you stop coming?\" email";
+  if (data?.is_birthday_reward) return "The birthday treat is given automatically a week before a member's birthday";
+  if (data?.is_apology_reward) return "Apology offers are sent from Customers → Feedback";
   if (data?.is_referral_reward) return "Bring a Friend vouchers are given automatically when a friend joins with a member's link";
   return null;
 }

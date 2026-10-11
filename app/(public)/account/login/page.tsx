@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { normalizeUkMobile } from "@/lib/phone";
+import { MONTHS } from "@/lib/birthday";
 import { freshStart } from "@/lib/auth-sync";
 
 function AuthForm() {
@@ -20,6 +21,8 @@ function AuthForm() {
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
+  const [bDay, setBDay] = useState("");
+  const [bMonth, setBMonth] = useState("");
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -42,7 +45,7 @@ function AuthForm() {
       const res = await fetch(`/api/account/${mode}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === "signup" ? { name, phone: mobile, email, password, marketingConsent, referralCode: referralCode || undefined } : { email, password }),
+        body: JSON.stringify(mode === "signup" ? { name, phone: mobile, email, password, marketingConsent, referralCode: referralCode || undefined, birthday: bDay && bMonth ? { day: Number(bDay), month: Number(bMonth) } : undefined } : { email, password }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -136,6 +139,22 @@ function AuthForm() {
               className="w-full rounded-xl border border-amber-300/25 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-amber-300"
             />
           </div>
+          {mode === "signup" && (
+            <div className="mt-3">
+              <label className="mb-1 block text-xs text-primary-foreground/70">Your birthday (optional)</label>
+              <div className="flex gap-2">
+                <select aria-label="Birthday day" value={bDay} onChange={(e) => setBDay(e.target.value)} className="w-24 rounded-xl border border-amber-300/25 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-300">
+                  <option value="" className="text-black">Day</option>
+                  {Array.from({ length: 31 }, (_, i) => <option key={i + 1} value={i + 1} className="text-black">{i + 1}</option>)}
+                </select>
+                <select aria-label="Birthday month" value={bMonth} onChange={(e) => setBMonth(e.target.value)} className="flex-1 rounded-xl border border-amber-300/25 bg-white/5 px-3 py-2.5 text-sm text-white outline-none focus:border-amber-300">
+                  <option value="" className="text-black">Month</option>
+                  {MONTHS.map((m, i) => <option key={m} value={i + 1} className="text-black">{m}</option>)}
+                </select>
+              </div>
+              <p className="mt-1 text-[11px] text-primary-foreground/50">We&apos;ll send you a birthday treat. No year needed.</p>
+            </div>
+          )}
           {mode === "signup" && (
             <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-xs text-primary-foreground/70">
               <input

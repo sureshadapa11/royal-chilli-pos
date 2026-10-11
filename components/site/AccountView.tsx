@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MONTHS, birthdayLabel } from "@/lib/birthday";
 import { useRouter } from "next/navigation";
 import { isValidUkMobile } from "@/lib/utils";
 import LogoutButton from "@/components/site/LogoutButton";
@@ -16,6 +17,7 @@ export default function AccountView({
   email,
   initialSubscribed,
   initialAddresses,
+  initialBirthday = null,
 }: {
   initialFirstName: string;
   initialLastName: string;
@@ -23,6 +25,7 @@ export default function AccountView({
   email: string;
   initialSubscribed: boolean;
   initialAddresses: Address[];
+  initialBirthday?: string | null;
 }) {
   const router = useRouter();
 
@@ -51,6 +54,29 @@ export default function AccountView({
       router.refresh();
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  // Birthday: day + month, set once (staff can change it)
+  const [birthday, setBirthday] = useState(initialBirthday);
+  const [bDay, setBDay] = useState("");
+  const [bMonth, setBMonth] = useState("");
+  const [bErr, setBErr] = useState("");
+  const [bSaving, setBSaving] = useState(false);
+  async function saveBirthday() {
+    setBErr("");
+    if (!bDay || !bMonth) { setBErr("Please choose a day and month"); return; }
+    setBSaving(true);
+    try {
+      const res = await fetch("/api/account/profile", {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ birthday: { day: Number(bDay), month: Number(bMonth) } }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setBErr(data.error || "Something went wrong"); return; }
+      setBirthday(data.customer?.date_of_birth ?? `2000-${bMonth.padStart(2, "0")}-${bDay.padStart(2, "0")}`);
+    } finally {
+      setBSaving(false);
     }
   }
 
@@ -198,6 +224,33 @@ export default function AccountView({
       <button onClick={() => setAddOpen(true)} className="mt-2.5 w-full rounded-xl border border-primary py-2.5 text-sm font-semibold text-primary">
         Add address
       </button>
+
+      <div className="mb-2 mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Birthday</div>
+      <div className="rounded-2xl border border-border bg-surface p-4 shadow-sm">
+        {birthday ? (
+          <div className="text-sm">
+            <span className="font-semibold">🎂 {birthdayLabel(birthday)}</span>
+            <p className="mt-1 text-xs text-muted-foreground">A week before, a birthday treat will be waiting in your Rewards. Need to change it? Call us.</p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm">Add your birthday and we&apos;ll send you a <b>free dessert</b> to celebrate.</p>
+            <div className="mt-3 flex gap-2">
+              <select aria-label="Birthday day" value={bDay} onChange={(e) => setBDay(e.target.value)} className="w-24 rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+                <option value="">Day</option>
+                {Array.from({ length: 31 }, (_, i) => <option key={i + 1} value={i + 1}>{i + 1}</option>)}
+              </select>
+              <select aria-label="Birthday month" value={bMonth} onChange={(e) => setBMonth(e.target.value)} className="flex-1 rounded-xl border border-border bg-background px-3 py-2.5 text-sm">
+                <option value="">Month</option>
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+              <button onClick={saveBirthday} disabled={bSaving} className="rounded-xl bg-primary px-4 text-sm font-bold text-primary-foreground disabled:opacity-50">{bSaving ? "Saving…" : "Save"}</button>
+            </div>
+            <p className="mt-1.5 text-xs text-muted-foreground">No year needed. Once saved, only we can change it.</p>
+            {bErr && <p className="mt-1 text-xs text-red-600">{bErr}</p>}
+          </div>
+        )}
+      </div>
 
       <div className="mb-2 mt-6 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Support</div>
       <div className="rounded-2xl border border-border bg-surface p-5 text-center shadow-sm">

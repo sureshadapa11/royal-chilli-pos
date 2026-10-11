@@ -15,13 +15,13 @@ export async function POST(req: NextRequest) {
     // bought with points and would just be lost.
     const { data: issued } = await supabase
       .from("loyalty_redemptions")
-      .select("id, points_spent, customer_id, status, reward:loyalty_rewards(is_welcome_reward, is_referral_reward, winback_reason)")
+      .select("id, points_spent, customer_id, status, reward:loyalty_rewards(is_welcome_reward, is_referral_reward, winback_reason, is_birthday_reward, is_apology_reward)")
       .eq("customer_id", session.id)
       .eq("status", "issued");
     // Only the points voucher: welcome, Bring a Friend and come-back codes are gifts, not cancellable.
     const redemption = (issued ?? []).find((r) => {
-      const f = (r.reward as unknown as { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null } | null) ?? {};
-      return !f.is_welcome_reward && !f.is_referral_reward && !f.winback_reason;
+      const f = (r.reward as unknown as { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null; is_birthday_reward?: boolean; is_apology_reward?: boolean } | null) ?? {};
+      return !f.is_welcome_reward && !f.is_referral_reward && !f.winback_reason && !f.is_birthday_reward && !f.is_apology_reward;
     });
     if (!redemption) return NextResponse.json({ error: "No active voucher to cancel" }, { status: 404 });
 

@@ -61,6 +61,7 @@ export type FeedbackRow = {
   comment: string | null; name: string | null; phone: string | null; email: string | null; contact_ok: boolean;
   customer_id: number | null; source: string; table_label: string | null;
   handled_at: string | null; handled_note: string | null;
+  apology_redemption_id?: number | null;
 };
 
 export type FeedbackSummary = {
