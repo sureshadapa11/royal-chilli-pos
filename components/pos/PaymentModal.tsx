@@ -248,15 +248,7 @@ export default function PaymentModal({
           const o = d.order;
           if (!o) return;
           setDiscountGivenBy(o.discount_given_by ?? null);
-          setLocalLoyalty(Number(o.loyalty_discount) || 0);
-          // A combined-table bill's totals come from the parent; this order alone would undercount.
-          if (!extraOrderIds?.length) {
-            setLocalDiscount(Number(o.discount) || 0);
-            setLocalServiceCharge(Number(o.service_charge_amount) || 0);
-            // The saved bill is the source of truth (loyalty isn't in the till's own sum).
-            if (o.total != null) setLocalTotal(Number(o.total));
-            if (o.tax != null) setLocalTax(Number(o.tax));
-          }
+          applySavedBill(d);
         }).catch(() => {});
       }
       setLocalDiscount(discount);
@@ -329,7 +321,7 @@ export default function PaymentModal({
       const res = await fetch("/api/loyalty/redeem-cash", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customer_id: customerId, order_id: orderId, amount, extra_order_ids: extraOrderIds }),
+        body: JSON.stringify({ customer_id: customerId, order_id: orderId, amount }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Couldn't apply loyalty credit"); return; }
@@ -342,6 +334,33 @@ export default function PaymentModal({
       toast({ variant: "success", title: "Loyalty credit applied", description: `£${data.amount.toFixed(2)} off` });
     } catch { setError("Couldn't apply loyalty credit"); }
     finally { setCashCreditApplying(false); }
+  };
+
+  // The saved bill is the source of truth (loyalty isn't in the till's own
+  // sum). A table bill with several rounds comes back as `table_bill`: its
+  // totals are the whole bill's — the oldest round holds the discount,
+  // loyalty and service charge rules (lib/order-totals.ts).
+  type SavedBill = {
+    order?: { discount?: number | null; loyalty_discount?: number | null; service_charge_amount?: number | null; total?: number | null; tax?: number | null };
+    table_bill?: { total: number; tax: number; service_charge_amount: number } | null;
+  };
+  function applySavedBill(d: SavedBill) {
+    const o = d.order;
+    if (!o) return;
+    const tb = d.table_bill;
+    setLocalLoyalty(Number(o.loyalty_discount) || 0);
+    if (!tb && extraOrderIds?.length) return; // merged orders the till added: its own sum stands
+    setLocalDiscount(Number(o.discount) || 0);
+    setLocalServiceCharge(Number(tb ? tb.service_charge_amount : o.service_charge_amount) || 0);
+    const t = tb ? tb.total : o.total;
+    const x = tb ? tb.tax : o.tax;
+    if (t != null) setLocalTotal(Number(t));
+    if (x != null) setLocalTax(Number(x));
+  }
+  const refreshSavedBill = async () => {
+    if (!orderId) return;
+    const d = await fetch(`/api/orders/${orderId}`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+    if (d) applySavedBill(d);
   };
 
   const applyDiscount = async () => {
@@ -368,6 +387,7 @@ export default function PaymentModal({
         setDiscountGivenBy(data.order.discount_given_by ?? null);
         setLocalTax(data.order.tax ?? localTax);
         setLocalTotal(data.order.total ?? localTotal);
+        await refreshSavedBill();
         toast({ variant: "success", title: "Discount applied" });
       }
     } catch { setError("Failed to apply discount"); }
@@ -394,6 +414,7 @@ export default function PaymentModal({
         setDiscountPctInput("");
         setDiscountReasonInput("");
         setDiscountGivenBy(null);
+        await refreshSavedBill();
       }
     } catch { setError("Failed to remove discount"); }
     finally { setDiscountApplying(false); }
@@ -407,7 +428,7 @@ export default function PaymentModal({
       const res = await fetch("/api/loyalty/redemptions/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: rewardCodeInput.trim(), order_id: orderId, extra_order_ids: extraOrderIds }),
+        body: JSON.stringify({ code: rewardCodeInput.trim(), order_id: orderId }),
       });
       const data = await res.json();
       if (!res.ok) { setRewardError(data.message || data.error || "Couldn't redeem this code"); return; }
@@ -436,6 +457,7 @@ export default function PaymentModal({
       if (data.order) {
         setLocalServiceCharge(data.order.service_charge_amount ?? 0);
         setLocalTotal(data.order.total ?? localTotal);
+        await refreshSavedBill();
       }
     } catch { /* silent */ }
     finally { setServiceChargeApplying(false); }

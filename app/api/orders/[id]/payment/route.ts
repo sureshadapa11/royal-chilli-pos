@@ -7,6 +7,7 @@ import { awardPurchasePoints } from "@/lib/customers";
 import { depleteStockForOrder } from "@/lib/inventory";
 import { sendOrderPaymentReceipt } from "@/lib/orders";
 import { tillRequired } from "@/lib/till-device";
+import { tableBillOrderIds } from "@/lib/order-totals";
 
 // What the payments table accepts (payments_method_check). Pay Later has its
 // own route and records no payment; loyalty/vouchers are discounts, not tenders.
@@ -59,98 +60,92 @@ export async function POST(
     if (!/^\d+$/.test(id)) return NextResponse.json({ error: "Order not found" }, { status: 404 });
     const db = bizDb(session.businessId);
 
-    // Records the payment with the order row locked (record_order_payment,
+    // The bill being paid: this order, plus — for a table bill — its other
+    // rounds (one order per Send to Kitchen; lib/order-totals.ts) and any
+    // order the till merged in. Each round's total is its share of the bill,
+    // so one payment is spread over them oldest first.
+    const billIds = await tableBillOrderIds(Number(id), session.businessId);
+    const extras = (Array.isArray(extraOrderIds) ? extraOrderIds : []).map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    const ids = [...new Set([Number(id), ...billIds, ...extras])];
+    const { data: rows } = await db.from("orders").select("id, status, is_paid, total, amount_paid, table_id, customer_id, created_at").in("id", ids);
+    const primary = (rows ?? []).find((o) => o.id === Number(id));
+    if (!primary) return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    if (primary.status === "cancelled") return NextResponse.json({ error: "This order was cancelled" }, { status: 400 });
+    const owedOf = (o: { total: number | string; amount_paid: number | string | null }) => Math.max(0, Math.round((Number(o.total) - Number(o.amount_paid || 0)) * 100) / 100);
+    const open = (rows ?? [])
+      .filter((o) => o.status !== "cancelled" && !o.is_paid && o.status !== "paid")
+      .sort((a, b) => (a.id === Number(id) ? -1 : b.id === Number(id) ? 1 : String(a.created_at).localeCompare(String(b.created_at)) || a.id - b.id));
+    const owed = Math.round(open.reduce((t, o) => t + owedOf(o), 0) * 100) / 100;
+    if (owed <= 0.009) return NextResponse.json({ error: "Order already paid" }, { status: 400 });
+    if (amountNum > owed + 0.01) {
+      return NextResponse.json({ error: `Amount exceeds the remaining balance of £${owed.toFixed(2)}` }, { status: 400 });
+    }
+
+    // Records each part with the order row locked (record_order_payment,
     // migration 095): two tills paying the same bill at once can't both get
-    // past the balance check — the second waits, then sees the new balance.
-    // The order is marked paid there too, once fully covered.
-    const { data: rpcData, error: paymentError } = await supabase.rpc("record_order_payment", {
-      p_business_id: session.businessId,
-      p_order_id: Number(id),
-      p_method: method,
-      p_amount: Math.round(amountNum * 100) / 100,
-      p_tip_amount: tip_amount || 0,
-      p_change_given: change_given || 0,
-      p_reference: reference || null,
-      p_staff_id: session.id,
-    });
-    if (paymentError) throw paymentError;
-    const result = rpcData as PaymentResult;
-
-    switch (result.outcome) {
-      case "not_found":
-        return NextResponse.json({ error: "Order not found" }, { status: 404 });
-      case "cancelled":
-        return NextResponse.json({ error: "This order was cancelled" }, { status: 400 });
-      case "already_paid":
-      case "nothing_due":
-        return NextResponse.json({ error: "Order already paid" }, { status: 400 });
-      case "exceeds_balance":
-        return NextResponse.json(
-          { error: `Amount exceeds the remaining balance of £${Number(result.remaining ?? 0).toFixed(2)}` },
-          { status: 400 }
-        );
-    }
-
-    const isFullyPaid = result.fully_paid === true;
-    if (isFullyPaid) {
-      // Best-effort stock depletion from recipes — never let this affect
-      // whether the payment itself succeeds.
-      waitUntil(depleteStockForOrder(Number(id), session.id).catch((e) => console.error("Stock depletion failed for order", id, e)));
-    }
-
-    // Merged/extra orders are paid in full alongside the primary one — record a real
-    // payment row for each (previously they were marked paid with no payment history at all,
-    // which would silently undercount cash/card totals in reporting).
-    // The primary payment is already saved by now, so a failure on one extra
-    // order must not throw: the till would show "Failed" for a bill that was
-    // taken, and skip the table/points/receipt below. Report it instead.
+    // past the balance check. The tip and change go on the first part.
+    let left = Math.round(amountNum * 100) / 100;
+    let first = true;
+    const paidIds: number[] = [];
     const unpaidMergedOrders: number[] = [];
-    if (Array.isArray(extraOrderIds) && extraOrderIds.length > 0) {
-      const { data: extraOrders } = await db.from("orders").select("id, total, amount_paid, customer_id").in("id", extraOrderIds);
-      for (const extra of extraOrders || []) {
-        const extraRemaining = Math.round((Number(extra.total) - Number(extra.amount_paid)) * 100) / 100;
-        if (extraRemaining <= 0.01) continue;
-        // p_amount null = whatever is still owed, read under the row lock.
-        const { data: extraData, error: extraErr } = await supabase.rpc("record_order_payment", {
-          p_business_id: session.businessId,
-          p_order_id: extra.id,
-          p_method: method,
-          p_amount: null,
-          p_tip_amount: 0,
-          p_change_given: 0,
-          p_reference: reference ? `${reference} (merged with #${id})` : `Merged with #${id}`,
-          p_staff_id: session.id,
-        });
-        if (extraErr) {
-          console.error("Payment failed for merged order", extra.id, extraErr);
-          unpaidMergedOrders.push(extra.id);
-          continue;
-        }
-        if ((extraData as PaymentResult).outcome !== "recorded") continue; // paid/cancelled meanwhile
-        waitUntil(depleteStockForOrder(extra.id, session.id).catch((e) => console.error("Stock depletion failed for order", extra.id, e)));
-        // a member linked to the table earns on every round, not just the first
-        if (extra.customer_id) await awardPurchasePoints(extra.customer_id, Number(extra.total), extra.id);
-        waitUntil(sendOrderPaymentReceipt(session.businessId, extra.id));
+    for (const o of open) {
+      const part = Math.min(left, owedOf(o));
+      if (part <= 0.009) continue;
+      const { data: rpcData, error: paymentError } = await supabase.rpc("record_order_payment", {
+        p_business_id: session.businessId,
+        p_order_id: o.id,
+        p_method: method,
+        p_amount: Math.round(part * 100) / 100,
+        p_tip_amount: first ? tip_amount || 0 : 0,
+        p_change_given: first ? change_given || 0 : 0,
+        p_reference: o.id === Number(id) ? reference || null : reference ? `${reference} (bill #${id})` : `Bill #${id}`,
+        p_staff_id: session.id,
+      });
+      if (paymentError) {
+        // An earlier part is already saved, so never throw here: the till
+        // would show "Failed" for money that was taken. Report it instead.
+        if (first) throw paymentError;
+        console.error("Payment failed for bill round", o.id, paymentError);
+        unpaidMergedOrders.push(o.id);
+        continue;
       }
+      const result = rpcData as PaymentResult;
+      if (result.outcome !== "recorded") {
+        if (first) {
+          switch (result.outcome) {
+            case "not_found": return NextResponse.json({ error: "Order not found" }, { status: 404 });
+            case "cancelled": return NextResponse.json({ error: "This order was cancelled" }, { status: 400 });
+            case "exceeds_balance":
+              return NextResponse.json({ error: `Amount exceeds the remaining balance of £${Number(result.remaining ?? 0).toFixed(2)}` }, { status: 400 });
+            default: return NextResponse.json({ error: "Order already paid" }, { status: 400 });
+          }
+        }
+        unpaidMergedOrders.push(o.id);
+        continue;
+      }
+      first = false;
+      left = Math.round((left - part) * 100) / 100;
+      if (result.fully_paid) paidIds.push(o.id);
+      if (left <= 0.009) break;
     }
 
-    // Free the table only once the primary order is actually fully settled.
-    if (isFullyPaid && result.table_id) {
-      await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", result.table_id);
+    // Each fully paid round: stock, points (a member linked to the table
+    // earns on every round), receipt — after the points, so it can show them.
+    for (const o of open.filter((x) => paidIds.includes(x.id))) {
+      waitUntil(depleteStockForOrder(o.id, session.id).catch((e) => console.error("Stock depletion failed for order", o.id, e)));
+      const member = o.customer_id ?? primary.customer_id;
+      if (member) await awardPurchasePoints(member, Number(o.total), o.id);
+    }
+    if (paidIds.length) waitUntil(sendOrderPaymentReceipt(session.businessId, paidIds.includes(Number(id)) ? Number(id) : paidIds[0]));
+
+    const remainingAfter = Math.max(0, Math.round((owed - (Math.round(amountNum * 100) / 100 - left)) * 100) / 100);
+    const isFullyPaid = remainingAfter <= 0.009 && unpaidMergedOrders.length === 0;
+
+    // Free the table only once the whole bill is settled.
+    if (isFullyPaid && primary.table_id) {
+      await supabase.from("restaurant_tables").update({ status: "available", self_order_enabled: false }).eq("id", primary.table_id);
     }
 
-    if (isFullyPaid && result.customer_id) {
-      await awardPurchasePoints(result.customer_id, Number(result.total), Number(id));
-    }
-
-    // Fired after awardPurchasePoints (not alongside the stock-depletion
-    // block above) specifically so the receipt can report the points this
-    // order actually just earned, not a stale pre-award balance.
-    if (isFullyPaid) {
-      waitUntil(sendOrderPaymentReceipt(session.businessId, Number(id)));
-    }
-
-    const remainingAfter = Math.max(0, Math.round((Number(result.total) - Number(result.amount_paid)) * 100) / 100);
     return NextResponse.json({ success: true, fully_paid: isFullyPaid, remaining_balance: remainingAfter, unpaid_merged_orders: unpaidMergedOrders });
   } catch (error) {
     console.error("Payment error:", error);
