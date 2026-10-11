@@ -22,7 +22,7 @@ export type CardDay = {
   net: number;             // Net total
   moneyOut: number;
   out: MoneyOut;
-  variance: number | null; // closing − opening
+  variance: number | null; // cash counted − expected (minus = missing)
   till: number;            // Z report
   catering: number;
   platforms: Record<CardPlatform, { sales: number; commission: number }>;

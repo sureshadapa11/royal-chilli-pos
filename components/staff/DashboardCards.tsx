@@ -361,7 +361,7 @@ export function CashCheckCard({ p }: { p: P }) {
           <div className="mt-1.5"><Legend items={[{ label: `Card ${Math.round((card / taken) * 100)}%`, colour: CHANNEL_COLOUR.dine_in }, { label: `Cash ${Math.round((cash / taken) * 100)}%`, colour: CHANNEL_COLOUR.just_eat }]} /></div>
         </div>
       )}
-      <p className="mb-1.5 mt-3 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Variance · closing − opening</p>
+      <p className="mb-1.5 mt-3 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Variance · cash counted − expected</p>
       {days.length === 0 ? <Empty text="No opening / closing cash entered in this period." /> : (
         <div className="flex flex-col gap-1.5">
           {days.map((d) => (

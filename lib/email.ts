@@ -1049,9 +1049,9 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
 
   const dr = d.drawer;
   const drawer = section("Cash drawer", [
-    row("Opening", gbp(dr.opening)), row("+ Cash sales", gbp(dr.cashSales)), row("+ Money in", gbp(dr.moneyIn)), row("− Money out", gbp(dr.moneyOut)),
+    row("Opening", gbp(dr.opening)), row("+ Cash sales", gbp(dr.cashSales)), row("+ Money in", gbp(dr.moneyIn)), row("− Money out", gbp(dr.moneyOut)), row("− Bank in", gbp(dr.bankIn)),
     row("Expected at close", gbp(dr.expected), true), row("Counted", gbp(dr.counted), true),
-    row("Difference", dr.variance == null ? "—" : `<span style="color:${Math.abs(dr.variance) < 0.01 ? "#15803d" : "#b91c1c"};">${dr.variance > 0 ? "+" : ""}${gbp(dr.variance)}</span>`, true),
+    row("Variance (counted − expected)", dr.variance == null ? "—" : `<span style="color:${Math.abs(dr.variance) < 0.01 ? "#15803d" : "#b91c1c"};">${dr.variance > 0 ? "+" : ""}${gbp(dr.variance)}</span>`, true),
   ].join(""));
 
   const cash = d.cash.length

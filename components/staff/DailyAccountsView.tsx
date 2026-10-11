@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
-import { DAILY_FIELDS, isComputedField, platformCommission, type DailyFieldKey, type DailyValues } from "@/lib/daily-accounts-fields";
+import { DAILY_FIELDS, isComputedField, platformCommission, type DailyFieldKey, type DailyValues, HIDDEN_FIELDS, cashCheck } from "@/lib/daily-accounts-fields";
 
 // Staff Hub → Daily accounts: the manager's day-end sheet (the paper "Daily
 // Accounts Report"). Till figures come pre-filled and stay editable; bank in,
@@ -14,7 +14,7 @@ const gbp = (n: number) => `£${n.toFixed(2)}`;
 const toText = (n: number | null | undefined) => (n == null ? "" : String(Number(n)));
 
 type Saved = (Partial<DailyValues> & { notes: string | null; status: "draft" | "submitted"; submitted_at: string | null }) | null;
-type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; locked: boolean; canUnlock: boolean };
+type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; cashMoves?: { moneyIn: number; moneyOut: number }; locked: boolean; canUnlock: boolean };
 
 export default function DailyAccountsView({ today, start }: { today: string; start: string }) {
   const { toast } = useToast();
@@ -78,7 +78,7 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
           ) : (
             <>
               <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
-                {DAILY_FIELDS.map((f) => {
+                {DAILY_FIELDS.filter((f) => !HIDDEN_FIELDS.includes(f.key)).map((f) => {
                   if (isComputedField(f.key)) {
                     // Commission & card fees: typed platform commissions + the card fee, never typed itself.
                     const platforms = platformCommission(values) ?? 0;
@@ -124,6 +124,8 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
                 })}
               </div>
 
+              <CashCheckBox values={values} moves={day.cashMoves} />
+
               <label className="mt-4 block">
                 <span className="text-[13.5px] font-semibold">Notes</span>
                 <textarea rows={3} maxLength={1000} disabled={locked} value={notes} onChange={(e) => setNotes(e.target.value)}
@@ -147,5 +149,33 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
             </>
           )}
         </div>
+  );
+}
+
+// The cash drawer check, worked out live as figures are typed (cashCheck in
+// lib/daily-accounts-fields.ts — the same sum as the month sheet and email).
+function CashCheckBox({ values, moves }: { values: Record<string, string>; moves?: { moneyIn: number; moneyOut: number } }) {
+  const n = (k: string) => (values[k] === "" || values[k] == null ? null : Number(values[k]));
+  const m = moves ?? { moneyIn: 0, moneyOut: 0 };
+  const c = cashCheck({ opening: n("opening_balance"), cash: n("cash") ?? 0, moneyIn: m.moneyIn, moneyOut: m.moneyOut, bankIn: n("bank_in") ?? 0, counted: n("closing_balance") });
+  const g = (v: number | null) => (v == null ? "—" : `£${v.toFixed(2)}`);
+  const row = (label: string, value: string, strong = false) => (
+    <div className={`flex justify-between py-0.5 ${strong ? "font-semibold" : ""}`}><span>{label}</span><span className="tabular-nums">{value}</span></div>
+  );
+  return (
+    <div className="mt-4 rounded-xl border border-border bg-[#FBF8F1] px-4 py-3 text-[13.5px]">
+      <div className="mb-1 text-[11.5px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">Cash drawer check</div>
+      {row("Opening", g(n("opening_balance")))}
+      {row("+ Cash sales", g(n("cash") ?? 0))}
+      {row("+ Money in (staff link)", g(m.moneyIn))}
+      {row("− Money out (staff link / till)", g(m.moneyOut))}
+      {row("− Bank in", g(n("bank_in") ?? 0))}
+      {row("= Expected at close", g(c.expected), true)}
+      {row("Counted (closing balance)", g(n("closing_balance")), true)}
+      <div className={`mt-1 flex justify-between border-t border-dashed border-border pt-1.5 font-bold ${c.variance == null ? "" : Math.abs(c.variance) < 0.005 ? "text-emerald-700" : "text-red-700"}`}>
+        <span>Variance {c.variance != null && Math.abs(c.variance) >= 0.005 ? (c.variance < 0 ? "(missing)" : "(extra)") : ""}</span>
+        <span className="tabular-nums">{c.variance == null ? "Enter opening and closing" : `${c.variance > 0 ? "+" : ""}£${c.variance.toFixed(2)}`}</span>
+      </div>
+    </div>
   );
 }

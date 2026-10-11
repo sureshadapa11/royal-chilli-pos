@@ -14,6 +14,8 @@ export type CashCategory = {
   pick?: "staff" | "supplier";
   photo: boolean;          // receipt photo required
   reasonRequired?: boolean;
+  /** No longer offered (kept so old entries still read right). */
+  hidden?: boolean;
 };
 
 export const CASH_CATEGORIES: CashCategory[] = [
@@ -25,7 +27,8 @@ export const CASH_CATEGORIES: CashCategory[] = [
   { key: "marketing", label: "Marketing", icon: "📣", direction: "out", home: "expense", expenseCategory: "marketing", vat: true, photo: true },
   { key: "wages", label: "Staff wages paid in cash", icon: "💷", direction: "out", home: "wages", pick: "staff", photo: false },
   { key: "staff_advance", label: "Staff advance", icon: "🤝", direction: "out", home: "advance", pick: "staff", photo: false },
-  { key: "owner_out", label: "Given to owner / management", icon: "👤", direction: "out", home: "book", photo: false },
+  // Cash given to the owner is entered as Bank in (Day End / Daily accounts), not here — so it is never taken off twice.
+  { key: "owner_out", label: "Given to owner / management", icon: "👤", direction: "out", home: "book", photo: false, hidden: true },
   { key: "customer_refund", label: "Refund to customer", icon: "↩️", direction: "out", home: "expense", expenseCategory: "customer_refund", vat: false, photo: true },
   { key: "other", label: "Other", icon: "❓", direction: "out", home: "expense", expenseCategory: "other", vat: true, photo: true, reasonRequired: true },
   { key: "catering", label: "Catering payment received", icon: "🍱", direction: "in", home: "book", photo: false },

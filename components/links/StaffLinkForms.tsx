@@ -131,7 +131,13 @@ export function DayEndForm({ token, business, today }: { token: string; business
       </section>
       <section className={card}>
         <div className={head}>Cash drawer</div>
+        <label className="flex items-center justify-between py-1.5 text-[15px]">Opening cash (start of day) {box("opening_balance")}</label>
+        <label className="flex items-center justify-between py-1.5 text-[15px]">Bank in (deposited / given to owner) {box("bank_in")}</label>
         <label className="flex items-center justify-between py-1.5 text-[15px]">Cash counted at close {box("closing_balance")}</label>
+      </section>
+      <section className={card}>
+        <div className={head}>Owed to us</div>
+        <label className="flex items-center justify-between py-1.5 text-[15px]">Pending bills {box("pending")}</label>
       </section>
       <section className={card}>
         <ReceiptPhotos entity="daily_account" label="Z report photo (optional)" required={false} value={photos} onChange={setPhotos}
@@ -210,7 +216,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
       <section className={card}>
         <div className={head}>What was it for?</div>
         <div className="grid grid-cols-2 gap-2">
-          {CASH_CATEGORIES.filter((c) => c.direction === direction).map((c) => (
+          {CASH_CATEGORIES.filter((c) => c.direction === direction && !c.hidden).map((c) => (
             <button key={c.key} onClick={() => { setCategory(c.key); setWho(""); setAskAgain(false); }}
               className={`rounded-xl border-2 px-2 py-2.5 text-left text-[13.5px] font-semibold leading-tight ${category === c.key ? "border-[#e4473a] bg-red-50" : "border-border bg-white"}`}>
               <span className="mr-1">{c.icon}</span>{c.label}
