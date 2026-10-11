@@ -5,7 +5,7 @@ import { ReceiptLinks } from "@/components/staff/ReceiptPhotos";
 
 // Staff Hub → Daily accounts → Cash in/out: what staff entered through the
 // staff links this month (Cash In / Out entries and who sent each Day End).
-type Move = { id: number; movement_date: string; direction: "in" | "out"; categoryLabel: string; amount: number; reason: string; paid_to: string | null; by: string; created_at: string; photos: { id: number }[]; possibleDuplicate: string | null };
+type Move = { id: number; movement_date: string; direction: "in" | "out"; categoryLabel: string; methodLabel: string; amount: number; reason: string; paid_to: string | null; by: string; created_at: string; photos: { id: number }[]; possibleDuplicate: string | null };
 type DayEnd = { date: string; by: string; via: string | null; photos: { id: number }[] };
 
 const gbp = (n: number) => `£${n.toFixed(2)}`;
@@ -34,17 +34,18 @@ export default function CashMovementsMonth({ startMonth }: { startMonth: string 
       <div className="overflow-x-auto rounded-xl border border-border bg-white">
         <table className="w-full text-sm">
           <thead className="bg-[#F6F1E6] text-left text-xs uppercase tracking-wide text-muted-foreground">
-            <tr><th className="px-3 py-2">Date</th><th className="px-3 py-2">In / Out</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2">Category</th><th className="px-3 py-2">Note</th><th className="px-3 py-2">Paid to / from</th><th className="px-3 py-2">Entered by</th><th className="px-3 py-2">Photo</th><th className="px-3 py-2" /></tr>
+            <tr><th className="px-3 py-2">Date</th><th className="px-3 py-2">In / Out</th><th className="px-3 py-2 text-right">Amount</th><th className="px-3 py-2">Category</th><th className="px-3 py-2">Paid by</th><th className="px-3 py-2">Note</th><th className="px-3 py-2">Paid to / from</th><th className="px-3 py-2">Entered by</th><th className="px-3 py-2">Photo</th><th className="px-3 py-2" /></tr>
           </thead>
           <tbody>
-            {!data ? <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">Loading…</td></tr>
-              : data.movements.length === 0 ? <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">No cash in / out entered this month.</td></tr>
+            {!data ? <tr><td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">Loading…</td></tr>
+              : data.movements.length === 0 ? <tr><td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">No money in / out entered this month.</td></tr>
               : data.movements.map((m) => (
                 <tr key={m.id} className="border-t border-border">
                   <td className="px-3 py-2 whitespace-nowrap">{day(m.movement_date)}</td>
                   <td className={`px-3 py-2 font-semibold ${m.direction === "out" ? "text-red-700" : "text-emerald-700"}`}>{m.direction === "out" ? "Out" : "In"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{gbp(m.amount)}</td>
                   <td className="px-3 py-2 font-medium">{m.categoryLabel}</td>
+                  <td className="px-3 py-2">{m.methodLabel}</td>
                   <td className="px-3 py-2">{m.reason !== m.categoryLabel ? m.reason : ""}{m.possibleDuplicate && (
                     <div className="mt-0.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800" title="Same amount, same day. If it's the same spend, delete one so it isn't counted twice.">
                       ⚠ Possible duplicate: {m.possibleDuplicate}

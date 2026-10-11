@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReceiptPhotos, { type Receipt } from "@/components/staff/ReceiptPhotos";
-import { CASH_CATEGORIES, cashCategory } from "@/lib/cash-categories";
+import { CASH_CATEGORIES, CATEGORY_HINT, PAY_METHODS, cashCategory } from "@/lib/cash-categories";
 
 // The staff links' forms (lib/staff-links.ts): Day End and Cash In / Out,
 // built for a phone held in one hand (agreed mock-up 2026-10-11): a big PIN
@@ -308,13 +308,13 @@ export function DayEndForm({ token, business, today }: { token: string; business
   );
 }
 
-// ── Cash In / Out ────────────────────────────────────────────────────────
+// ── Money In / Out ────────────────────────────────────────────────────────
 
 export function CashForm({ token, business, today }: { token: string; business: string; today: string }) {
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
   const [picks, setPicks] = useState<Picks>({ staff: [], suppliers: [] });
-  const blank = { direction: "out" as "out" | "in", category: "", who: "", amount: "", reason: "", paidTo: "", date: today };
+  const blank = { direction: "out" as "out" | "in", category: "", who: "", amount: "", reason: "", paidTo: "", date: today, method: "cash" as string };
   const [f, setF, clearDraft, savedAt] = useDraft(`cash:${token}`, blank);
   const [photos, setPhotos] = useState<Receipt[]>([]);
   const [busy, setBusy] = useState(false);
@@ -336,7 +336,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
     const res = await fetch(`/api/links/${token}/cash`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        pin, category: cat.key, amount: f.amount, reason: f.reason, paid_to: f.paidTo, date: f.date, photo_ids: photos.map((p) => p.id),
+        pin, category: cat.key, amount: f.amount, reason: f.reason, paid_to: f.paidTo, date: f.date, method: f.method, photo_ids: photos.map((p) => p.id),
         staff_member_id: cat.pick === "staff" ? Number(f.who) : undefined,
         supplier_id: cat.pick === "supplier" ? Number(f.who) : undefined,
         confirm_duplicate: askAgain,
@@ -348,14 +348,14 @@ export function CashForm({ token, business, today }: { token: string; business: 
     if (!res.ok) { setAskAgain(!!d?.duplicate); return setErr(d?.error ?? "Couldn't save. Please try again."); }
     setAskAgain(false);
     clearDraft();
-    setDone(`${cat.label} £${Number(f.amount).toFixed(2)}, entered by ${name}.`);
+    setDone(`${cat.label} £${Number(f.amount).toFixed(2)} (${PAY_METHODS.find((m) => m.key === f.method)?.label ?? "Cash"}), entered by ${name}.`);
   }
 
   const again = () => { setDone(""); setF({ ...blank, date: ukToday() }); setPhotos([]); setAskAgain(false); };
-  if (done) return <Saved business={business} title="Cash In / Out" what={done} again={again} />;
+  if (done) return <Saved business={business} title="Money In / Out" what={done} again={again} />;
   const list = cat?.pick === "staff" ? picks.staff : picks.suppliers;
   return (
-    <Shell business={business} title={name ? `Cash In / Out · ✓ ${name}` : "Cash In / Out"} bar={<>
+    <Shell business={business} title={name ? `Money In / Out · ✓ ${name}` : "Money In / Out"} bar={<>
       {err && (askAgain
         ? <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-[15px] text-amber-900">{err}</div>
         : <NotSaved message={err} />)}
@@ -386,6 +386,21 @@ export function CashForm({ token, business, today }: { token: string; business: 
       </section>
       {cat && (
         <>
+          {CATEGORY_HINT[cat.key] && (
+            <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">ℹ️ {CATEGORY_HINT[cat.key]}</p>
+          )}
+          <section className={card}>
+            <div className={head}>Paid how?</div>
+            <div className="grid grid-cols-3 gap-2">
+              {PAY_METHODS.map((m) => (
+                <button key={m.key} onClick={() => upd({ method: m.key })}
+                  className={`flex min-h-[56px] flex-col items-center justify-center rounded-2xl border-2 text-[14px] font-semibold leading-tight ${f.method === m.key ? "border-[#e4473a] bg-red-50" : "border-[#eadfcc] bg-white"}`}>
+                  <span className="text-[18px]">{m.icon}</span>{m.label}
+                </button>
+              ))}
+            </div>
+            {f.method !== "cash" && <p className="mt-2 text-[13px] text-[#7a6a60]">Not cash, so it doesn't count in the cash drawer.</p>}
+          </section>
           {cat.pick && (
             <section className={card}>
               <div className={head}>{cat.pick === "staff" ? "Staff member" : "Supplier"}</div>

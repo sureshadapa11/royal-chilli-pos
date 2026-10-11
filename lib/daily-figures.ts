@@ -166,10 +166,10 @@ async function costsByDay(businessId: number, from: string, to: string, vatRate:
     add(spent, e.expense_date, e.vat_applicable ? amount - extractVat(amount, vatRate) : amount);
   }
   for (const p of paidOuts) add(paidOut, shiftDay.get(p.work_period_id)!, Number(p.amount));
-  // The staff link's Cash In / Out: not costs here (each has its own home),
-  // but they move cash in and out of the drawer for the cash check.
+  // The staff link's Money In / Out paid in CASH: not costs here (each has its
+  // own home), but they move cash in and out of the drawer for the cash check.
   const moves = await allRows<{ direction: string; amount: number; movement_date: string }>((a, b) =>
-    db.from("cash_movements").select("direction, amount, movement_date")
+    db.from("cash_movements").select("direction, amount, movement_date").eq("method", "cash")
       .gte("movement_date", from).lte("movement_date", to).order("id").range(a, b));
   const cashIn = new Map<string, number>();
   const cashOut = new Map<string, number>();

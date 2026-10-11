@@ -3,11 +3,11 @@ import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { attachReceipts, checkReceiptsForSave, type ReceiptEntity } from "@/lib/receipts";
 import { DATE_RE, linkStaff, money } from "@/lib/staff-links";
-import { cashCategory } from "@/lib/cash-categories";
+import { cashCategory, payMethodLabel } from "@/lib/cash-categories";
 import { tradingDayStr, londonDayRangeUtc } from "@/lib/london-date";
 import { addDays } from "@/lib/admin-dashboard";
 
-// POST — the Cash In / Out link. Every entry has a category, and each
+// POST — the Money In / Out link (cash, card or bank transfer). Every entry has a category, and each
 // category has ONE home (lib/cash-categories.ts): an expense is created as
 // the expense itself, a supplier payment as the supplier payment, an advance
 // in staff advances — so nobody enters it again in the Staff Hub. The same
@@ -25,6 +25,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (amount === "bad" || amount == null || amount <= 0) return NextResponse.json({ error: "Enter the amount.", field: "amount" }, { status: 400 });
   const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";
   if (cat.reasonRequired && reason.length < 3) return NextResponse.json({ error: "Write what it was for.", field: "reason" }, { status: 400 });
+  const method = body?.method === "card" || body?.method === "bank" ? body.method : "cash";
   const paidTo = typeof body?.paid_to === "string" ? body.paid_to.trim().slice(0, 120) || null : null;
   const today = tradingDayStr();
   const date = DATE_RE.test(String(body?.date ?? "")) ? String(body.date) : today;
@@ -81,16 +82,16 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       category: cat.expenseCategory,
       description: [cat.label, reason, paidTo && `paid to ${paidTo}`].filter(Boolean).join(" · ").slice(0, 300),
       amount, vat_applicable: cat.vat ? 1 : 0, expense_date: date,
-      receipt_reference: "Paid in cash (staff link)", recorded_by: who.staff.id,
+      receipt_reference: `Paid by ${payMethodLabel(method).toLowerCase()} (staff link)`, recorded_by: who.staff.id,
     }).select("id").single();
     if (error || !e) return NextResponse.json({ error: "Couldn't save. Please try again." }, { status: 500 });
     expenseId = e.id;
     photoEntity = "expense";
   } else if (cat.home === "supplier") {
     const { data: p, error } = await db.from("supplier_payments").insert({
-      supplier_id: supplierId, amount, method: "cash", recorded_by: who.staff.id,
+      supplier_id: supplierId, amount, method: method === "bank" ? "bank_transfer" : method, recorded_by: who.staff.id,
       paid_at: date === today ? new Date().toISOString() : `${date}T12:00:00Z`,
-      notes: ["Paid in cash (staff link)", reason].filter(Boolean).join(" · "),
+      notes: [`Paid by ${payMethodLabel(method).toLowerCase()} (staff link)`, reason].filter(Boolean).join(" · "),
     }).select("id").single();
     if (error || !p) return NextResponse.json({ error: "Couldn't save. Please try again." }, { status: 500 });
     supplierPaymentId = p.id;
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
 
   const { data: saved, error } = await db.from("cash_movements").insert({
-    movement_date: date, direction: cat.direction, category: cat.key, amount,
+    movement_date: date, direction: cat.direction, category: cat.key, amount, method,
     reason: reason || cat.label, paid_to: paidTo ?? (pickedName || null), staff_id: who.staff.id, source: "link",
     staff_member_id: staffMemberId, supplier_id: supplierId, expense_id: expenseId, supplier_payment_id: supplierPaymentId,
   }).select("id").single();

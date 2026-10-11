@@ -37,5 +37,19 @@ export const CASH_CATEGORIES: CashCategory[] = [
   { key: "other_in", label: "Other income", icon: "❓", direction: "in", home: "book", photo: false, reasonRequired: true },
 ];
 
+/** How it was paid (132). Only cash moves the drawer, so only cash is in the cash check. */
+export const PAY_METHODS = [
+  { key: "cash", label: "Cash", icon: "💷" },
+  { key: "card", label: "Card", icon: "💳" },
+  { key: "bank", label: "Bank transfer", icon: "🏦" },
+] as const;
+export type PayMethod = (typeof PAY_METHODS)[number]["key"];
+export const payMethodLabel = (key: string | null | undefined) => PAY_METHODS.find((m) => m.key === key)?.label ?? "Cash";
+
+/** A line under a category on the form. */
+export const CATEGORY_HINT: Record<string, string> = {
+  catering: "Paid on our card machine? It's already in the Z report, so don't add it here.",
+};
+
 export const cashCategory = (key: string) => CASH_CATEGORIES.find((c) => c.key === key) ?? null;
 export const cashCategoryLabel = (key: string) => cashCategory(key)?.label ?? key;
