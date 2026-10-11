@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { findWinBack, winBackOffers } from "@/lib/winback";
 import { isWinBackReason } from "@/lib/winback-reasons";
 import ComeBack from "@/components/site/ComeBack";
+import { DEFAULT_REWARD_MIN_SPEND, getLoyaltySetting, rewardRuleText } from "@/lib/loyalty";
 
 // Opened from the "Why did you stop coming?" email. The reason in the link is
 // only pre-selected: the customer confirms it here (email scanners open every
@@ -21,6 +22,7 @@ export default async function ComeBackPage({ searchParams }: { searchParams: Pro
   }
   return (
     <ComeBack token={t} firstName={req.firstName} initialReason={isWinBackReason(r) ? r : null}
-      offers={await winBackOffers(req.businessId)} offer={req.offer} />
+      offers={await winBackOffers(req.businessId)} offer={req.offer}
+      rule={rewardRuleText(await getLoyaltySetting(req.businessId, "loyalty_reward_min_spend", DEFAULT_REWARD_MIN_SPEND))} />
   );
 }

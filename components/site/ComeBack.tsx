@@ -20,9 +20,9 @@ const NOTE: Record<WinBackReason, string> = {
   busy: "We understand, life gets busy!",
 };
 
-export default function ComeBack({ token, firstName, initialReason, offers, offer: initialOffer }: {
+export default function ComeBack({ token, firstName, initialReason, offers, offer: initialOffer, rule }: {
   token: string; firstName: string; initialReason: WinBackReason | null;
-  offers: Partial<Record<WinBackReason, { name: string; description: string | null }>>; offer: Offer | null;
+  offers: Partial<Record<WinBackReason, { name: string; description: string | null }>>; offer: Offer | null; rule?: string;
 }) {
   const [reason, setReason] = useState<WinBackReason | null>(initialReason);
   const [comment, setComment] = useState("");
@@ -55,6 +55,7 @@ export default function ComeBack({ token, firstName, initialReason, offers, offe
           <p className="mt-5 text-xs uppercase tracking-[0.2em] text-muted-foreground">Your code</p>
           <p className="mt-1 select-all font-mono text-3xl font-bold tracking-[0.15em] text-primary">{offer.code}</p>
           <p className="mt-4 text-sm text-muted-foreground">Show this code when you order or pay. Valid until {ukDate(offer.expiresAt)}, once.</p>
+          {rule && <p className="mt-1 text-xs text-muted-foreground">{rule}</p>}
         </div>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <Link href="/reservations" className="bg-primary px-6 py-3 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90">Book a table</Link>

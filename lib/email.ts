@@ -1,4 +1,5 @@
 import { SITE_URL } from "@/lib/site-url";
+import { DEFAULT_REWARD_MIN_SPEND, getLoyaltySetting, rewardRuleText } from "@/lib/loyalty";
 import { getBusiness } from "@/lib/business";
 import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
 import { addressOneLine, type Address } from "@/lib/business-setup";
@@ -593,7 +594,7 @@ export async function sendWinBackEmail(
         <tr><td align="center" style="padding:24px;">
           ${cardLabel("Show this code at the till")}
           <div style="font-family:${SANS}; font-size:28px; font-weight:700; letter-spacing:4px; color:${C.chilli}; margin-top:8px;">${data.code}</div>
-          <div style="font-family:${SANS}; font-size:12px; color:${C.muted}; margin-top:8px;">Valid until ${expiryLabel}</div>
+          <div style="font-family:${SANS}; font-size:12px; color:${C.muted}; margin-top:8px;">Valid until ${expiryLabel}<br />${rewardRuleText(ruleMin)}</div>
         </td></tr>
       </table>
     </td></tr>`;
@@ -662,9 +663,16 @@ function codeBox(label: string, code: string, note: string) {
       <tr><td align="center" style="padding:22px;">
         ${cardLabel(label)}
         <div style="font-family:${SANS}; font-size:28px; font-weight:700; letter-spacing:4px; color:${C.chilli}; margin-top:8px;">${esc(code)}</div>
-        <div style="font-family:${SANS}; font-size:12px; color:${C.muted}; margin-top:8px; line-height:1.5;">${note}</div>
+        <div style="font-family:${SANS}; font-size:12px; color:${C.muted}; margin-top:8px; line-height:1.5;">${note}${note ? "<br />" : ""}${rewardRuleText(ruleMin)}</div>
       </td></tr>
     </table>`;
+}
+
+// The Rewards Club minimum spend shown on emailed codes. Emails that know
+// their business look up its own rule (rewardRule); the rest use the default.
+const ruleMin = DEFAULT_REWARD_MIN_SPEND;
+async function rewardRule(businessId: number): Promise<string> {
+  return rewardRuleText(await getLoyaltySetting(businessId, "loyalty_reward_min_spend", DEFAULT_REWARD_MIN_SPEND).catch(() => DEFAULT_REWARD_MIN_SPEND));
 }
 
 const howItWorks = `
@@ -672,6 +680,7 @@ const howItWorks = `
     🍛 <strong style="color:${C.ink};">10 points for every £1</strong> — dine-in, collection or delivery<br />
     ⭐ <strong style="color:${C.ink};">Double points Tuesday to Thursday</strong><br />
     🎁 <strong style="color:${C.ink};">100 points = £1 off</strong> when you dine in — up to £10 a visit<br />
+    🎟️ Rewards: ${rewardRuleText(DEFAULT_REWARD_MIN_SPEND).replace(/^U/, "u")}<br />
     🔁 Bonus points on your 2nd, 3rd and every 5th visit
   </div>`;
 
@@ -953,7 +962,7 @@ export async function sendComeBackOfferEmail(
     <tr><td align="center" style="padding:14px 32px 6px;">
       <div style="display:inline-block; background:${C.chilli}; color:#fff; font-family:${SERIF}; font-size:28px; letter-spacing:6px; padding:16px 26px; border-radius:12px;">${esc(d.code)}</div>
       <div style="font-family:${SANS}; font-size:13px; color:${C.muted}; margin-top:12px; line-height:1.6;">
-        Show this code when you order or pay. One use, valid until ${esc(ukDate(d.expiresAt))}.<br/>It's also saved in your account under Rewards.
+        Show this code when you order or pay. One use, valid until ${esc(ukDate(d.expiresAt))}.<br/>${await rewardRule(d.businessId)}.<br/>It's also saved in your account under Rewards.
       </div>
     </td></tr>
     <tr><td align="center" style="padding:16px 32px 30px;">${button(d.accountUrl, "See it in my account")}</td></tr>`;
@@ -963,7 +972,7 @@ export async function sendComeBackOfferEmail(
 
 // ---------- Gift emails: birthday treat and apology offer ----------
 
-function giftEmailBody(d: { label: string; heading: string; intro: string; code: string; expiresAt: string; accountUrl: string; unsubscribeUrl?: string }) {
+function giftEmailBody(d: { label: string; heading: string; intro: string; code: string; expiresAt: string; accountUrl: string; unsubscribeUrl?: string; rule: string }) {
   return `
     <tr><td style="padding:28px 32px 8px; text-align:center;">
       ${cardLabel(d.label)}
@@ -973,7 +982,7 @@ function giftEmailBody(d: { label: string; heading: string; intro: string; code:
     <tr><td align="center" style="padding:14px 32px 6px;">
       <div style="display:inline-block; background:${C.chilli}; color:#fff; font-family:${SERIF}; font-size:28px; letter-spacing:6px; padding:16px 26px; border-radius:12px;">${esc(d.code)}</div>
       <div style="font-family:${SANS}; font-size:13px; color:${C.muted}; margin-top:12px; line-height:1.6;">
-        Show this code when you dine in. One use, valid until ${esc(ukDate(d.expiresAt))}.<br/>It's also saved in your account under Rewards.
+        Show this code when you dine in. One use, valid until ${esc(ukDate(d.expiresAt))}.<br/>${d.rule}.<br/>It's also saved in your account under Rewards.
       </div>
     </td></tr>
     <tr><td align="center" style="padding:16px 32px 30px;">
@@ -992,7 +1001,7 @@ export async function sendBirthdayEmail(
   const body = giftEmailBody({
     label: "Birthday treat", heading: `Happy birthday, ${firstName(d.customerName)}! 🎂`,
     intro: `Your birthday is coming up on ${esc(d.birthday)}, so ${esc(d.offer)} is on us. Come and celebrate with us any time in the next two weeks.`,
-    code: d.code, expiresAt: d.expiresAt, accountUrl: d.accountUrl, unsubscribeUrl: d.unsubscribeUrl,
+    code: d.code, expiresAt: d.expiresAt, accountUrl: d.accountUrl, unsubscribeUrl: d.unsubscribeUrl, rule: await rewardRule(d.businessId),
   });
   await sendBrevoEmail(to, `Happy birthday from ${name}! A treat on us 🎂`, shell(body, brand), d.unsubscribeUrl, brand);
 }
@@ -1007,7 +1016,7 @@ export async function sendApologyEmail(
   const body = giftEmailBody({
     label: "With our apologies", heading: `We're sorry, ${firstName(d.customerName)}`,
     intro: `Thank you for telling us about your visit. It wasn't the experience we want for anyone, and we'd love the chance to make it right, so ${esc(d.offer)} is on us next time.`,
-    code: d.code, expiresAt: d.expiresAt, accountUrl: d.accountUrl,
+    code: d.code, expiresAt: d.expiresAt, accountUrl: d.accountUrl, rule: await rewardRule(d.businessId),
   });
   await sendBrevoEmail(to, `We're sorry, and thank you for telling us (${name})`, shell(body, brand), undefined, brand);
 }

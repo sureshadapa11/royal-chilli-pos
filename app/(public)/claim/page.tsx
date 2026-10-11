@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { getCustomerSession } from "@/lib/customer-auth";
 import { claimableOrder, CLAIM_WINDOW_DAYS } from "@/lib/claim";
+import { pageBusinessId } from "@/lib/business";
+import { DEFAULT_REWARD_MIN_SPEND, getLoyaltySetting, rewardRuleText } from "@/lib/loyalty";
 import ClaimButton from "./ClaimButton";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +43,7 @@ export default async function ClaimPage({ searchParams }: { searchParams: Promis
               </Link>
               <p className="text-xs text-muted-foreground">
                 New members also get 20% off their next dine-in visit. Claim within {CLAIM_WINDOW_DAYS} days.
+                <br />Rewards: {rewardRuleText(await getLoyaltySetting(await pageBusinessId(), "loyalty_reward_min_spend", DEFAULT_REWARD_MIN_SPEND)).toLowerCase()}.
               </p>
             </div>
           )}

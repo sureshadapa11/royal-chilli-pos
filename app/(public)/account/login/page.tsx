@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -73,7 +73,10 @@ function AuthForm() {
             <p className="mt-2 rounded-lg bg-amber-300/15 px-3 py-2 text-sm font-semibold text-amber-100">🎉 A friend invited you to our Rewards Club</p>
           )}
           {mode === "signup" && (
-            <p className="mt-2 text-sm font-semibold text-amber-200">Sign up for 200 points and 20% off your next dine-in visit (up to £20). Earn 10 points per £1 — double Tue–Thu.</p>
+            <>
+              <p className="mt-2 text-sm font-semibold text-amber-200">Sign up for 200 points and 20% off your next dine-in visit (up to £20). Earn 10 points per £1 — double Tue–Thu.</p>
+              <RewardRuleNote />
+            </>
           )}
         </div>
 
@@ -198,5 +201,20 @@ export default function AccountLoginPage() {
     <Suspense fallback={null}>
       <AuthForm />
     </Suspense>
+  );
+}
+
+// "Rewards can be used on bills of £15 or more · one reward per bill" — the
+// business's own minimum (Settings → Rewards rules).
+function RewardRuleNote() {
+  const [min, setMin] = useState<number | null>(null);
+  useEffect(() => {
+    fetch("/api/public/rewards-rules").then((r) => (r.ok ? r.json() : null)).then((d) => { if (d) setMin(Number(d.min_spend) || 0); }).catch(() => {});
+  }, []);
+  if (min == null) return null;
+  return (
+    <p className="mt-1 text-xs text-primary-foreground/70">
+      Rewards can be used on {min > 0 ? `bills of £${min % 1 ? min.toFixed(2) : min} or more` : "any bill"}, one reward per bill.
+    </p>
   );
 }
