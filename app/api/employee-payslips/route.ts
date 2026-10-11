@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
-import { payslipDays, payslipTotals } from "@/lib/payroll";
+import { payslipDays, payslipTotals, balanceToPay, cashSideOfPay } from "@/lib/payroll";
 
 // GET ?staff_id=123 — one employee's payslip history, latest first.
 // GET ?staff_id=123&from=&to=&preview=1 — what a payslip for that range would
@@ -26,7 +26,9 @@ export async function GET(req: NextRequest) {
     const { data: staff } = await db.from("staff").select("id, pay_rate").eq("id", Number(staffId)).maybeSingle();
     if (!staff) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     const days = await payslipDays(session.businessId, staff.id, from, to);
-    return NextResponse.json({ preview: payslipTotals(days, Number(staff.pay_rate || 0)) });
+    const pay = payslipTotals(days, Number(staff.pay_rate || 0));
+    const cash = await cashSideOfPay(session.businessId, staff.id, from, to);
+    return NextResponse.json({ preview: { ...pay, ...cash } });
   }
 
   const { data, error } = await db
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
   const db = bizDb(session.businessId);
 
-  const { staff_id, period_start, period_end } = await req.json();
+  const { staff_id, period_start, period_end, deduct_advance } = await req.json();
   if (!staff_id || !period_start || !period_end) {
     return NextResponse.json({ error: "staff_id, period_start and period_end are required" }, { status: 400 });
   }
@@ -63,6 +65,9 @@ export async function POST(req: NextRequest) {
 
   const pay = payslipTotals(await payslipDays(session.businessId, staff.id, period_start, period_end), Number(staff.pay_rate || 0));
   const { hours_worked: hoursWorked, pay_rate: payRate, total_amount: totalAmount } = pay;
+  // Wages already paid in cash that period, and any advance to take off.
+  const cash = await cashSideOfPay(session.businessId, staff.id, period_start, period_end);
+  const owed = balanceToPay(totalAmount, cash.cash_paid, cash.advance_outstanding, deduct_advance !== false);
 
   // Auto-name: "<Month> <Year> - Payslip #<n>" — n = how many this employee
   // already has whose period_end falls in the same calendar month.
@@ -85,10 +90,18 @@ export async function POST(req: NextRequest) {
     .insert({
       staff_id: staff.id, name, period_start, period_end,
       hours_worked: hoursWorked, pay_rate: payRate, total_amount: totalAmount,
+      cash_paid: cash.cash_paid, advance_deducted: owed.advance_deducted,
       status: "unpaid", created_by: session.id,
     })
     .select()
     .single();
   if (error) return NextResponse.json({ error: "Failed to create payslip" }, { status: 500 });
+  // The advance taken off this payslip is no longer owed.
+  if (owed.advance_deducted > 0) {
+    await db.from("staff_advances").insert({
+      staff_id: staff.id, kind: "deducted", amount: owed.advance_deducted, advance_date: period_end,
+      payslip_id: saved.id, note: name, created_by: session.id,
+    });
+  }
   return NextResponse.json({ payslip: saved }, { status: 201 });
 }

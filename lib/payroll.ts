@@ -62,3 +62,20 @@ export function computeGrossPay(entry: {
 }): number {
   return Math.round((entry.base_pay + entry.bonuses + entry.tips + entry.holiday_pay - entry.deductions) * 100) / 100;
 }
+
+// ── Cash already paid and staff advances (staff link Cash In / Out, 130) ─────
+
+export { balanceToPay } from "@/lib/payroll-balance";
+
+/** Wages paid in cash in the period, and the advance still owed (given − repaid − taken off payslips). */
+export async function cashSideOfPay(businessId: number, staffId: number, from: string, to: string) {
+  const db = bizDb(businessId);
+  const [{ data: wages }, { data: adv }] = await Promise.all([
+    db.from("cash_movements").select("amount").eq("category", "wages").eq("staff_member_id", staffId).gte("movement_date", from).lte("movement_date", to),
+    db.from("staff_advances").select("kind, amount").eq("staff_id", staffId),
+  ]);
+  const sum = (rows: { amount: number | string }[] | null) => Math.round((rows ?? []).reduce((t, x) => t + Number(x.amount), 0) * 100) / 100;
+  const given = sum((adv ?? []).filter((a) => a.kind === "advance"));
+  const back = sum((adv ?? []).filter((a) => a.kind !== "advance"));
+  return { cash_paid: sum(wages), advance_outstanding: Math.max(0, Math.round((given - back) * 100) / 100) };
+}

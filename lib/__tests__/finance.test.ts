@@ -48,7 +48,7 @@ describe("buildPnl", () => {
   it("costs are every bit of money out; profit is ex-VAT sales less costs", () => {
     expect(p.costs).toMatchObject({ ingredients: 50, staff: 40, expenses: 32, commission: 60, card_fees: 1.69, paid_out: 10, total: 193.69 });
     // No category split given: the whole amount shows as "Other expenses", and every line is listed.
-    expect(p.costs.expense_lines.map((l) => l.key)).toEqual(["rent", "utilities", "marketing", "equipment", "professional_fees", "other"]);
+    expect(p.costs.expense_lines.map((l) => l.key)).toEqual(["rent", "utilities", "marketing", "equipment", "professional_fees", "other", "food_stock", "cleaning", "repairs", "customer_refund"]);
     expect(p.costs.expense_lines.find((l) => l.key === "other")?.amount).toBe(32);
     expect(p.profit).toBe(556.31);
   });
@@ -96,7 +96,7 @@ describe("buildPnl expense categories", () => {
         expenses: { total: 36, vatApplicableTotal: 24, byCategory: { rent: { total: 24, vatApplicableTotal: 24 }, other: { total: 12, vatApplicableTotal: 0 } } }, recipe: { cogs: 30, coveragePct: 75 },
       });
     const lines = Object.fromEntries(split.costs.expense_lines.map((l) => [l.key, l.amount]));
-    expect(lines).toEqual({ rent: 20, utilities: 0, marketing: 0, equipment: 0, professional_fees: 0, other: 12 });
+    expect(lines).toEqual({ rent: 20, utilities: 0, marketing: 0, equipment: 0, professional_fees: 0, other: 12, food_stock: 0, cleaning: 0, repairs: 0, customer_refund: 0 });
     expect(split.costs.expense_lines.reduce((s, l) => s + l.amount, 0)).toBeCloseTo(split.costs.expenses, 2);
   });
 });
