@@ -6,6 +6,7 @@ import RewardsRules from "@/components/staff/RewardsRules";
 import ClubReport from "@/components/staff/ClubReport";
 import DuplicatesPanel from "@/components/staff/DuplicatesPanel";
 import FeedbackInbox from "@/components/staff/FeedbackInbox";
+import UseCodeBox from "@/components/staff/UseCodeBox";
 
 type Segment = "NEW" | "FIRST_TIME" | "RETURNING" | "REGULAR" | "LAPSED";
 type Customer = {
@@ -521,6 +522,7 @@ export default function CustomersView({ isManager, businessName = "The Royal Chi
 
         {tab === "redemptions" && (
           <div className="mt-5">
+            <div className="mb-5"><UseCodeBox onUsed={loadRedemptions} /></div>
             <div className="flex flex-wrap items-center gap-2">
               <label className="text-muted-foreground text-xs">Up to date:</label>
               <input type="date" value={redemptionsDate} onChange={(e) => setRedemptionsDate(e.target.value)}

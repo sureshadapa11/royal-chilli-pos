@@ -372,6 +372,23 @@ export function notYetValidMessage(validFrom: string | null | undefined, now: Da
 }
 
 /**
+ * Why a reward code can't be used right now, or null if it can — the same
+ * checks wherever a code is looked up (till and Staff Hub). Pure.
+ */
+export function redemptionProblem(
+  r: { status: string; valid_from?: string | null; expires_at: string },
+  now: Date = new Date(),
+): { error: string; message: string } | null {
+  if (r.status === "locked") return { error: "LOCKED", message: "This Bring a Friend voucher unlocks after their friend's first visit" };
+  if (r.status === "redeemed") return { error: "ALREADY_REDEEMED", message: "This code has already been used" };
+  if (r.status === "cancelled") return { error: "CANCELLED", message: "This code was cancelled" };
+  const notYet = notYetValidMessage(r.valid_from, now);
+  if (notYet) return { error: "NOT_YET_VALID", message: notYet };
+  if (r.status === "expired" || new Date(r.expires_at) < now) return { error: "REWARD_EXPIRED", message: "This code has expired" };
+  return null;
+}
+
+/**
  * Sign-up points (Rewards Club: 200). Once per customer — never a second
  * time, even if an old guest row is later claimed by signing up.
  */
