@@ -100,7 +100,11 @@ export function computeZReport(input: {
   const refunds = payments.filter((p) => Number(p.amount) < 0);
   const gross = (p: ZPayment) => Number(p.amount) + Number(p.tip_amount || 0);
 
-  const salesOrderIds = new Set(sales.map((p) => p.order_id));
+  // A bill closed at £0 (a reward, points or a 100% discount covered it) has
+  // no payment, but it's still a sale of this shift and its reward/discount
+  // belongs on the report.
+  const zeroBills = orders.filter((o) => o.work_period_id === period.id && o.status === "paid" && Number(o.total) <= 0.009).map((o) => o.id);
+  const salesOrderIds = new Set([...sales.map((p) => p.order_id), ...zeroBills]);
   const salesTotal = sales.reduce((s, p) => s + gross(p), 0);
   const refundsTotal = refunds.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
   const tipsTotal = sales.reduce((s, p) => s + Number(p.tip_amount || 0), 0);

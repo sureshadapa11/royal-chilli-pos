@@ -151,3 +151,20 @@ describe("zReportLines", () => {
     expect(r["Difference"]).toBe("-£5.70");
   });
 });
+
+describe("bills closed at £0", () => {
+  it("count as a sale with their reward on the Loyalty line, adding £0 to takings", () => {
+    const r = computeZReport({
+      period: period(), openedByName: null, closedByName: null, paidOuts: [],
+      orders: [
+        order(1, { total: 20, amount_paid: 20 }),
+        order(2, { total: 0, amount_paid: 0, loyalty_discount: 2.95 }), // voucher covered it all
+      ],
+      payments: [{ order_id: 1, method: "cash", amount: 20, tip_amount: 0 }],
+    });
+    expect(r.sales_count).toBe(2);
+    expect(r.sales_total).toBe(20);
+    expect(r.loyalty_count).toBe(1);
+    expect(r.loyalty_total).toBe(2.95);
+  });
+});

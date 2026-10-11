@@ -287,7 +287,9 @@ export default function PaymentModal({
   // total" after that first render.
   useEffect(() => {
     if (!open || !customerId) { setLoyaltyPreview(null); return; }
-    const amount = localTotal || total;
+    // Once anything has changed the bill (reward, points, discount), use its
+    // current total — even £0, which earns nothing — not the original one.
+    const amount = localLoyalty > 0 || cashCreditApplied !== null || appliedReward ? localTotal : localTotal || total;
     fetch(`/api/loyalty/estimate?customer_id=${customerId}&amount=${amount}${orderId ? `&order_id=${orderId}` : ""}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
@@ -306,7 +308,7 @@ export default function PaymentModal({
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, customerId, orderId, localTotal, total]);
+  }, [open, customerId, orderId, localTotal, total, localLoyalty]);
 
   useEffect(() => {
     if (open) { setCashCreditApplied(null); setCashCreditApplying(false); }
@@ -461,6 +463,27 @@ export default function PaymentModal({
 
   const handleCashClear = () => {
     setCashCents(0);
+  };
+
+  // A bill brought to £0 by a reward, points or a 100% discount: nothing to
+  // take, so close it (marks it paid, frees the table, prints the receipt).
+  const closeZeroBill = async () => {
+    if (!orderId) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`/api/orders/${orderId}/close-zero`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setError(data.error || "Couldn't close the bill"); return; }
+      setLastPaymentAmount(0);
+      setAmountPaidSoFar(localTotal);
+      setStep("receipt");
+      onPaymentComplete(0);
+    } catch {
+      setError("Couldn't close the bill. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleProcessPayment = async (reference?: string) => {
@@ -857,6 +880,10 @@ export default function PaymentModal({
                     <span className="text-emerald-800 text-[11px] font-semibold">✓ Loyalty credit applied</span>
                     <span className="text-emerald-800 text-[11px] font-bold">−{formatCurrency(cashCreditApplied)}</span>
                   </div>
+                ) : localLoyalty > 0 ? (
+                  <p className="text-center text-muted-foreground text-[10px]">
+                    A reward is already on this bill, so points can&apos;t be used too
+                  </p>
                 ) : loyaltyPreview && !loyaltyPreview.canSpend ? (
                   loyaltyPreview.cashCredit && loyaltyPreview.cashCredit.convertedValue > 0 ? (
                     <p className="text-center text-muted-foreground text-[10px]">
@@ -923,6 +950,15 @@ export default function PaymentModal({
                 </div>
               </div>
 
+              {remainingBalance <= 0.009 && localTotal <= 0.009 ? (
+                <div className="space-y-2">
+                  <p className="text-center text-sm text-muted-foreground">Nothing to pay: the reward or discount covers the whole bill.</p>
+                  <button onClick={closeZeroBill} disabled={loading}
+                    className="pos-btn no-select w-full h-14 bg-green-600 hover:bg-green-500 disabled:opacity-60 text-white font-bold text-lg rounded-xl transition-all">
+                    {loading ? "Closing…" : "✓ Close bill: nothing to pay"}
+                  </button>
+                </div>
+              ) : (<>
               <div className="text-muted-foreground text-sm font-medium text-center">Select Payment Method</div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -937,12 +973,15 @@ export default function PaymentModal({
                   <span className="font-bold text-lg">CARD</span>
                 </button>
               </div>
+              </>)}
 
-              <button onClick={() => setStep("pay_later_confirm")}
-                className="pos-btn no-select w-full flex items-center justify-center gap-2 py-3 bg-amber-100 hover:bg-amber-200 border-2 border-amber-300 rounded-xl text-amber-700 transition-all">
-                <span className="text-xl">📌</span>
-                <span className="font-bold text-sm">PAY LATER — card declined / customer will return</span>
-              </button>
+              {!(remainingBalance <= 0.009 && localTotal <= 0.009) && (
+                <button onClick={() => setStep("pay_later_confirm")}
+                  className="pos-btn no-select w-full flex items-center justify-center gap-2 py-3 bg-amber-100 hover:bg-amber-200 border-2 border-amber-300 rounded-xl text-amber-700 transition-all">
+                  <span className="text-xl">📌</span>
+                  <span className="font-bold text-sm">PAY LATER — card declined / customer will return</span>
+                </button>
+              )}
 
               {error && <div className="text-red-600 text-sm text-center">{error}</div>}
             </div>
