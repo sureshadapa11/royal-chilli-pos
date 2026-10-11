@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
-import { billFoodTotal, billRewardProblem, getCashCreditInfo, minSpendProblem, rewardMinSpend } from "@/lib/loyalty";
+import { billRewardProblem, getCashCreditInfo, minSpendProblem, rewardMinSpend } from "@/lib/loyalty";
 
 // One-tap "use my points" at the till — no code, no Staff Hub trip. Offered
 // in £ steps up to the per-visit cap (see getCashCreditInfo: £5 or £10);
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const { customer_id, order_id, amount, extra_order_ids } = await req.json();
+    const { customer_id, order_id, amount } = await req.json();
     if (!customer_id || !order_id) return NextResponse.json({ error: "customer_id and order_id are required" }, { status: 400 });
 
     // The till's own business's order only.
@@ -40,7 +40,7 @@ export async function POST(req: NextRequest) {
 
     // Minimum spend, on the food before the reward.
     const current = await recalcTotals(String(order_id), session.businessId);
-    const food = await billFoodTotal(session.businessId, order, Number(current.subtotal), extra_order_ids);
+    const food = Number(current.subtotal); // the whole table bill's food (every round)
     const short = minSpendProblem(await rewardMinSpend(session.businessId), food);
     if (short) return NextResponse.json({ error: short.message }, { status: 400 });
 

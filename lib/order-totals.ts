@@ -1,4 +1,5 @@
 import { bizDb } from "@/lib/business-db";
+import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -66,13 +67,77 @@ export function computeBill(input: BillInput): BillBreakdown {
   return { subtotal, tax, subtotalWithTax: subtotal, discount, loyalty, discounted, serviceChargeAmount, total };
 }
 
+/**
+ * Splits a whole-bill amount across a table's rounds in proportion to each
+ * round's food, to the penny: the rounding pennies go to the biggest round,
+ * so the shares always add up to exactly `amount`. No food at all → the
+ * first round takes it.
+ */
+export function splitByFood(amount: number, foods: number[]): number[] {
+  if (foods.length === 0) return [];
+  const food = foods.reduce((s, f) => s + Math.max(0, f), 0);
+  const shares = foods.map((f) => (food > 0 ? round2((amount * Math.max(0, f)) / food) : 0));
+  const big = food > 0 ? foods.indexOf(Math.max(...foods)) : 0;
+  shares[big] = round2(shares[big] + round2(amount - shares.reduce((s, x) => s + x, 0)));
+  return shares;
+}
+
+type RoundRow = {
+  id: number; created_at: string; discount: number | null; discount_type: string | null; discount_pct: number | null;
+  service_charge_pct: number | null; loyalty_discount: number | null;
+};
+
+/**
+ * A dine-in table's bill: every "Send to Kitchen" is its own order (a round,
+ * see lib/kitchen-rounds.ts), but the guests get ONE bill. Its rounds are the
+ * table's unpaid, live orders this trading day — the same ones the kitchen
+ * counts — oldest first. The oldest holds the bill's discount, loyalty
+ * reward and service charge. Empty when the order isn't part of a table bill
+ * with more than one round.
+ */
+async function tableBillRounds(
+  db: ReturnType<typeof bizDb>,
+  order: { order_type?: string | null; table_id?: number | null; status?: string | null; is_paid?: boolean | null } | null,
+): Promise<RoundRow[]> {
+  if (!order || order.order_type !== "dine_in" || !order.table_id || order.is_paid || order.status === "paid" || order.status === "cancelled") return [];
+  const { start } = tradingRangeUtc(tradingDayStr());
+  const { data } = await db.from("orders")
+    .select("id, created_at, discount, discount_type, discount_pct, service_charge_pct, loyalty_discount")
+    .eq("table_id", order.table_id).eq("order_type", "dine_in").eq("is_paid", false)
+    .not("status", "in", '("paid","cancelled")').gte("created_at", start);
+  const rounds = ((data ?? []) as RoundRow[]).sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+  return rounds.length > 1 ? rounds : [];
+}
+
+/**
+ * The table bill an order belongs to: its rounds' ids, oldest (the one that
+ * holds the bill's adjustments) first. Just the order itself when it isn't
+ * part of a table bill with several rounds.
+ */
+export async function tableBillOrderIds(orderId: number, businessId: number): Promise<number[]> {
+  const db = bizDb(businessId);
+  const { data: order } = await db.from("orders").select("order_type, table_id, status, is_paid").eq("id", orderId).maybeSingle();
+  const rounds = await tableBillRounds(db, order);
+  return rounds.length && rounds.some((r) => r.id === orderId) ? rounds.map((r) => r.id) : [orderId];
+}
+
+/**
+ * Recalculates an order's bill and saves it. For a table bill with several
+ * rounds, the WHOLE bill is worked out (all rounds' food, with the oldest
+ * round's discount / loyalty / service charge) and its total, VAT and service
+ * charge are split across the rounds by their food, so each round's total is
+ * its share and they add up to the bill. Returns the whole bill.
+ */
 export async function recalcTotals(orderId: string, businessId: number) {
   const db = bizDb(businessId);
   const { data: orderData } = await db
     .from("orders")
-    .select("discount, discount_type, discount_pct, service_charge_pct, loyalty_discount")
+    .select("discount, discount_type, discount_pct, service_charge_pct, loyalty_discount, order_type, table_id, status, is_paid")
     .eq("id", orderId)
     .single();
+
+  const rounds = await tableBillRounds(db, orderData);
+  if (rounds.some((r) => String(r.id) === String(orderId))) return recalcTableBill(db, rounds);
 
   // Sum only active (non-cancelled) items
   const { data: activeItems } = await db
@@ -111,5 +176,30 @@ export async function recalcTotals(orderId: string, businessId: number) {
   }
 
   await db.from("orders").update(updatePayload).eq("id", orderId);
+  return bill;
+}
+
+async function recalcTableBill(db: ReturnType<typeof bizDb>, rounds: RoundRow[]) {
+  const ids = rounds.map((r) => r.id);
+  const { data: items } = await db.from("order_items").select("order_id, item_price, quantity").in("order_id", ids).neq("status", "cancelled");
+  const foods = ids.map((id) => round2((items ?? []).filter((i) => i.order_id === id).reduce((s, i) => s + Number(i.item_price) * Number(i.quantity), 0)));
+  const lead = rounds[0];
+  const bill = computeBill({
+    subtotal: foods.reduce((s, f) => s + f, 0),
+    discountType: (lead.discount_type as DiscountType) ?? null,
+    discountPct: lead.discount_pct ?? null,
+    discountAmount: Number(lead.discount ?? 0),
+    serviceChargePct: Number(lead.service_charge_pct ?? 0),
+    loyaltyAmount: rounds.reduce((s, r) => s + Number(r.loyalty_discount ?? 0), 0),
+  });
+  const totals = splitByFood(bill.total, foods);
+  const taxes = splitByFood(bill.tax, foods);
+  const service = splitByFood(bill.serviceChargeAmount, foods);
+  const now = new Date().toISOString();
+  await Promise.all(rounds.map((r, i) => {
+    const payload: Record<string, unknown> = { subtotal: foods[i], tax: taxes[i], service_charge_amount: service[i], total: totals[i], updated_at: now };
+    if (i === 0 && lead.discount_type === "percent") payload.discount = bill.discount;
+    return db.from("orders").update(payload).eq("id", r.id);
+  }));
   return bill;
 }

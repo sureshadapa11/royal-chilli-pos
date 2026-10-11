@@ -3,7 +3,7 @@ import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { cancelOrderAndFreeTable } from "@/lib/orders";
-import { recalcTotals } from "@/lib/order-totals";
+import { recalcTotals, tableBillOrderIds } from "@/lib/order-totals";
 import { findOrCreateCustomerByPhone } from "@/lib/customers";
 import { queueKitchenTicketSafely } from "@/lib/print-queue";
 import { staffLocationIds } from "@/lib/locations";
@@ -55,9 +55,20 @@ export async function GET(
 
     if (itemsError) throw itemsError;
 
+    // A table bill with several rounds (one order per Send to Kitchen): the
+    // payment screen shows and takes the whole bill, not this round's share.
+    const billIds = await tableBillOrderIds(Number(id), session.businessId);
+    let table_bill = null;
+    if (billIds.length > 1) {
+      const { data: rounds } = await db.from("orders").select("total, tax, service_charge_amount, amount_paid").in("id", billIds);
+      const sum = (k: "total" | "tax" | "service_charge_amount" | "amount_paid") => Math.round((rounds ?? []).reduce((t, r) => t + Number(r[k] ?? 0), 0) * 100) / 100;
+      table_bill = { order_ids: billIds, total: sum("total"), tax: sum("tax"), service_charge_amount: sum("service_charge_amount"), amount_paid: sum("amount_paid") };
+    }
+
     return NextResponse.json({
       order: { ...orderRest, table_number: (rt?.join_label || rt?.table_number) ?? null, staff_name: s?.name ?? null },
       items,
+      table_bill,
     });
   } catch (error) {
     console.error("Order fetch error:", error);

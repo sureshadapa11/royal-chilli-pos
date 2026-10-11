@@ -1,4 +1,4 @@
-import { computeBill } from "@/lib/order-totals";
+import { computeBill, splitByFood } from "@/lib/order-totals";
 
 // Order of operations: subtotal (already VAT-inclusive) -> discount ->
 // service charge -> total. Tip is never part of this (per-payment,
@@ -137,5 +137,27 @@ describe("recalcTotals", () => {
     itemRows = [{ item_price: 100, quantity: 1 }];
     await recalcTotals("order-1", 1);
     expect(updateSpy).toHaveBeenCalledWith(expect.objectContaining({ total: 70 }));
+  });
+});
+
+// A table bill with several rounds: the whole bill's total is shared over
+// the rounds by their food, to the penny.
+describe("splitByFood", () => {
+  it("shares a £5-off bill over two rounds by their food", () => {
+    // Fries £2.95 + soups £13.90 = £16.85, £5 off → £11.85 to pay
+    const shares = splitByFood(11.85, [2.95, 13.9]);
+    expect(shares).toEqual([2.07, 9.78]);
+    expect(Math.round((shares[0] + shares[1]) * 100) / 100).toBe(11.85);
+  });
+  it("always adds up to the bill exactly (pennies go to the biggest round)", () => {
+    const shares = splitByFood(10, [1, 1, 1]);
+    expect(Math.round(shares.reduce((s, x) => s + x, 0) * 100) / 100).toBe(10);
+    expect(shares.every((x) => x >= 0)).toBe(true);
+  });
+  it("a fully covered bill is £0 on every round", () => {
+    expect(splitByFood(0, [2.95, 13.9])).toEqual([0, 0]);
+  });
+  it("no food on any round: the first round takes it", () => {
+    expect(splitByFood(3, [0, 0])).toEqual([3, 0]);
   });
 });
