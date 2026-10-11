@@ -43,7 +43,7 @@ export default async function StaffHubPage() {
 
   // Super admins and Managers: the sales & costs dashboard (a Manager only
   // ever sees their own business — no switcher, no All businesses table).
-  if (role === "admin" || role === "manager") {
+  if (role === "admin" || role === "supervisor" || role === "manager") {
     // Owner with "Working in: All businesses": every business's dashboard combined.
     const allMode = !!session!.owner && (await cookies()).get(ALL_BUSINESSES_COOKIE)?.value === "1";
     const data = allMode

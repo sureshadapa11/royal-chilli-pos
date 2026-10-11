@@ -1,4 +1,4 @@
-import { canChangeAccess, canGiveRole, isFrontLine, isManagerRole, roleLabel } from "../roles";
+import { canChangeAccess, canGiveRole, isFrontLine, isManagerRole, roleLabel, isTillOnly, NOT_ON_ROTA } from "@/lib/roles";
 import { canAccess } from "../permissions";
 
 jest.mock("@/lib/supabase", () => ({
@@ -17,14 +17,15 @@ describe("roles", () => {
     for (const actor of ["admin", "hr", "manager"]) expect(canGiveRole(actor, "admin")).toBe(false);
   });
 
-  it("lets Super admin and HR give any of the four; Manager only Front House and Kitchen; nobody Supervisor", () => {
+  it("lets Super admin and HR give any role but Super admin; Manager / Supervisor only Front House, Bar and Kitchen", () => {
     for (const actor of ["admin", "hr"]) {
-      for (const r of ["manager", "hr", "employee", "kitchen"]) expect(canGiveRole(actor, r)).toBe(true);
+      for (const r of ["supervisor", "manager", "hr", "employee", "bar", "kitchen"]) expect(canGiveRole(actor, r)).toBe(true);
+      expect(canGiveRole(actor, "admin")).toBe(false);
     }
-    expect(canGiveRole("manager", "employee")).toBe(true);
-    expect(canGiveRole("manager", "kitchen")).toBe(true);
-    expect(canGiveRole("manager", "hr")).toBe(false);
-    expect(canGiveRole("admin", "supervisor")).toBe(false);
+    for (const actor of ["manager", "supervisor"]) {
+      for (const r of ["employee", "bar", "kitchen"]) expect(canGiveRole(actor, r)).toBe(true);
+      for (const r of ["supervisor", "manager", "hr"]) expect(canGiveRole(actor, r)).toBe(false);
+    }
     expect(canGiveRole("employee", "kitchen")).toBe(false);
     expect(canGiveRole("admin", "driver")).toBe(false);
     expect(canChangeAccess("manager")).toBe(false);
@@ -35,6 +36,16 @@ describe("roles", () => {
     expect(isManagerRole("hr")).toBe(false);
     expect(isFrontLine("kitchen")).toBe(true);
     expect(isFrontLine("manager")).toBe(false);
+  });
+
+  it("Supervisor is manager level and off the rota; Bar is till only and on the rota", () => {
+    expect(isManagerRole("supervisor")).toBe(true);
+    expect(isFrontLine("bar")).toBe(true);
+    expect(isTillOnly("bar")).toBe(true);
+    expect(isTillOnly("employee")).toBe(true);
+    expect(isTillOnly("kitchen")).toBe(false);
+    expect(NOT_ON_ROTA).toContain("supervisor");
+    expect(NOT_ON_ROTA).not.toContain("bar");
   });
 
   it("gives Managers their tabs and keeps Kitchen out of the Staff Hub", () => {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { isManagerRole, roleLabel } from "@/lib/roles";
+import { isManagerRole, isTillOnly, roleLabel } from "@/lib/roles";
 import { initials, type Brand } from "@/lib/brand-client";
 import { useRouter } from "next/navigation";
 import { formatCurrency, isHappyHour, isBreakfastTime } from "@/lib/utils";
@@ -955,7 +955,7 @@ export default function POSPage() {
                 <span className="text-[10px] text-muted-foreground bg-elevated px-1.5 py-0.5 rounded">{roleLabel(session.role)}</span>
               </div>
             )}
-            {session && session.role !== "employee" && (
+            {session && !isTillOnly(session.role) && (
               <button onClick={() => router.push("/staff")}
                 className="px-3 py-1.5 bg-surface-hover hover:bg-elevated text-foreground text-xs font-semibold rounded-lg border border-border transition-colors">
                 👥 Staff Hub
@@ -1016,7 +1016,7 @@ export default function POSPage() {
                       <p className="text-muted-foreground text-[10px]">{roleLabel(session.role)}</p>
                     </div>
                   )}
-                  {session && session.role !== "employee" && (
+                  {session && !isTillOnly(session.role) && (
                     <button onClick={() => { setShowMobileMenu(false); router.push("/staff"); }}
                       className="w-full text-left px-3 py-2 text-foreground text-xs font-semibold hover:bg-surface-hover">
                       👥 Staff Hub

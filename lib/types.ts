@@ -1,7 +1,7 @@
 // Five roles (lib/roles.ts has the names people see): admin = Super admin
 // (the group owners), manager, hr, employee = Front House
 // (till only), kitchen (Kitchen Display only).
-export type StaffRole = "employee" | "kitchen" | "manager" | "hr" | "admin";
+export type StaffRole = "employee" | "kitchen" | "bar" | "manager" | "supervisor" | "hr" | "admin";
 
 export interface Staff {
   id: number;

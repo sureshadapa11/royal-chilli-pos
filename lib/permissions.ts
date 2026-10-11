@@ -1,10 +1,10 @@
 import type { StaffRole } from "@/lib/types";
 import supabase from "@/lib/supabase";
-import { ROLE_LABEL, isFrontLine } from "@/lib/roles";
+import { ROLE_LABEL, isFrontLine, isTillOnly } from "@/lib/roles";
 
 // The roles shown in Settings → Roles & Permissions. Super admin is always on
 // and Front House / Kitchen never have Staff Hub tabs, so they aren't editable.
-export const ALL_ROLES: StaffRole[] = ["admin", "manager", "hr", "employee", "kitchen"];
+export const ALL_ROLES: StaffRole[] = ["admin", "supervisor", "manager", "hr", "employee", "bar", "kitchen"];
 
 export const ROLE_LABELS = Object.fromEntries(ALL_ROLES.map((r) => [r, ROLE_LABEL[r]])) as Record<StaffRole, string>;
 
@@ -69,24 +69,25 @@ export type Level = (typeof LEVELS)[number];
 // Insights pages (Analytics, Reports, Finance); no HR & Payroll or Audit log.
 // HR: Attendance & Rota, HR & Payroll and Reports.
 const DEFAULTS: Record<TabKey, Partial<Record<StaffRole, Level>>> = {
-  menu: { manager: "full" },
-  tables: { manager: "full" },
-  inventory: { manager: "full" },
-  approve_stock_takes: { manager: "full" },
+  menu: { supervisor: "full", manager: "full" },
+  tables: { supervisor: "full", manager: "full" },
+  inventory: { supervisor: "full", manager: "full" },
+  approve_stock_takes: { supervisor: "full", manager: "full" },
   // Orders over the business's limit (migration 116) — never your own.
-  approve_purchase_orders: { manager: "full" },
-  drivers: { manager: "full" },
-  daily_accounts: { manager: "full" },
-  website: { manager: "full" },
-  till: { manager: "full" },
-  attendance: { manager: "full", hr: "full" },
-  hr: { hr: "full" },
-  customers: { manager: "view" },
-  analytics: { manager: "view" },
-  reports: { manager: "view", hr: "full" },
-  finance: { manager: "view" },
+  approve_purchase_orders: { supervisor: "full", manager: "full" },
+  drivers: { supervisor: "full", manager: "full" },
+  daily_accounts: { supervisor: "full", manager: "full" },
+  website: { supervisor: "full", manager: "full" },
+  till: { supervisor: "full", manager: "full" },
+  attendance: { supervisor: "full", manager: "full", hr: "full" },
+  // Supervisor (131): Manager + HR & Payroll to view + the Insights pages in full.
+  hr: { supervisor: "view", hr: "full" },
+  customers: { supervisor: "view", manager: "view" },
+  analytics: { supervisor: "full", manager: "view" },
+  reports: { supervisor: "full", manager: "view", hr: "full" },
+  finance: { supervisor: "full", manager: "view" },
   audit: {},
-  settings: { manager: "full" },
+  settings: { supervisor: "full", manager: "full" },
 };
 
 type Cache = Record<TabKey, Partial<Record<StaffRole, Level>>>;
@@ -136,7 +137,7 @@ export function levelOf(role: StaffRole, tab: TabKey): Level {
   keepFresh();
   // transition safety net: pre-migration-032 accounts may still be "owner"
   if (role === "admin" || (role as string) === "owner") return "full";
-  if (role === "employee") return tab === "till" ? "full" : "off";
+  if (isTillOnly(role)) return tab === "till" ? "full" : "off"; // Front House, Bar
   if (isFrontLine(role)) return "off";
   return (cache ?? DEFAULTS)[tab]?.[role] ?? "off";
 }
@@ -167,7 +168,7 @@ export function manageAllows(role: StaffRole, tab: TabKey, method: string): bool
 /** Management-level at all (Staff Hub layout gate). Excludes the front-line
  *  roles under both the new (employee) and pre-migration-032 role names. */
 export function isStaffManagement(role: StaffRole): boolean {
-  return !["employee", "cashier", "waiter", "chef", "kitchen", "driver"].includes(role as string);
+  return !["employee", "bar", "cashier", "waiter", "chef", "kitchen", "driver"].includes(role as string);
 }
 
 // --- shims used by API routes / pages --------------------------------------

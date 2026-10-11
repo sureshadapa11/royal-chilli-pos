@@ -10,7 +10,7 @@ const LEVEL_OPTIONS: { value: Level; label: string; on: string }[] = [
   { value: "view", label: "View", on: "bg-amber-500 text-white" },
   { value: "full", label: "Full", on: "bg-red-600 text-white" },
 ];
-const FIXED = new Set(["admin", "employee", "kitchen"]); // Super admin always on; Front House and Kitchen always off
+const FIXED = new Set(["admin", "employee", "bar", "kitchen"]); // Super admin always on; Front House, Bar and Kitchen always off
 
 function PermissionsPanel({ canEdit }: { canEdit: boolean }) {
   const [matrix, setMatrix] = useState<Matrix | null>(null);
