@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
   const db = bizDb(session.businessId);
   const { data: r } = await db.from("loyalty_redemptions")
-    .select("id, code, status, valid_from, expires_at, redeemed_at, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, min_spend), customer:customers(name, phone)")
+    .select("id, code, status, valid_from, expires_at, redeemed_at, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, min_spend), customer:customers!loyalty_redemptions_customer_id_fkey(name, phone)")
     .eq("code", code).maybeSingle();
   if (!r) return NextResponse.json({ error: "INVALID_CODE", message: "No reward found with that code" }, { status: 404 });
 
