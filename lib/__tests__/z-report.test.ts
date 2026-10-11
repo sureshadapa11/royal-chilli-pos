@@ -168,3 +168,24 @@ describe("bills closed at £0", () => {
     expect(r.loyalty_total).toBe(2.95);
   });
 });
+
+describe("a table bill paid in one go", () => {
+  it("counts its rounds as ONE sale (the other rounds' payments say 'Bill #…')", () => {
+    const r = computeZReport({
+      period: period(), openedByName: null, closedByName: null, paidOuts: [],
+      orders: [
+        order(249, { total: 5.28, amount_paid: 5.28, loyalty_discount: 5 }),
+        order(250, { total: 10.57, amount_paid: 10.57 }),
+        order(251, { total: 12, amount_paid: 12 }),
+      ],
+      payments: [
+        { order_id: 249, method: "cash", amount: 5.28, tip_amount: 0, reference: null },
+        { order_id: 250, method: "cash", amount: 10.57, tip_amount: 0, reference: "Bill #249" },
+        { order_id: 251, method: "card", amount: 12, tip_amount: 0, reference: null },
+      ],
+    });
+    expect(r.sales_count).toBe(2); // the table bill + another bill
+    expect(r.sales_total).toBe(27.85);
+    expect(r.loyalty_count).toBe(1);
+  });
+});
