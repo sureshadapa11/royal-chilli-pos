@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
-import { notYetValidMessage } from "@/lib/loyalty";
+import { redemptionProblem } from "@/lib/loyalty";
 
 // Read-only lookup — lets staff preview a code (name, discount, expiry)
 // before committing to /redeem against a specific order.
@@ -21,20 +21,8 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (error || !redemption) return NextResponse.json({ error: "INVALID_CODE", message: "No reward found with that code" }, { status: 404 });
 
-  if (redemption.status === "locked") {
-    return NextResponse.json({ error: "LOCKED", message: "This Bring a Friend voucher unlocks after their friend's first visit" }, { status: 400 });
-  }
-  if (redemption.status === "redeemed") {
-    return NextResponse.json({ error: "ALREADY_REDEEMED", message: "This code has already been used" }, { status: 400 });
-  }
-  if (redemption.status === "cancelled") {
-    return NextResponse.json({ error: "CANCELLED", message: "This code was cancelled" }, { status: 400 });
-  }
-  const notYet = notYetValidMessage(redemption.valid_from);
-  if (notYet) return NextResponse.json({ error: "NOT_YET_VALID", message: notYet }, { status: 400 });
-  if (redemption.status === "expired" || new Date(redemption.expires_at) < new Date()) {
-    return NextResponse.json({ error: "REWARD_EXPIRED", message: "This code has expired" }, { status: 400 });
-  }
+  const problem = redemptionProblem(redemption);
+  if (problem) return NextResponse.json(problem, { status: 400 });
 
   return NextResponse.json({ valid: true, redemption });
 }
