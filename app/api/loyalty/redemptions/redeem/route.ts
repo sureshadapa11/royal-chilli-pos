@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
-import { billRewardProblem, minSpendProblem, notYetValidMessage, orderTypesLabel, rewardAllowsOrderType, rewardDiscount, rewardMinSpend, type RewardTerms } from "@/lib/loyalty";
+import { billFoodTotal, billRewardProblem, minSpendProblem, notYetValidMessage, orderTypesLabel, rewardAllowsOrderType, rewardDiscount, rewardMinSpend, type RewardTerms } from "@/lib/loyalty";
 
 // Applies an issued redemption to a specific order at the till — any staff
 // member can (the "Loyalty Reward Code" box in the payment screen); codes
@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const { code, order_id } = await req.json();
+    const { code, order_id, extra_order_ids } = await req.json();
     if (!code || !order_id) return NextResponse.json({ error: "code and order_id are required" }, { status: 400 });
 
     const db = bizDb(session.businessId);
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     // The till's own business's order only.
     const { data: order, error: orderErr } = await db
       .from("orders")
-      .select("id, status, is_paid, order_type, subtotal, total, loyalty_discount, loyalty_reason")
+      .select("id, status, is_paid, order_type, table_id, subtotal, total, loyalty_discount, loyalty_reason")
       .eq("id", order_id)
       .single();
     if (orderErr || !order) return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -72,7 +72,8 @@ export async function POST(req: NextRequest) {
     // — recalculated first so every item on it counts. The minimum spend is
     // on that same food total, before the reward.
     const current = await recalcTotals(String(order_id), session.businessId);
-    const short = minSpendProblem(await rewardMinSpend(session.businessId, reward.min_spend), Number(current.subtotal));
+    const food = await billFoodTotal(session.businessId, order, Number(current.subtotal), extra_order_ids);
+    const short = minSpendProblem(await rewardMinSpend(session.businessId, reward.min_spend), food);
     if (short) return NextResponse.json(short, { status: 400 });
     const discount = rewardDiscount(reward, current.subtotal);
     let updatedBill = null;

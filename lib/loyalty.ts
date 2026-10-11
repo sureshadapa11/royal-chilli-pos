@@ -398,6 +398,24 @@ export function minSpendProblem(minSpend: number, spend: number): { error: strin
   };
 }
 
+/**
+ * The food total a reward's minimum spend is checked against: this order
+ * plus the other rounds of the same table bill paid with it (each round is
+ * its own order). Only unpaid, live orders of the same business and table.
+ */
+export async function billFoodTotal(
+  businessId: number,
+  order: { id: number | string; table_id?: number | null },
+  orderSubtotal: number,
+  extraOrderIds: unknown,
+): Promise<number> {
+  const ids = (Array.isArray(extraOrderIds) ? extraOrderIds : []).map(Number).filter((n) => Number.isInteger(n) && n > 0 && n !== Number(order.id));
+  if (!ids.length || !order.table_id) return orderSubtotal;
+  const { data } = await bizDb(businessId).from("orders").select("subtotal")
+    .in("id", ids).eq("table_id", order.table_id).eq("is_paid", false).neq("status", "cancelled");
+  return orderSubtotal + (data ?? []).reduce((s, o) => s + (Number(o.subtotal) || 0), 0);
+}
+
 /** One reward per bill: a £-off reward/points (its loyalty line) or a free-item code already used on it. */
 export async function billRewardProblem(
   businessId: number,

@@ -329,7 +329,7 @@ export default function PaymentModal({
       const res = await fetch("/api/loyalty/redeem-cash", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ customer_id: customerId, order_id: orderId, amount }),
+        body: JSON.stringify({ customer_id: customerId, order_id: orderId, amount, extra_order_ids: extraOrderIds }),
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Couldn't apply loyalty credit"); return; }
@@ -407,7 +407,7 @@ export default function PaymentModal({
       const res = await fetch("/api/loyalty/redemptions/redeem", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code: rewardCodeInput.trim(), order_id: orderId }),
+        body: JSON.stringify({ code: rewardCodeInput.trim(), order_id: orderId, extra_order_ids: extraOrderIds }),
       });
       const data = await res.json();
       if (!res.ok) { setRewardError(data.message || data.error || "Couldn't redeem this code"); return; }
@@ -802,7 +802,7 @@ export default function PaymentModal({
                   </div>
                 )}
                 {rewardError && <div className="text-red-600 text-xs">{rewardError}</div>}
-                {!appliedReward && localLoyalty <= 0 && loyaltyPreview && loyaltyPreview.minSpend > 0 && subtotal < loyaltyPreview.minSpend - 0.005 && (
+                {!appliedReward && !rewardError && localLoyalty <= 0 && loyaltyPreview && loyaltyPreview.minSpend > 0 && subtotal < loyaltyPreview.minSpend - 0.005 && (
                   <div className="text-amber-700 text-[11px]">Rewards need a bill of {formatCurrency(loyaltyPreview.minSpend)} or more: this one is {formatCurrency(subtotal)}</div>
                 )}
               </div>
