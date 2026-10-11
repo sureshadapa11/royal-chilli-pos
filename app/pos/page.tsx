@@ -82,6 +82,9 @@ export default function POSPage() {
   // PaymentModal needs this to know the TRUE remaining balance; without it,
   // reopening Pay Now on a partially-paid order shows the full bill again.
   const [currentAmountPaid, setCurrentAmountPaid] = useState(0);
+  // What's left on the saved bill (after discounts / rewards, which the
+  // till's own item sum doesn't know about), for the cart it was read with.
+  const [billDue, setBillDue] = useState<{ remaining: number; items: number } | null>(null);
 
   // UI state
   const [loading, setLoading] = useState(false);
@@ -410,6 +413,7 @@ export default function POSPage() {
     setAllOrderIds([]);
     setCurrentCustomerId(null);
     setCurrentAmountPaid(0);
+    setBillDue(null);
     setShowCustomerForm(type !== "dine_in" && type !== "online");
     setShowTablePopup(false);
     setShowCustomerPopup(false);
@@ -422,7 +426,7 @@ export default function POSPage() {
     try {
       const res = await fetch(`/api/orders?table_id=${tableId}&status=open`);
       const data = await res.json();
-      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null; customer_id: number | null; amount_paid: number }[] = data.orders || [];
+      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null; customer_id: number | null; amount_paid: number; total?: number }[] = data.orders || [];
       if (orders.length === 0) return false;
       const ordersOldFirst = [...orders].reverse();
       const allItems: CartItem[] = [];
@@ -451,7 +455,13 @@ export default function POSPage() {
       setDiscount(firstOrder.discount ?? 0);
       setDiscountReason(firstOrder.discount_reason ?? "");
       setCurrentCustomerId(firstOrder.customer_id ?? null);
+      // A member is already on this bill: don't ask "Loyalty number?" again.
+      if (firstOrder.customer_id) setCustomerDetailsCollected(true);
       setCurrentAmountPaid(ordersOldFirst.reduce((sum, o) => sum + Number(o.amount_paid ?? 0), 0));
+      setBillDue({
+        remaining: Math.max(0, Math.round(ordersOldFirst.reduce((sum, o) => sum + Number(o.total ?? 0) - Number(o.amount_paid ?? 0), 0) * 100) / 100),
+        items: allItems.length,
+      });
       return true;
     } catch {
       return false;
@@ -580,12 +590,16 @@ export default function POSPage() {
     }
   };
 
-  const handlePaymentComplete = (remainingBalance?: number) => {
+  const handlePaymentComplete = (remainingBalance?: number, paidSoFar?: number) => {
     // Keep the running "already paid" figure correct if the modal is
     // reopened later in this same session without switching tables —
     // recallOrderForTable refreshes it authoritatively from the DB anyway,
     // this just covers the gap before that next recall happens.
-    if (remainingBalance !== undefined) setCurrentAmountPaid(Math.max(0, total - remainingBalance));
+    // The payment screen knows the real bill (after discounts and rewards);
+    // the till's item sum doesn't, so take what was paid and what's left from it.
+    if (paidSoFar !== undefined) setCurrentAmountPaid(paidSoFar);
+    else if (remainingBalance !== undefined) setCurrentAmountPaid(Math.max(0, total - remainingBalance));
+    if (remainingBalance !== undefined) setBillDue({ remaining: remainingBalance, items: cartItems.length });
     refreshTables();
   };
 
@@ -600,6 +614,10 @@ export default function POSPage() {
     }
     handleSendToKitchen();
   };
+
+  // Left to pay: the saved bill's own figure while the cart is the one it was
+  // read with; once items are added, the till's sum less what's been paid.
+  const dueNow = billDue && billDue.items === cartItems.length ? billDue.remaining : Math.max(0, total - currentAmountPaid);
 
   const requestPayment = () => {
     if ((orderType === "takeaway" || orderType === "delivery" || orderType === "dine_in") && !customerDetailsCollected) {
@@ -647,6 +665,7 @@ export default function POSPage() {
     setAllOrderIds([]);
     setCurrentCustomerId(null);
     setCurrentAmountPaid(0);
+    setBillDue(null);
     setStatus("");
     setShowCustomerPopup(false);
     setCustomerDetailsCollected(false);
@@ -776,6 +795,7 @@ export default function POSPage() {
       setAllOrderIds([]);
       setCurrentCustomerId(null);
       setCurrentAmountPaid(0);
+    setBillDue(null);
       setStatus("");
       // A fresh table is a fresh (potential) customer — the loyalty prompt
       // at payment must ask again, not carry over "skipped" from whichever
@@ -864,7 +884,7 @@ export default function POSPage() {
       {currentAmountPaid > 0 && (
         <div className="flex items-center justify-between text-xs px-1">
           <span className="text-emerald-700 font-semibold">✓ Already paid {formatCurrency(currentAmountPaid)}</span>
-          <span className="text-foreground font-bold">{formatCurrency(Math.max(0, total - currentAmountPaid))} remaining</span>
+          <span className="text-foreground font-bold">{formatCurrency(dueNow)} remaining</span>
         </div>
       )}
       {cartItems.some(i => !i.sent) && (
@@ -877,7 +897,7 @@ export default function POSPage() {
         <button onClick={requestPayment} disabled={loading || cartItems.length === 0}
           className="pos-btn no-select h-12 bg-emerald-600 hover:bg-emerald-500 disabled:bg-surface-hover disabled:text-muted-foreground text-white rounded-xl transition-all flex flex-col items-center justify-center leading-tight">
           <span className="text-[10px] font-semibold opacity-80">Pay Now</span>
-          <span className="text-base font-black">{cartItems.length > 0 ? formatCurrency(Math.max(0, total - currentAmountPaid)) : "—"}</span>
+          <span className="text-base font-black">{cartItems.length > 0 ? formatCurrency(dueNow) : "—"}</span>
         </button>
         <button onClick={confirmClear} disabled={loading}
           className="pos-btn no-select h-12 bg-surface-hover hover:bg-elevated border border-border text-foreground hover:text-foreground font-semibold rounded-xl transition-all text-sm flex items-center justify-center gap-1.5">

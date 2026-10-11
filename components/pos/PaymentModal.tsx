@@ -33,7 +33,8 @@ interface Props {
   // — without this, remainingBalance below has no way to know a payment
   // already happened and re-offers the full bill as if nothing was paid.
   amountPaid?: number;
-  onPaymentComplete: (remainingBalance?: number) => void;
+  /** remainingBalance and paidSoFar are the real bill's, after discounts and rewards. */
+  onPaymentComplete: (remainingBalance?: number, paidSoFar?: number) => void;
 }
 
 type PayStep = "method" | "cash_amount" | "card_confirm" | "partial" | "receipt" | "pay_later_confirm" | "pay_later_done";
@@ -507,9 +508,7 @@ export default function PaymentModal({
       setLastPaymentAmount(0);
       setAmountPaidSoFar(localTotal);
       setStep("receipt");
-      // No balance passed: the till's own total doesn't include the reward,
-      // so "0 left" would read as the full price "already paid".
-      onPaymentComplete();
+      onPaymentComplete(0, 0); // nothing was paid, nothing left
     } catch {
       setError("Couldn't close the bill. Please try again.");
     } finally {
@@ -559,12 +558,13 @@ export default function PaymentModal({
       setTipCents(0);
       setCashCents(0);
 
+      const paidNow = Math.max(0, Math.round((localTotal - (data.remaining_balance ?? 0)) * 100) / 100);
       if (data.fully_paid) {
         setStep("receipt");
-        onPaymentComplete(data.remaining_balance);
+        onPaymentComplete(data.remaining_balance, paidNow);
       } else {
         setStep("partial");
-        onPaymentComplete(data.remaining_balance);
+        onPaymentComplete(data.remaining_balance, paidNow);
       }
     } catch {
       setError("Payment failed. Please try again.");

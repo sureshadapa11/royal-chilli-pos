@@ -64,7 +64,7 @@ export type ZPeriod = {
   closing_cash: number | string | null;
   close_note: string | null;
 };
-export type ZPayment = { order_id: number; method: string; amount: number | string; tip_amount: number | string | null };
+export type ZPayment = { order_id: number; method: string; amount: number | string; tip_amount: number | string | null; reference?: string | null };
 export type ZOrder = {
   id: number;
   order_number: string;
@@ -105,6 +105,16 @@ export function computeZReport(input: {
   // belongs on the report.
   const zeroBills = orders.filter((o) => o.work_period_id === period.id && o.status === "paid" && Number(o.total) <= 0.009).map((o) => o.id);
   const salesOrderIds = new Set([...sales.map((p) => p.order_id), ...zeroBills]);
+  // A table bill is several rounds (one order each) paid in one go: the
+  // other rounds' payments say which bill they belong to ("Bill #249",
+  // "… (bill #249)", or the older "Merged with #249"), so the bill counts
+  // as ONE sale.
+  const billOf = new Map<number, number>();
+  for (const p of sales) {
+    const m = String(p.reference ?? "").match(/(?:^bill #|\(bill #|merged with #)(\d+)/i);
+    if (m && Number(m[1]) !== p.order_id) billOf.set(p.order_id, Number(m[1]));
+  }
+  const salesCount = new Set([...salesOrderIds].map((id) => billOf.get(id) ?? id)).size;
   const salesTotal = sales.reduce((s, p) => s + gross(p), 0);
   const refundsTotal = refunds.reduce((s, p) => s + Math.abs(Number(p.amount)), 0);
   const tipsTotal = sales.reduce((s, p) => s + Number(p.tip_amount || 0), 0);
@@ -162,7 +172,7 @@ export function computeZReport(input: {
     closed_by_name: input.closedByName,
     close_note: period.close_note,
 
-    sales_count: salesOrderIds.size,
+    sales_count: salesCount,
     sales_total: r2(salesTotal),
     refunds_count: refunds.length,
     refunds_total: r2(refundsTotal),

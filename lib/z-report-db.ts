@@ -20,7 +20,7 @@ export async function calculateZReport(periodId: number): Promise<ZReport | null
   // businesses take payments at the same time.
   const db = bizDb(period.business_id);
   const [{ data: payments }, { data: ownOrders }, { data: paidOuts }, { data: staff }] = await Promise.all([
-    db.from("payments").select("order_id, method, amount, tip_amount").gte("created_at", period.opened_at).lte("created_at", until),
+    db.from("payments").select("order_id, method, amount, tip_amount, reference").gte("created_at", period.opened_at).lte("created_at", until),
     db.from("orders").select(ORDER_COLUMNS).eq("work_period_id", periodId),
     supabase.from("cash_paid_outs").select("reason, amount").eq("work_period_id", periodId).order("created_at"),
     supabase.from("staff").select("id, name").in("id", [period.opened_by, period.closed_by].filter((x) => x != null)),
