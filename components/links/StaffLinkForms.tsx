@@ -85,6 +85,23 @@ function Money({ value, onChange, wide }: { value: string; onChange: (v: string)
   );
 }
 
+/**
+ * A date box that always fits its card: iPhone Safari's own date input
+ * ignores the width it's given and spills over the edge, so the date is
+ * shown as text ("Sat 11 Oct") with the real picker laid invisibly on top —
+ * tapping anywhere on it opens the phone's date picker.
+ */
+function DateBox({ value, max, onChange }: { value: string; max: string; onChange: (d: string) => void }) {
+  return (
+    <span className="relative flex h-12 w-full min-w-0 items-center justify-between overflow-hidden rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]">
+      <span className="truncate">{niceDay(value)}</span>
+      <span className="ml-2 shrink-0 text-[14px] font-semibold text-[#e4473a]">📅 Change</span>
+      <input type="date" value={value} max={max} aria-label="Date" onChange={(e) => e.target.value && onChange(e.target.value)}
+        className="absolute inset-0 h-full w-full cursor-pointer opacity-0 [appearance:none]" />
+    </span>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="flex min-h-[56px] items-center justify-between gap-3 text-[16px]">{label}{children}</label>;
 }
@@ -238,8 +255,7 @@ export function DayEndForm({ token, business, today }: { token: string; business
       <PinPad token={token} onOk={(p, n) => { setPin(p); setName(n); }} />
       <section className={card}>
         <div className={head}>Trading day</div>
-        <input type="date" value={draft.date} max={today} onChange={(e) => e.target.value && setDraft((d) => ({ ...d, date: e.target.value }))}
-          className="h-12 w-full rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]" />
+        <DateBox value={draft.date} max={today} onChange={(d) => setDraft((x) => ({ ...x, date: d }))} />
         <p className="mt-1.5 text-[13px] text-[#7a6a60]">Each day can be entered once. Forgot a day? Pick it here.</p>
       </section>
       <section className={card}>
@@ -399,7 +415,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
               </Row>
             )}
             <Row label="Date">
-              <input type="date" value={f.date} max={today} onChange={(e) => e.target.value && upd({ date: e.target.value })} className="h-12 w-44 rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]" />
+              <span className="w-44"><DateBox value={f.date} max={today} onChange={(d) => upd({ date: d })} /></span>
             </Row>
           </section>
           {(cat.photo || cat.direction === "out") && (
