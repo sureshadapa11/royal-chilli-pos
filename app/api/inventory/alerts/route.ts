@@ -3,6 +3,7 @@ import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
 import { londonDateStr } from "@/lib/london-date";
+import { expiryStatus, useFirstUntil } from "@/lib/batches";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -14,19 +15,19 @@ export async function GET(req: NextRequest) {
   const { data: ingredients } = await db.from("ingredients").select("*").eq("active", 1);
   const lowStock = (ingredients || []).filter((i) => Number(i.current_stock) <= Number(i.reorder_level));
 
-  const sevenDaysOut = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const { data: expiringItems } = await db
-    .from("purchase_order_items")
-    .select("*, ingredient:ingredients(name, unit), purchase_orders!inner(business_id)")
-    .eq("purchase_orders.business_id", session.businessId)
-    .not("expiry_date", "is", null)
-    .lte("expiry_date", sevenDaysOut)
-    .gte("expiry_date", londonDateStr());
+  // Dated stock still on the shelf with a use-by today or tomorrow, or past it
+  // (batches, migration 118).
+  const today = londonDateStr();
+  const { data: dated } = await db
+    .from("inventory_batches")
+    .select("id, expiry_date, remaining_qty, ingredient:ingredients(name, unit)")
+    .gt("remaining_qty", 0)
+    .lte("expiry_date", useFirstUntil(today))
+    .order("expiry_date");
 
-  const flatExpiring = (expiringItems || []).map((i) => {
-    const { ingredient: ing, purchase_orders: _po, ...rest } = i as typeof i & { ingredient: { name: string; unit: string } | null; purchase_orders: unknown };
-    void _po;
-    return { ...rest, ingredient_name: ing?.name ?? null, unit: ing?.unit ?? null };
+  const flatExpiring = (dated || []).map((b) => {
+    const { ingredient: ing, ...rest } = b as unknown as typeof b & { ingredient: { name: string; unit: string } | null };
+    return { ...rest, ingredient_name: ing?.name ?? null, unit: ing?.unit ?? null, status: expiryStatus(b.expiry_date, today) };
   });
 
   return NextResponse.json({ lowStock, expiringSoon: flatExpiring });

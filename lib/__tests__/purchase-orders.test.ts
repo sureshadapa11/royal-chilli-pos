@@ -10,6 +10,11 @@ describe("cleanReceivedLine", () => {
     expect(cleanReceivedLine({ item_id: "4", received_quantity: "", expiry_date: undefined })).toEqual({ item_id: 4 });
   });
 
+  it("keeps the storage area", () => {
+    expect(cleanReceivedLine({ item_id: 4, storage_area_id: "3" })).toEqual({ item_id: 4, storage_area_id: 3 });
+    expect(cleanReceivedLine({ item_id: 4, storage_area_id: "fridge" })).toBeNull();
+  });
+
   it("keeps the invoice price", () => {
     expect(cleanReceivedLine({ item_id: 4, unit_cost: "6.40" })).toEqual({ item_id: 4, unit_cost: 6.4 });
     expect(cleanReceivedLine({ item_id: 4, unit_cost: 0 })).toBeNull();

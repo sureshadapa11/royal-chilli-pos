@@ -142,6 +142,8 @@ export const REJECTION_LABEL: Record<RejectionReason, string> = {
 export type ReceivedLine = {
   item_id: number; received_quantity?: number; expiry_date?: string; unit_cost?: number;
   rejected_quantity?: number; rejection_reason?: RejectionReason;
+  /** Where a dated line is kept (migration 118); checked against the branch in SQL. */
+  storage_area_id?: number;
 };
 
 // Checks one delivery line from the receive screen. Returns null when it's
@@ -149,7 +151,7 @@ export type ReceivedLine = {
 // price means the invoice price matches the order.
 export function cleanReceivedLine(raw: unknown): ReceivedLine | null {
   if (!raw || typeof raw !== "object") return null;
-  const { item_id, received_quantity, expiry_date, unit_cost, rejected_quantity, rejection_reason } = raw as Record<string, unknown>;
+  const { item_id, received_quantity, expiry_date, unit_cost, rejected_quantity, rejection_reason, storage_area_id } = raw as Record<string, unknown>;
   const id = Number(item_id);
   if (!Number.isInteger(id) || id < 1) return null;
   const line: ReceivedLine = { item_id: id };
@@ -166,6 +168,11 @@ export function cleanReceivedLine(raw: unknown): ReceivedLine | null {
     if (!REJECTION_REASONS.includes(rejection_reason as RejectionReason)) return null;
     line.rejected_quantity = rejected;
     line.rejection_reason = rejection_reason as RejectionReason;
+  }
+  if (storage_area_id != null && storage_area_id !== "") {
+    const area = Number(storage_area_id);
+    if (!Number.isInteger(area) || area < 1) return null;
+    line.storage_area_id = area;
   }
   if (unit_cost != null && unit_cost !== "") {
     const price = Number(unit_cost);

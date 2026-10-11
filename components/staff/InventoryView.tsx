@@ -6,6 +6,7 @@ import { tradingDayStr } from "@/lib/london-date";
 import FoodCostReport from "@/components/staff/FoodCostReport";
 import { ExpensesTab, SupplierPaymentsTab } from "@/components/staff/SpendingTabs";
 import PurchaseOrdersTab from "@/components/staff/PurchaseOrdersTab";
+import BatchesTab from "@/components/staff/BatchesTab";
 
 type Ingredient = {
   id: number; name: string; unit: string; current_stock: number; reorder_level: number;
@@ -530,10 +531,10 @@ function StockTakesTab({ canApprove }: { canApprove: boolean }) {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function InventoryView({ canApproveStockTakes, canRecordSpending }: { canApproveStockTakes: boolean; canRecordSpending: boolean }) {
-  const [tab, setTab] = useState<"ingredients" | "suppliers" | "orders" | "recipes" | "stocktake" | "reconciliation" | "expenses" | "supplier_payments">("ingredients");
+  const [tab, setTab] = useState<"ingredients" | "suppliers" | "orders" | "batches" | "recipes" | "stocktake" | "reconciliation" | "expenses" | "supplier_payments">("ingredients");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [ingredients, setIngredients] = useState<Ingredient[]>([]);
-  const [alerts, setAlerts] = useState<{ lowStock: Ingredient[]; expiringSoon: { ingredient_name: string; expiry_date: string }[] }>({ lowStock: [], expiringSoon: [] });
+  const [alerts, setAlerts] = useState<{ lowStock: Ingredient[]; expiringSoon: { ingredient_name: string; expiry_date: string; remaining_qty: number; unit: string; status: string }[] }>({ lowStock: [], expiringSoon: [] });
 
   const loadSuppliers = useCallback(async () => {
     const res = await fetch("/api/suppliers");
@@ -555,13 +556,14 @@ export default function InventoryView({ canApproveStockTakes, canRecordSpending 
   // A link straight to a tab (e.g. the "to approve" notification → ?tab=orders).
   useEffect(() => {
     const want = new URLSearchParams(window.location.search).get("tab");
-    if (want === "orders" || want === "stocktake" || want === "recipes" || want === "suppliers") setTab(want);
+    if (want === "orders" || want === "batches" || want === "stocktake" || want === "recipes" || want === "suppliers") setTab(want);
   }, []);
 
   const tabs = [
     { id: "ingredients", label: "Ingredients" },
     { id: "suppliers", label: "Suppliers" },
     { id: "orders", label: "Purchase Orders" },
+    { id: "batches", label: "Batches & expiry" },
     { id: "recipes", label: "Recipes & Food Cost" },
     { id: "stocktake", label: "Stock Take" },
     { id: "reconciliation", label: "Reconciliation" },
@@ -593,7 +595,12 @@ export default function InventoryView({ canApproveStockTakes, canRecordSpending 
         {(alerts.lowStock.length > 0 || alerts.expiringSoon.length > 0) && (
           <div className="rounded-xl border border-amber-300/50 bg-amber-50 p-3 space-y-1">
             {alerts.lowStock.map((i) => <p key={i.id} className="text-amber-700 text-sm">⚠ Low stock: {i.name} ({i.current_stock} {i.unit} left)</p>)}
-            {alerts.expiringSoon.map((i, idx) => <p key={idx} className="text-amber-700 text-sm">⏳ Expiring soon: {i.ingredient_name} on {i.expiry_date}</p>)}
+            {alerts.expiringSoon.map((i, idx) => (
+              <p key={idx} className={`text-sm ${i.status === "expired" ? "text-red-700 font-semibold" : "text-amber-700"}`}>
+                {i.status === "expired" ? "🗑️ Past its use-by" : "⏳ Use first"}: {i.ingredient_name} ({Number(i.remaining_qty)} {i.unit}, use by {i.expiry_date}){" "}
+                <button onClick={() => setTab("batches")} className="underline">Batches</button>
+              </p>
+            ))}
           </div>
         )}
 
@@ -601,6 +608,7 @@ export default function InventoryView({ canApproveStockTakes, canRecordSpending 
           {tab === "ingredients" && <IngredientsTab suppliers={suppliers} />}
           {tab === "suppliers" && <SuppliersTab suppliers={suppliers} onChange={loadSuppliers} />}
           {tab === "orders" && <PurchaseOrdersTab suppliers={suppliers} ingredients={ingredients} />}
+          {tab === "batches" && <BatchesTab />}
           {tab === "recipes" && <RecipesTab ingredients={ingredients} />}
           {tab === "stocktake" && <StockTakesTab canApprove={canApproveStockTakes} />}
           {tab === "reconciliation" && <FoodCostReport />}

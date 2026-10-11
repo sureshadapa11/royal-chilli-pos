@@ -16,6 +16,8 @@ export const BUSINESS_TABLES = new Set([
   "receipt_photos",
   // 116: purchase order history
   "purchase_order_events",
+  // 118: batches, use-by dates and storage areas
+  "storage_areas", "inventory_batches", "batch_movements",
   "fs_check_type", "fs_check_log", "fs_temp_type", "fs_temp_log",
   "fs_delivery_check", "fs_problem", "fs_signoff",
   "shifts", "attendance", "timesheets", "payroll_periods", "employee_payslips", "leave_requests",

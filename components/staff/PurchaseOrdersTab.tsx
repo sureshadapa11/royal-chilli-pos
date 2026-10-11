@@ -349,7 +349,7 @@ function OrderModal({ draft, suppliers, ingredients, lastPaid, limit, superAdmin
 // refused is the shortfall, kept in the history — nothing waits for the rest.
 type ReceiveLine = {
   id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number;
-  arrived: string; refused: string; reason: RejectionReason | ""; price: string; expiry_date: string;
+  arrived: string; refused: string; reason: RejectionReason | ""; price: string; expiry_date: string; area: string;
 };
 type DeliveryCheck = { id: number; item: string; temp_value: number | null; accepted: boolean; corrective_action: string | null; created_at: string; staff_name: string | null };
 
@@ -359,19 +359,24 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
   const [orderNumber, setOrderNumber] = useState("");
   const [supplier, setSupplier] = useState("");
   const [checks, setChecks] = useState<DeliveryCheck[] | null>(null);
+  const [areas, setAreas] = useState<{ id: number; name: string }[]>([]);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [saving, setSaving] = useState(false);
   const accepted = (i: ReceiveLine) => Math.max(0, (num(i.arrived) || 0) - (num(i.refused) || 0));
   const total = Math.round(items.reduce((sum, i) => sum + accepted(i) * (num(i.price) || 0), 0) * 100) / 100;
 
   useEffect(() => {
+    fetch("/api/storage-areas").then((r) => r.json()).then((d) => setAreas(d.areas || [])).catch(() => {});
     fetch(`/api/purchase-orders/${poId}`).then((r) => r.json()).then((d) => {
+      const lastArea: Record<number, number> = d.lastArea || {};
       setOrderNumber(d.purchaseOrder.order_number);
       setSupplier(d.purchaseOrder.supplier_name ?? "");
       setChecks(d.deliveryChecks || []);
-      setItems((d.items || []).map((i: { id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number }) => ({
+      setItems((d.items || []).map((i: { id: number; ingredient_id: number; ingredient_name: string; unit: string; quantity: number; unit_cost: number }) => ({
         ...i, quantity: Number(i.quantity), unit_cost: Number(i.unit_cost),
         arrived: String(Number(i.quantity)), refused: "", reason: "", price: String(Number(i.unit_cost)), expiry_date: "",
+        // Where this item went last time (it's only used once a use-by is entered).
+        area: lastArea[i.ingredient_id] ? String(lastArea[i.ingredient_id]) : "",
       })));
     });
   }, [poId]);
@@ -393,6 +398,7 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
           unit_cost: num(i.price) > 0 ? num(i.price) : undefined,
           rejected_quantity: (num(i.refused) || 0) > 0 ? num(i.refused) : undefined,
           rejection_reason: (num(i.refused) || 0) > 0 ? i.reason : undefined,
+          storage_area_id: i.expiry_date && i.area ? Number(i.area) : undefined,
         })),
         receipt_ids: receipts.map((r) => r.id),
       }),
@@ -413,7 +419,7 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
     <div className={overlay}>
       <div className={`${panel} max-w-3xl`}>
         <h2 className="text-foreground font-bold text-lg">Receive {orderNumber}{supplier ? ` · ${supplier}` : ""}</h2>
-        <p className="mt-1 text-muted-foreground text-xs">Enter what arrived, anything you refused at the door (and why), and the price on the invoice. Only what you keep goes into stock and Finance. Anything short or refused is noted and the order closes.</p>
+        <p className="mt-1 text-muted-foreground text-xs">Enter what arrived, anything you refused at the door (and why), and the price on the invoice. Only what you keep goes into stock and Finance. Anything short or refused is noted and the order closes. Enter the use-by date for dated products — they&apos;re tracked as batches.</p>
 
         {/* Temperatures live in Food Safety — shown here, not asked again. */}
         <div className="mt-3 rounded-lg border border-border bg-surface-hover px-3 py-2 text-sm">
@@ -449,6 +455,15 @@ function ReceivePoModal({ poId, onClose, onSaved }: { poId: number; onClose: () 
                   <input type="number" inputMode="decimal" min="0" step="0.01" value={item.price} onChange={(e) => set(i, { price: e.target.value })} className={`${input} ${changed ? "border-amber-500 bg-amber-50 text-amber-900" : ""}`} aria-label={`${item.ingredient_name} invoice price`} />
                   <input type="date" value={item.expiry_date} onChange={(e) => set(i, { expiry_date: e.target.value })} className={input} aria-label={`${item.ingredient_name} use by`} />
                 </div>
+                {item.expiry_date && areas.length > 0 && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="text-muted-foreground">Kept in</span>
+                    <select value={item.area} onChange={(e) => set(i, { area: e.target.value })} className={`${input} py-1`} aria-label={`Where ${item.ingredient_name} is kept`}>
+                      <option value="">— choose (optional)</option>
+                      {areas.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                    </select>
+                  </div>
+                )}
                 <p className="text-xs">
                   <span className="text-foreground">Into stock: <b>{Math.round(accepted(item) * 1000) / 1000} {item.unit}</b></span>
                   {notDelivered > 0 && <span className="text-amber-700"> · {Math.round(notDelivered * 1000) / 1000} {item.unit} not delivered</span>}

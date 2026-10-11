@@ -32,6 +32,16 @@ export async function GET(
   ]);
   if (itemsErr) return NextResponse.json({ error: "Failed to fetch items" }, { status: 500 });
 
+  // Where each item was put last time — Receive pre-selects it.
+  const lastArea: Record<number, number> = {};
+  const ingredientIds = [...new Set((items || []).map((i) => i.ingredient_id))];
+  if (ingredientIds.length) {
+    const { data: recent } = await db.from("inventory_batches").select("ingredient_id, storage_area_id, area:storage_areas!inner(active)")
+      .in("ingredient_id", ingredientIds).not("storage_area_id", "is", null).eq("area.active", true)
+      .order("id", { ascending: false }).limit(200);
+    for (const r of recent ?? []) if (!(r.ingredient_id in lastArea)) lastArea[r.ingredient_id] = r.storage_area_id as number;
+  }
+
   const { supplier: s, ...poRest } = po as typeof po & { supplier: { name: string } | null };
   const flatItems = (items || []).map((i) => {
     const { ingredient: ing, ...rest } = i as typeof i & { ingredient: { name: string; unit: string } | null };
@@ -46,6 +56,7 @@ export async function GET(
     purchaseOrder: { ...poRest, supplier_name: s?.name ?? null },
     items: flatItems,
     events: history,
+    lastArea,
     deliveryChecks: (checks || []).map((c) => {
       const { staff, ...rest } = c as typeof c & { staff: { name: string } | null };
       return { ...rest, staff_name: staff?.name ?? null };
