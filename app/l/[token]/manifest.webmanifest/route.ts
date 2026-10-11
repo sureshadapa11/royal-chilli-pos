@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     {
       name: `${name} Staff`,
       short_name: `${name.split(" ").filter((w) => w.toLowerCase() !== "the").join(" ").slice(0, 10)} Staff`,
-      description: `Day End and Cash In / Out for ${name} staff.`,
+      description: `Day End and Money In / Out for ${name} staff.`,
       start_url: `/l/${token}`,
       scope: `/l/${token}`,
       display: "standalone",

@@ -30,11 +30,11 @@ export default function DailyAccountsPage({ today, start, startMonth, startView,
             <p className="mt-1 text-sm text-muted-foreground">
               {view === "day"
                 ? "The day-end sheet. Till figures are filled in for you — check them, add bank in, catering and any notes, then submit."
-                : view === "cash" ? "Money staff put in or took out of the drawer through the staff link, with who entered it and the receipt photos."
+                : view === "cash" ? "Money in and out entered through the staff link (cash, card or bank), with who entered it and the receipt photos. Only cash counts in the drawer check."
                 : "The whole month, like the paper report — with totals, Excel download and print."}
             </p>
           </div>
-          <div className="flex gap-1 rounded-xl bg-[#F6F1E6] p-1">{tab("day", "Day")}{tab("month", "Month")}{tab("cash", "Cash in/out")}</div>
+          <div className="flex gap-1 rounded-xl bg-[#F6F1E6] p-1">{tab("day", "Day")}{tab("month", "Month")}{tab("cash", "Money in/out")}</div>
         </div>
         <div className="mt-5">
           {view === "day"

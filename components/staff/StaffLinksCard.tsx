@@ -28,7 +28,7 @@ export default function StaffLinksCard() {
 
   return (
     <div className="mb-5 rounded-xl border border-border bg-white p-4">
-      <h3 className="text-sm font-semibold">Staff links: Day End &amp; Cash In / Out</h3>
+      <h3 className="text-sm font-semibold">Staff links: Day End &amp; Money In / Out</h3>
       <p className="mt-0.5 text-xs text-muted-foreground">Anyone with a till PIN can fill these in on their phone. No Staff Hub login; they can only enter, never see figures.</p>
       <div className="mt-3 flex flex-wrap items-center gap-4">
         {data.qr && <div className="h-32 w-32 shrink-0" dangerouslySetInnerHTML={{ __html: data.qr }} />}

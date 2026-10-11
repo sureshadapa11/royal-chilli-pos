@@ -29,7 +29,7 @@ export async function GET(req: NextRequest) {
     db.from("daily_accounts").select(COLUMNS).eq("trading_date", date).maybeSingle(),
     tillFigures(session.businessId, date),
     getCardFeeRate(session.businessId),
-    db.from("cash_movements").select("direction, amount").eq("movement_date", date),
+    db.from("cash_movements").select("direction, amount").eq("movement_date", date).eq("method", "cash"),
     tillPaidOutOn(session.businessId, date),
   ]);
   // Cash in / out of the drawer that day (staff link + the till's Cash Out), for the cash check.

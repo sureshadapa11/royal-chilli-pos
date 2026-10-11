@@ -21,8 +21,8 @@ export default async function StaffLinkHome({ params }: { params: Promise<{ toke
           <div className="text-sm text-muted-foreground">Once a day, at closing: till, platforms, catering, cash counted</div>
         </Link>
         <Link href={`/l/${token}/cash`} className="block rounded-2xl border border-border bg-white p-5 shadow-sm">
-          <div className="text-lg font-semibold">💷 Cash In / Out</div>
-          <div className="text-sm text-muted-foreground">Any time money goes in or out of the drawer</div>
+          <div className="text-lg font-semibold">💷 Money In / Out</div>
+          <div className="text-sm text-muted-foreground">Any money in or out: cash, card or bank transfer</div>
         </Link>
       </main>
     </div>

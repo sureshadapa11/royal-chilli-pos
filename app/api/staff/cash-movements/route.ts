@@ -6,7 +6,7 @@ import { bizDb } from "@/lib/business-db";
 import { receiptsFor } from "@/lib/receipts";
 import { dayAmountKey, otherEntriesByDayAmount } from "@/lib/cash-duplicates";
 import { isManagerRole } from "@/lib/staff-pin";
-import { cashCategoryLabel } from "@/lib/cash-categories";
+import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 
 // GET ?month=YYYY-MM — Staff Hub → Daily accounts → Cash in/out: every entry
 // from the Cash In / Out link that month, with who entered it and its photos,
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const to = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
   const db = bizDb(session.businessId);
   const [{ data: moves }, { data: days }] = await Promise.all([
-    db.from("cash_movements").select("id, movement_date, direction, category, amount, reason, paid_to, staff_id, created_at, expense_id, supplier_payment_id")
+    db.from("cash_movements").select("id, movement_date, direction, category, method, amount, reason, paid_to, staff_id, created_at, expense_id, supplier_payment_id")
       .gte("movement_date", from).lte("movement_date", to).order("movement_date").order("id"),
     db.from("daily_accounts").select("id, trading_date, submitted_by, submitted_via").eq("status", "submitted")
       .gte("trading_date", from).lte("trading_date", to).order("trading_date"),
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
     // A cash-out with the same amount that day in the Staff Hub or on the till
     // may be the same spend entered twice (it would count twice in Money out).
     movements: list.map((x) => ({
-      ...x, amount: Number(x.amount), by: nameOf(x.staff_id), categoryLabel: cashCategoryLabel(x.category),
+      ...x, amount: Number(x.amount), by: nameOf(x.staff_id), categoryLabel: cashCategoryLabel(x.category), methodLabel: payMethodLabel(x.method),
       photos: (x.expense_id ? expPhotos.get(x.expense_id) : x.supplier_payment_id ? payPhotos.get(x.supplier_payment_id) : movePhotos.get(x.id)) ?? [],
       possibleDuplicate: x.direction === "out" ? others.get(dayAmountKey(x.movement_date, x.amount)) ?? null : null,
     })),
