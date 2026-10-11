@@ -13,7 +13,8 @@ import { getCardFeeRate } from "@/lib/daily-figures";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const COLUMNS = ["trading_date", ...DAILY_KEYS, "notes", "status", "submitted_at", "updated_at"].join(", ");
 
-const canUnlock = (s: { role: string; owner?: boolean }) => !!s.owner || s.role === "admin";
+// Super admin and Supervisor can correct a submitted day.
+const canUnlock = (s: { role: string; owner?: boolean }) => !!s.owner || s.role === "admin" || s.role === "supervisor";
 
 /** GET ?date=YYYY-MM-DD → the saved sheet (or null) and the till's figures to pre-fill it. */
 export async function GET(req: NextRequest) {

@@ -12,10 +12,12 @@
 
 export const ROLE_LABEL: Record<string, string> = {
   admin: "Super admin",
+  supervisor: "Supervisor",
   manager: "Manager",
   hr: "HR",
   employee: "Front House",
   kitchen: "Kitchen",
+  bar: "Bar",
   driver: "Driver",
 };
 
@@ -23,20 +25,22 @@ export const roleLabel = (role: string | null | undefined) => (role ? ROLE_LABEL
 
 /** Roles HR / managers can give someone — Super admin is never one of them. */
 export const ASSIGNABLE_ROLES = [
+  { value: "supervisor", label: "Supervisor — above Manager: also HR view, Insights and correcting Daily accounts" },
   { value: "manager", label: "Manager — runs the restaurant day to day" },
   { value: "hr", label: "HR — people, payroll and attendance" },
   { value: "employee", label: "Front House — the till only" },
   { value: "kitchen", label: "Kitchen — the Kitchen Display only" },
+  { value: "bar", label: "Bar — the till only" },
 ] as const;
 
 export const ASSIGNABLE_ROLE_KEYS: string[] = ASSIGNABLE_ROLES.map((r) => r.value);
 
 /** Manager level and up: approve refunds, pair tills, see management alerts. */
-export const MANAGER_ROLES = ["admin", "manager"] as const;
+export const MANAGER_ROLES = ["admin", "supervisor", "manager"] as const;
 export const isManagerRole = (role: string) => (MANAGER_ROLES as readonly string[]).includes(role);
 
 /** Front-line roles: PIN on a paired device only — no password sign-in, no Staff Hub. */
-export const FRONT_LINE_ROLES = ["employee", "kitchen", "driver"] as const;
+export const FRONT_LINE_ROLES = ["employee", "kitchen", "bar", "driver"] as const;
 export const isFrontLine = (role: string) => (FRONT_LINE_ROLES as readonly string[]).includes(role);
 
 /**
@@ -48,9 +52,16 @@ export const isFrontLine = (role: string) => (FRONT_LINE_ROLES as readonly strin
 export function canGiveRole(actor: string, target: string): boolean {
   if (!ASSIGNABLE_ROLE_KEYS.includes(target)) return false;
   if (actor === "admin" || actor === "hr") return true;
-  if (actor === "manager") return target === "employee" || target === "kitchen";
+  if (actor === "manager" || actor === "supervisor") return target === "employee" || target === "kitchen" || target === "bar";
   return false;
 }
 
 /** Can `actor` change role, active status or password of other staff? (Super admin, HR) */
 export const canChangeAccess = (actor: string) => actor === "admin" || actor === "hr";
+
+/** The till only (PIN on a paired till): Front House and Bar. */
+export const TILL_ONLY_ROLES = ["employee", "bar"] as const;
+export const isTillOnly = (role: string) => (TILL_ONLY_ROLES as readonly string[]).includes(role);
+
+/** Not scheduled on the rota (attendance app): HR and Supervisor. */
+export const NOT_ON_ROTA = ["hr", "supervisor"] as const;

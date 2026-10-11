@@ -47,7 +47,7 @@ export async function PUT(req: NextRequest) {
     }
     // Super admin always has everything; Front House and Kitchen never see
     // Staff Hub — none of them is editable.
-    if (role === "admin" || role === "employee" || role === "kitchen") {
+    if (role === "admin" || role === "employee" || role === "bar" || role === "kitchen") {
       return NextResponse.json({ error: `${ROLE_LABELS[role as keyof typeof ROLE_LABELS]} access is fixed` }, { status: 400 });
     }
 

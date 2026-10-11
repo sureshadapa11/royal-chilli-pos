@@ -58,7 +58,7 @@ export async function POST(req: NextRequest) {
     // device. Their own things (clock-in, rota, payslips) are in their
     // business's attendance app. The exception: staff who "Can deliver" sign
     // in on their phone for My deliveries (and nothing else).
-    const frontLine = staff.role === "employee" || staff.role === "kitchen";
+    const frontLine = staff.role === "employee" || staff.role === "bar" || staff.role === "kitchen";
     const deliverer = (frontLine && staff.can_deliver === true) || (staff.role as string) === "driver";
     if (frontLine && !deliverer) {
       const own = home.businessId != null ? await getBusiness(home.businessId).catch(() => null) : null;
