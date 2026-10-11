@@ -3,6 +3,7 @@
 import { useState } from "react";
 import DailyAccountsView from "@/components/staff/DailyAccountsView";
 import DailyAccountsMonth from "@/components/staff/DailyAccountsMonth";
+import CashMovementsMonth from "@/components/staff/CashMovementsMonth";
 
 // Staff Hub → Daily accounts: Day (fill in the day-end sheet) and Month (the
 // whole month like the paper report, with totals, Excel and PDF).
@@ -11,9 +12,9 @@ const heading = { fontFamily: "var(--font-space-grotesk)" };
 export default function DailyAccountsPage({ today, start, startMonth, startView, businessName }: {
   today: string; start: string; startMonth: string; startView: "day" | "month"; businessName: string;
 }) {
-  const [view, setView] = useState(startView);
+  const [view, setView] = useState<"day" | "month" | "cash">(startView);
   const [day, setDay] = useState(start);
-  const tab = (v: "day" | "month", label: string) => (
+  const tab = (v: "day" | "month" | "cash", label: string) => (
     <button type="button" onClick={() => setView(v)} aria-pressed={view === v}
       className={`rounded-lg px-4 py-1.5 text-[13.5px] font-semibold ${view === v ? "bg-[#E34435] text-white" : "text-[#5B524B] hover:bg-[#F6F1E6]"}`}>
       {label}
@@ -29,14 +30,16 @@ export default function DailyAccountsPage({ today, start, startMonth, startView,
             <p className="mt-1 text-sm text-muted-foreground">
               {view === "day"
                 ? "The day-end sheet. Till figures are filled in for you — check them, add bank in, catering and any notes, then submit."
+                : view === "cash" ? "Money staff put in or took out of the drawer through the staff link, with who entered it and the receipt photos."
                 : "The whole month, like the paper report — with totals, Excel download and print."}
             </p>
           </div>
-          <div className="flex gap-1 rounded-xl bg-[#F6F1E6] p-1">{tab("day", "Day")}{tab("month", "Month")}</div>
+          <div className="flex gap-1 rounded-xl bg-[#F6F1E6] p-1">{tab("day", "Day")}{tab("month", "Month")}{tab("cash", "Cash in/out")}</div>
         </div>
         <div className="mt-5">
           {view === "day"
             ? <DailyAccountsView key={day} today={today} start={day} />
+            : view === "cash" ? <CashMovementsMonth startMonth={startMonth} />
             : <DailyAccountsMonth startMonth={startMonth} businessName={businessName} onOpenDay={(d) => { setDay(d > today ? today : d); setView("day"); }} />}
         </div>
       </div>

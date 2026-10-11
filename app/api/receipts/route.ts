@@ -13,6 +13,7 @@ const SHARP_MIN = 40;
 
 const AREA: Record<ReceiptEntity, "finance" | "inventory"> = {
   expense: "finance", supplier_payment: "finance", purchase_order: "inventory",
+  cash_movement: "finance", daily_account: "finance",
 };
 const asEntity = (v: unknown): ReceiptEntity | null =>
   RECEIPT_ENTITIES.includes(v as ReceiptEntity) ? (v as ReceiptEntity) : null;

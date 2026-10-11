@@ -4,6 +4,7 @@ import { getSessionFromRequest } from "@/lib/auth";
 import { areaAllows } from "@/lib/permissions";
 import { londonDateStr } from "@/lib/london-date";
 import { attachReceipts, checkReceiptsForSave } from "@/lib/receipts";
+import { linkCashOutMatch } from "@/lib/cash-duplicates";
 
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
@@ -49,6 +50,8 @@ export async function POST(req: NextRequest) {
       if (same && same.length > 0) {
         return NextResponse.json({ error: "This expense is already recorded for that day", duplicate: true }, { status: 409 });
       }
+      const fromLink = await linkCashOutMatch(db, expense_date || londonDateStr(), Number(amount));
+      if (fromLink) return NextResponse.json({ error: `${fromLink} Press Save again to record it anyway.`, duplicate: true }, { status: 409 });
     }
 
     const { data, error } = await db

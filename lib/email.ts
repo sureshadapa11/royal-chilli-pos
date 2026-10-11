@@ -1020,3 +1020,55 @@ export async function sendApologyEmail(
   });
   await sendBrevoEmail(to, `We're sorry, and thank you for telling us (${name})`, shell(body, brand), undefined, brand);
 }
+
+// ---------- Morning Day End report (lib/day-end-report.ts) ----------
+
+export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end-report").DayEndReport) {
+  const brand = await getEmailBrand(d.businessId);
+  const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toFixed(2)}`);
+  const day = new Date(`${d.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
+  const row = (label: string, value: string, strong = false) =>
+    `<tr><td style="font-family:${SANS}; font-size:13.5px; color:${C.ink}; padding:4px 0;">${esc(label)}</td><td align="right" style="font-family:${SANS}; font-size:13.5px; color:${C.ink}; padding:4px 0;${strong ? " font-weight:700;" : ""}">${value}</td></tr>`;
+  const section = (title: string, inner: string) => `
+    <tr><td style="padding:14px 28px 4px;">
+      ${cardLabel(title)}
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:6px;">${inner}</table>
+    </td></tr>`;
+  const warn = (text: string) => `<div style="font-family:${SANS}; font-size:13.5px; color:#9a3412; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:10px 12px; margin-top:6px;">⚠️ ${text}</div>`;
+
+  const f = d.figures;
+  const dayEnd = f
+    ? section(`Day End · entered by ${esc(d.entered?.by ?? "—")}`, [
+        row("Z report", gbp(f.z_report)), row("Card", gbp(f.card)), row("Cash", gbp(f.cash)), row("Tips", gbp(f.tips)),
+        ...f.platforms.filter((p) => p.sales || p.commission).map((p) => row(p.label, `${gbp(p.sales)}${p.commission ? ` <span style="color:${C.muted};">(commission ${gbp(p.commission)})</span>` : ""}`)),
+        ...(f.catering_paid || f.catering_pending ? [row("Catering paid / pending", `${gbp(f.catering_paid)} / ${gbp(f.catering_pending)}`)] : []),
+        row("Total sales", gbp(f.total_sales), true),
+        row("Net total (after costs)", gbp(f.net_total), true),
+      ].join("") + (d.notes ? `<tr><td colspan="2" style="font-family:${SANS}; font-size:13px; color:${C.muted}; padding-top:6px;">Notes: ${esc(d.notes)}</td></tr>` : ""))
+    : `<tr><td style="padding:14px 28px 4px;">${warn("No Day End was entered for this day.")}</td></tr>`;
+
+  const dr = d.drawer;
+  const drawer = section("Cash drawer", [
+    row("Opening", gbp(dr.opening)), row("+ Cash sales", gbp(dr.cashSales)), row("+ Money in", gbp(dr.moneyIn)), row("− Money out", gbp(dr.moneyOut)),
+    row("Expected at close", gbp(dr.expected), true), row("Counted", gbp(dr.counted), true),
+    row("Difference", dr.variance == null ? "—" : `<span style="color:${Math.abs(dr.variance) < 0.01 ? "#15803d" : "#b91c1c"};">${dr.variance > 0 ? "+" : ""}${gbp(dr.variance)}</span>`, true),
+  ].join(""));
+
+  const cash = d.cash.length
+    ? section("Cash in / out", d.cash.map((c) => row(`${c.direction === "out" ? "OUT" : "IN"} · ${c.reason}${c.paidTo ? ` (${c.paidTo})` : ""} · ${c.by}`,
+        `<span style="color:${c.direction === "out" ? "#b91c1c" : "#15803d"};">${c.direction === "out" ? "−" : "+"}${gbp(c.amount)}</span>`)).join(""))
+    : "";
+
+  const missing = d.missingDays.filter((x) => x !== d.date);
+  const body = `
+    <tr><td style="padding:26px 28px 6px;">
+      ${cardLabel("Day End report")}
+      <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:4px;">${esc(d.business)} · ${esc(day)}</div>
+    </td></tr>
+    ${dayEnd}
+    ${drawer}
+    ${cash}
+    ${missing.length ? `<tr><td style="padding:10px 28px 0;">${warn(`Day End also missing for: ${missing.map((x) => new Date(`${x}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })).join(", ")}`)}</td></tr>` : ""}
+    <tr><td style="padding:18px 28px 26px; font-family:${SANS}; font-size:12px; color:${C.muted};">Receipt photos and every entry are in the Staff Hub → Daily accounts.</td></tr>`;
+  await sendBrevoEmail(to, `${d.business} Day End · ${day}${f ? "" : " · NOT ENTERED"}`, shell(body, brand), undefined, brand);
+}

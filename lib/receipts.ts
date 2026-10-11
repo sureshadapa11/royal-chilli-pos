@@ -5,8 +5,9 @@ import type { BizDb } from "@/lib/business-db";
 // to its expense / supplier payment / purchase order when that is saved.
 
 export const RECEIPT_BUCKET = "receipts";
-export type ReceiptEntity = "expense" | "supplier_payment" | "purchase_order";
-export const RECEIPT_ENTITIES: ReceiptEntity[] = ["expense", "supplier_payment", "purchase_order"];
+// cash_movement / daily_account (129): from the staff links (lib/staff-links.ts).
+export type ReceiptEntity = "expense" | "supplier_payment" | "purchase_order" | "cash_movement" | "daily_account";
+export const RECEIPT_ENTITIES: ReceiptEntity[] = ["expense", "supplier_payment", "purchase_order", "cash_movement", "daily_account"];
 
 type PhotoRow = { id: number; entity_type: string | null };
 
