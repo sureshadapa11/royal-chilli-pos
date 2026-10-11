@@ -4,6 +4,7 @@ import { bizDb } from "@/lib/business-db";
 import supabase from "@/lib/supabase";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { getBusinessSetting } from "@/lib/business-settings";
+import { DEFAULT_REWARD_MIN_SPEND, getLoyaltySetting } from "@/lib/loyalty";
 
 // Everything the Loyalty tab needs in one call: current points, the active
 // reward catalogue, this customer's active points voucher (if any), and their
@@ -35,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   const { data: issued } = await supabase
     .from("loyalty_redemptions")
-    .select("id, code, status, points_spent, issued_at, expires_at, valid_from, referred_customer_id, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, is_welcome_reward, is_referral_reward, winback_reason, is_birthday_reward, is_apology_reward)")
+    .select("id, code, status, points_spent, issued_at, expires_at, valid_from, referred_customer_id, reward:loyalty_rewards(name, description, discount_amount, discount_pct, max_discount, order_types, min_spend, is_welcome_reward, is_referral_reward, winback_reason, is_birthday_reward, is_apology_reward)")
     .eq("customer_id", session.id)
     .in("status", ["issued", "locked"])
     .order("issued_at", { ascending: false });
@@ -43,7 +44,10 @@ export async function GET(req: NextRequest) {
   const now = new Date();
   const expired = (issued ?? []).filter((r) => new Date(r.expires_at) < now);
   for (const r of expired) await supabase.from("loyalty_redemptions").update({ status: "expired" }).eq("id", r.id);
-  const live = (issued ?? []).filter((r) => new Date(r.expires_at) >= now);
+  // Every reward needs a minimum spend (Settings → Rewards rules; a reward's own, if higher).
+  const minRule = await getLoyaltySetting(businessId, "loyalty_reward_min_spend", DEFAULT_REWARD_MIN_SPEND);
+  const live = (issued ?? []).filter((r) => new Date(r.expires_at) >= now)
+    .map((r) => ({ ...r, min_spend: Math.max(minRule, Number((r.reward as unknown as { min_spend?: number } | null)?.min_spend) || 0) }));
   type Flags = { is_welcome_reward?: boolean; is_referral_reward?: boolean; winback_reason?: string | null; is_birthday_reward?: boolean; is_apology_reward?: boolean } | null;
   const flags = (r: (typeof live)[number]) => (r.reward as unknown as Flags) ?? {};
   const isWelcome = (r: (typeof live)[number]) => !!flags(r).is_welcome_reward;
@@ -71,6 +75,7 @@ export async function GET(req: NextRequest) {
     comeBackVouchers: live.filter((r) => isComeBack(r) && r.status === "issued").map((r) => ({ ...r, kind: giftKind(r) })),
     welcomeVoucher: live.find((r) => isWelcome(r) && r.status === "issued") ?? null,
     referralCode: customer?.referral_code ?? null,
+    rewardMinSpend: minRule,
     shareMessage: typeof shareSetting?.value === "string" ? shareSetting.value : null,
     referralVouchers: referral.map((r) => ({
       id: r.id,

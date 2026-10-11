@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
 import { getSessionFromRequest } from "@/lib/auth";
 import { recalcTotals } from "@/lib/order-totals";
-import { getCashCreditInfo } from "@/lib/loyalty";
+import { billRewardProblem, getCashCreditInfo, minSpendProblem, rewardMinSpend } from "@/lib/loyalty";
 
 // One-tap "use my points" at the till — no code, no Staff Hub trip. Offered
 // in £ steps up to the per-visit cap (see getCashCreditInfo: £5 or £10);
@@ -30,13 +30,18 @@ export async function POST(req: NextRequest) {
     if (order.is_paid || order.status === "cancelled") {
       return NextResponse.json({ error: "This order can no longer be changed" }, { status: 409 });
     }
-    // One loyalty reward per bill (it has one loyalty line) — never swap one out unseen.
-    if (Number(order.loyalty_discount) > 0) {
-      return NextResponse.json({ error: `This bill already has a loyalty reward (${order.loyalty_reason ?? "loyalty"})` }, { status: 409 });
-    }
+    // One loyalty reward per bill (it has one loyalty line; a free-item code
+    // counts too) — never swap one out unseen.
+    const already = await billRewardProblem(session.businessId, order);
+    if (already) return NextResponse.json({ error: already }, { status: 409 });
     if (order.order_type !== "dine_in") {
       return NextResponse.json({ error: "Points can only be used on dine-in bills" }, { status: 400 });
     }
+
+    // Minimum spend, on the food before the reward.
+    const current = await recalcTotals(String(order_id), session.businessId);
+    const short = minSpendProblem(await rewardMinSpend(session.businessId), Number(current.subtotal));
+    if (short) return NextResponse.json({ error: short.message }, { status: 400 });
 
     // Guard against double-tapping the button (or a retried request) — never
     // debit twice for the same order.

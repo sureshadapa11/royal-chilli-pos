@@ -165,6 +165,8 @@ export default function PaymentModal({
     visitBonus: number;
     /** points/vouchers can be spent on this bill (dine-in only) */
     canSpend: boolean;
+    /** any reward needs the food bill (before it) to be at least this */
+    minSpend: number;
   } | null>(null);
   const [cashCreditApplying, setCashCreditApplying] = useState(false);
   const [cashCreditApplied, setCashCreditApplied] = useState<number | null>(null);
@@ -290,10 +292,13 @@ export default function PaymentModal({
     // Once anything has changed the bill (reward, points, discount), use its
     // current total — even £0, which earns nothing — not the original one.
     const amount = localLoyalty > 0 || cashCreditApplied !== null || appliedReward ? localTotal : localTotal || total;
+    // Reopening a bill fires this twice (the till's total, then the saved
+    // bill's): only the latest answer may land, or a stale one can win.
+    let stale = false;
     fetch(`/api/loyalty/estimate?customer_id=${customerId}&amount=${amount}${orderId ? `&order_id=${orderId}` : ""}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
-        if (!d) return;
+        if (!d || stale) return;
         setLoyaltyPreview({
           customerName: d.customer_name,
           currentBalance: d.current_balance,
@@ -304,9 +309,11 @@ export default function PaymentModal({
           visitNumber: d.visit_number ?? 0,
           visitBonus: d.visit_bonus ?? 0,
           canSpend: d.can_spend !== false,
+          minSpend: Number(d.reward_min_spend) || 0,
         });
       })
       .catch(() => {});
+    return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, customerId, orderId, localTotal, total, localLoyalty]);
 
@@ -478,7 +485,9 @@ export default function PaymentModal({
       setLastPaymentAmount(0);
       setAmountPaidSoFar(localTotal);
       setStep("receipt");
-      onPaymentComplete(0);
+      // No balance passed: the till's own total doesn't include the reward,
+      // so "0 left" would read as the full price "already paid".
+      onPaymentComplete();
     } catch {
       setError("Couldn't close the bill. Please try again.");
     } finally {
@@ -793,6 +802,9 @@ export default function PaymentModal({
                   </div>
                 )}
                 {rewardError && <div className="text-red-600 text-xs">{rewardError}</div>}
+                {!appliedReward && localLoyalty <= 0 && loyaltyPreview && loyaltyPreview.minSpend > 0 && subtotal < loyaltyPreview.minSpend - 0.005 && (
+                  <div className="text-amber-700 text-[11px]">Rewards need a bill of {formatCurrency(loyaltyPreview.minSpend)} or more: this one is {formatCurrency(subtotal)}</div>
+                )}
               </div>
 
               {/* Service charge */}
@@ -880,7 +892,7 @@ export default function PaymentModal({
                     <span className="text-emerald-800 text-[11px] font-semibold">✓ Loyalty credit applied</span>
                     <span className="text-emerald-800 text-[11px] font-bold">−{formatCurrency(cashCreditApplied)}</span>
                   </div>
-                ) : localLoyalty > 0 ? (
+                ) : localLoyalty > 0 || appliedReward ? (
                   <p className="text-center text-muted-foreground text-[10px]">
                     A reward is already on this bill, so points can&apos;t be used too
                   </p>
@@ -890,6 +902,10 @@ export default function PaymentModal({
                       £{loyaltyPreview.cashCredit.convertedValue.toFixed(2)} of points banked — points can be used on dine-in only
                     </p>
                   ) : null
+                ) : loyaltyPreview?.cashCredit?.eligible && subtotal < loyaltyPreview.minSpend - 0.005 ? (
+                  <p className="text-center text-muted-foreground text-[10px]">
+                    £{loyaltyPreview.cashCredit.convertedValue.toFixed(2)} of points banked: usable on bills of {formatCurrency(loyaltyPreview.minSpend)} or more
+                  </p>
                 ) : loyaltyPreview?.cashCredit?.eligible ? (
                   <div className="flex gap-1.5">
                     {loyaltyPreview.cashCredit.options.map((amt) => (
@@ -1317,7 +1333,7 @@ export default function PaymentModal({
                 <div className="text-right text-muted-foreground text-[10px]">incl. VAT {formatCurrency(localTax)} (on food only)</div>
                 <div className="flex justify-between text-foreground text-xs">
                   <span>Paid by</span>
-                  <span className="capitalize">{method}</span>
+                  <span className="capitalize">{localTotal <= 0.009 ? "Nothing to pay" : method}</span>
                 </div>
                 {method === "cash" && (
                   <>

@@ -55,6 +55,7 @@ async function rules() {
     everyN: n("loyalty_visit_bonus_every_n", 0),
     everyPoints: n("loyalty_visit_bonus_every_points", 0),
     referralMin: n("loyalty_referral_min_spend", 20),
+    rewardMin: n("loyalty_reward_min_spend", 15),
     referralMax: n("loyalty_referral_max_per_year", 10),
     welcomePct: Number(welcome?.discount_pct ?? 20),
     welcomeMax: Number(welcome?.max_discount ?? 20),
@@ -95,7 +96,8 @@ export default async function RewardsTermsPage() {
       heading: "Using points",
       body: [
         `${r.pointsPerPoundOff} points are worth ${money(1)} off. Points can be used when you dine in, in steps of ${money(r.step)}, up to ${money(r.maxPerVisit)} per visit. They can't be used on collection or delivery orders.`,
-        "Only one reward, voucher or points discount can be used per bill. Points and rewards have no cash value, can't be exchanged for cash, and can't be transferred to another person.",
+        `Only one reward, voucher or points discount can be used per bill${r.rewardMin > 0 ? `, and only on a bill of at least ${money(r.rewardMin)} before the reward` : ""}.`,
+        "Points and rewards have no cash value, can't be exchanged for cash, and can't be transferred to another person.",
         `Points expire ${r.expiryMonths} months after you earn them if they haven't been used.`,
       ],
     },

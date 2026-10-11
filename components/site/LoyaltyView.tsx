@@ -14,6 +14,7 @@ type Redemption = {
   expires_at: string;
   valid_from?: string | null;
   kind?: "birthday" | "apology" | "comeback" | null;
+  min_spend?: number;
   reward: { name: string; description?: string | null; discount_amount: number | null; discount_pct?: number | null; max_discount?: number | null; order_types?: string[] | null } | null;
 };
 type ReferralVoucher = { id: number; status: "locked" | "issued"; code: string | null; expires_at: string | null; friend: string };
@@ -26,7 +27,17 @@ type LoyaltyData = {
   referralCode: string | null;
   shareMessage?: string | null;
   referralVouchers: ReferralVoucher[];
+  rewardMinSpend?: number;
 };
+
+// "Minimum spend £15 · one reward per bill" under each voucher.
+function MinSpendNote({ amount }: { amount?: number }) {
+  return (
+    <div className="mt-1 text-xs text-muted-foreground">
+      {amount ? `Minimum spend £${amount % 1 ? amount.toFixed(2) : amount} · ` : ""}one reward per bill
+    </div>
+  );
+}
 
 const spacedCode = (code: string) => `${code.slice(0, 4)} ${code.slice(4)}`;
 const expiryLabel = (iso: string) =>
@@ -47,6 +58,7 @@ function WelcomeVoucher({ voucher }: { voucher: Redemption }) {
         {spacedCode(voucher.code)}
       </div>
       <div className="text-xs text-muted-foreground">Show this code to staff when you pay for a dine-in meal.</div>
+      <MinSpendNote amount={voucher.min_spend} />
       {voucher.valid_from && new Date(voucher.valid_from) > new Date() && (
         <div className="mt-1 text-xs text-muted-foreground">
           For your next visit — use it from{" "}
@@ -74,6 +86,7 @@ function ComeBackVoucher({ voucher }: { voucher: Redemption }) {
         {spacedCode(voucher.code)}
       </div>
       <div className="text-xs text-muted-foreground">Show this code to staff when you order or pay{where}. One use.</div>
+      <MinSpendNote amount={voucher.min_spend} />
       <div className="mt-1 text-xs text-amber-600">Expires {expiryLabel(voucher.expires_at)}</div>
     </div>
   );
@@ -158,6 +171,7 @@ function VoucherPanel({ redemption, onCancel, busy }: { redemption: Redemption |
         {redemption.reward?.discount_amount ? ` · £${Number(redemption.reward.discount_amount).toFixed(2)} off order` : ""}
       </div>
       <div className="mt-1 text-xs text-muted-foreground">{redemption.points_spent} points redeemed</div>
+      <MinSpendNote amount={redemption.min_spend} />
       <div className="mt-2 text-xs text-amber-600">Expires {expiresLabel}</div>
       <button
         onClick={onCancel}
@@ -219,14 +233,14 @@ function BringAFriend({ code, template }: { code: string; template: string | nul
   );
 }
 
-function ReferralVouchers({ vouchers }: { vouchers: ReferralVoucher[] }) {
+function ReferralVouchers({ vouchers, minSpend }: { vouchers: ReferralVoucher[]; minSpend?: number }) {
   if (vouchers.length === 0) return null;
   return (
     <div className="mt-3.5 rounded-2xl border border-border bg-surface shadow-sm">
       {vouchers.map((v) => (
         <div key={v.id} className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 last:border-b-0">
           <div>
-            <div className="font-semibold">£5 off · dine-in</div>
+            <div className="font-semibold">£5 off · dine-in{minSpend ? ` · min. spend £${minSpend % 1 ? minSpend.toFixed(2) : minSpend}` : ""}</div>
             <div className="text-xs text-muted-foreground">Thanks for bringing {v.friend}</div>
             {v.status === "issued" && v.expires_at && <div className="text-xs text-amber-600">Expires {expiryLabel(v.expires_at)}</div>}
           </div>
@@ -303,7 +317,7 @@ function LoyaltyInner() {
 
       {data.welcomeVoucher && <WelcomeVoucher voucher={data.welcomeVoucher} />}
       {(data.comeBackVouchers ?? []).map((v) => <ComeBackVoucher key={v.id} voucher={v} />)}
-      <ReferralVouchers vouchers={data.referralVouchers ?? []} />
+      <ReferralVouchers vouchers={data.referralVouchers ?? []} minSpend={data.rewardMinSpend} />
 
       <div className="mt-3.5 rounded-2xl border border-border bg-surface shadow-sm">
         <Donut points={data.points} nextReward={nextReward} />

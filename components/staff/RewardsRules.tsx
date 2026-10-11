@@ -20,6 +20,7 @@ type Form = {
   everyN: string;
   everyPoints: string;
   referralMinSpend: string;
+  rewardMinSpend: string;
   referralMaxPerYear: string;
   expiryMonths: string;
   shareMessage: string;
@@ -62,6 +63,7 @@ export default function RewardsRules({ canEdit }: { canEdit: boolean }) {
           everyN: num(s.loyalty_visit_bonus_every_n, "0"),
           everyPoints: num(s.loyalty_visit_bonus_every_points, "0"),
           referralMinSpend: num(s.loyalty_referral_min_spend, "20"),
+          rewardMinSpend: num(s.loyalty_reward_min_spend, "15"),
           referralMaxPerYear: num(s.loyalty_referral_max_per_year, "10"),
           expiryMonths: num(s.loyalty_points_expiry_months, "12"),
           shareMessage: typeof s.loyalty_share_message === "string" && s.loyalty_share_message.trim() ? s.loyalty_share_message : DEFAULT_SHARE_MESSAGE,
@@ -101,6 +103,7 @@ export default function RewardsRules({ canEdit }: { canEdit: boolean }) {
         loyalty_visit_bonus_every_n: n(form.everyN),
         loyalty_visit_bonus_every_points: n(form.everyPoints),
         loyalty_referral_min_spend: n(form.referralMinSpend),
+        loyalty_reward_min_spend: n(form.rewardMinSpend),
         loyalty_referral_max_per_year: n(form.referralMaxPerYear),
         loyalty_points_expiry_months: n(form.expiryMonths),
         loyalty_share_message: form.shareMessage,
@@ -162,6 +165,7 @@ export default function RewardsRules({ canEdit }: { canEdit: boolean }) {
         <div className="rounded-xl border border-border bg-surface">
           <Row label="Max points per visit" hint="100 points = £1">£{box("maxPerVisit")}</Row>
           <Row label="Use points in steps of">£{box("redeemStep")}</Row>
+          <Row label="Minimum spend to use any reward" hint="Codes and points: the food bill before the reward. One reward per bill.">£{box("rewardMinSpend")}</Row>
         </div>
       </section>
 
