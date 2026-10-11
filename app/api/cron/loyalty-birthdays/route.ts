@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
   const { data: customers } = await supabase
     .from("customers")
     .select("id, business_id, name, date_of_birth")
-    .not("date_of_birth", "is", null);
+    .not("date_of_birth", "is", null)
+    .is("merged_into", null); // a merged leftover isn't a customer of its own
 
   const birthdayCustomers = (customers || []).filter((c) => {
     const [, month, day] = (c.date_of_birth as string).split("-").map(Number);

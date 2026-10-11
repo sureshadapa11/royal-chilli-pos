@@ -44,7 +44,10 @@ export async function runWinBackEmails(now: Date = new Date()): Promise<{ winBac
     .from("customers")
     .select("id, name, email, business_id, winback_asked_at")
     .eq("marketing_consent", true)
-    .not("email", "is", null);
+    .not("email", "is", null)
+    // A record merged into another (one customer, one record) is a leftover:
+    // its visits and codes live on the record it was merged into.
+    .is("merged_into", null);
   const list = (customers ?? []) as { id: number; name: string; email: string; business_id: number; winback_asked_at: string | null }[];
   if (!list.length) return { winBack: 0 };
 
