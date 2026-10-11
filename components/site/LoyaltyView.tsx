@@ -372,7 +372,7 @@ function LoyaltyInner() {
             Full details in our <a href="/rewards-terms" className="underline">Rewards Club terms</a>.
           </p>
           <div className="mb-1 text-xs font-semibold uppercase tracking-[0.1em] text-muted-foreground">Redeem rewards</div>
-          <p className="mb-3 px-0.5 text-[13.5px] text-muted-foreground">Simple steps to redeem your points at checkout.</p>
+          <p className="mb-3 px-0.5 text-[13.5px] text-muted-foreground">Simple steps to use your rewards at the till.</p>
           <div className="rounded-2xl border border-border bg-surface shadow-sm">
             {[
               { n: 1, t: "Show your code at the till", d: "When you pay for a dine-in meal, show your voucher code from this page, or ask to use your points (100 points = £1 off)." },
