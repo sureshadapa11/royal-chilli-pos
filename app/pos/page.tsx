@@ -458,10 +458,11 @@ export default function POSPage() {
     }
   }, []);
 
-  const handleSendToKitchen = async () => {
+  // Returns whether the new items were saved (Pay Now needs to know).
+  const handleSendToKitchen = async (): Promise<boolean> => {
     const newItems = cartItems.filter(i => !i.sent);
-    if (newItems.length === 0) return;
-    if (orderType === "dine_in" && !selectedTable) return;
+    if (newItems.length === 0) return true;
+    if (orderType === "dine_in" && !selectedTable) return false;
     setLoading(true);
     try {
       const res = await fetch("/api/orders", {
@@ -480,7 +481,7 @@ export default function POSPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) return;
+      if (!res.ok) return false;
       const orderId = data.order.id;
       await fetch(`/api/orders/${orderId}`, {
         method: "PUT",
@@ -502,8 +503,9 @@ export default function POSPage() {
         return { ...i, sent: true, db_id: dbItem?.id, order_id: orderId };
       }));
       refreshTables();
+      return true;
     } catch {
-      // silent
+      return false;
     } finally {
       setLoading(false);
     }
@@ -548,7 +550,17 @@ export default function POSPage() {
         setCurrentCustomerId(data.order.customer_id ?? null);
         setCurrentAmountPaid(0);
         setAllOrderIds([data.order.id]);
-      } else if (customerPhone.trim()) {
+      } else {
+        // Items added since the bill was started aren't saved yet: send them
+        // (a new round, like Send to Kitchen) or they'd be missing from the
+        // bill the payment, rewards and receipt all read.
+        if (cartItems.some(i => !i.sent) && !(await handleSendToKitchen())) {
+          setStatus("Couldn't save the new items. Please try again.");
+          return;
+        }
+        setLoading(true);
+      }
+      if (currentOrderId && customerPhone.trim()) {
         // Order already exists (e.g. dine-in sent to kitchen earlier) — a
         // phone just captured at payment time needs attaching after the
         // fact so loyalty picks it up when this payment completes.
