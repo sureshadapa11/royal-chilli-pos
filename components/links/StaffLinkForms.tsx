@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import ReceiptPhotos, { type Receipt } from "@/components/staff/ReceiptPhotos";
+import { CASH_CATEGORIES, cashCategory } from "@/lib/cash-categories";
 
 // The staff links' forms (lib/staff-links.ts): Day End and Cash In / Out.
 // Input only — after saving they say "Saved", never show figures.
@@ -30,7 +31,9 @@ function Shell({ business, title, children }: { business: string; title: string;
 }
 
 /** PIN pad box: shows "✓ Name" once the PIN is right. */
-function PinBox({ token, onOk }: { token: string; onOk: (pin: string, name: string) => void }) {
+type Picks = { staff: { id: number; name: string }[]; suppliers: { id: number; name: string }[] };
+
+function PinBox({ token, onOk }: { token: string; onOk: (pin: string, name: string, picks: Picks) => void }) {
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
   const [err, setErr] = useState("");
@@ -41,7 +44,7 @@ function PinBox({ token, onOk }: { token: string; onOk: (pin: string, name: stri
     if (p.length !== 4) return;
     const res = await fetch(`/api/links/${token}/pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: p }) }).catch(() => null);
     const d = await res?.json().catch(() => ({}));
-    if (res?.ok && d?.name) { setName(d.name); onOk(p, d.name); } else setErr(d?.error ?? "Couldn't check the PIN.");
+    if (res?.ok && d?.name) { setName(d.name); onOk(p, d.name, { staff: d.staff ?? [], suppliers: d.suppliers ?? [] }); } else setErr(d?.error ?? "Couldn't check the PIN.");
   }
   return (
     <section className={card}>
@@ -148,7 +151,10 @@ export function DayEndForm({ token, business, today }: { token: string; business
 export function CashForm({ token, business, today }: { token: string; business: string; today: string }) {
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
+  const [picks, setPicks] = useState<Picks>({ staff: [], suppliers: [] });
   const [direction, setDirection] = useState<"out" | "in">("out");
+  const [category, setCategory] = useState("");
+  const [who, setWho] = useState("");
   const [amount, setAmount] = useState("");
   const [reason, setReason] = useState("");
   const [paidTo, setPaidTo] = useState("");
@@ -156,61 +162,107 @@ export function CashForm({ token, business, today }: { token: string; business: 
   const [photos, setPhotos] = useState<Receipt[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const [askAgain, setAskAgain] = useState(false);
   const [done, setDone] = useState("");
+  const cat = cashCategory(category);
+
+  function pickDirection(d: "out" | "in") { setDirection(d); setCategory(""); setWho(""); setAskAgain(false); }
 
   async function save() {
     setErr("");
     if (!pin) return setErr("Enter your PIN first.");
+    if (!cat) return setErr("Choose what it was for.");
+    if (cat.pick && !who) return setErr(cat.pick === "staff" ? "Choose the staff member." : "Choose the supplier.");
     if (!(Number(amount) > 0)) return setErr("Enter the amount.");
-    if (reason.trim().length < 3) return setErr("Write the reason.");
-    if (direction === "out" && photos.length === 0) return setErr("Add a photo of the receipt.");
+    if (cat.reasonRequired && reason.trim().length < 3) return setErr("Write what it was for.");
+    if (cat.direction === "out" && cat.photo && photos.length === 0) return setErr("Add a photo of the receipt.");
     setBusy(true);
     const res = await fetch(`/api/links/${token}/cash`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin, direction, amount, reason, paid_to: paidTo, date, photo_ids: photos.map((p) => p.id) }),
+      body: JSON.stringify({
+        pin, category: cat.key, amount, reason, paid_to: paidTo, date, photo_ids: photos.map((p) => p.id),
+        staff_member_id: cat.pick === "staff" ? Number(who) : undefined,
+        supplier_id: cat.pick === "supplier" ? Number(who) : undefined,
+        confirm_duplicate: askAgain,
+      }),
     }).catch(() => null);
     setBusy(false);
     const d = await res?.json().catch(() => ({}));
-    if (!res?.ok) return setErr(d?.error ?? "Couldn't save. Check your connection and try again.");
-    setDone(`${direction === "out" ? "Money out" : "Money in"} £${Number(amount).toFixed(2)}, entered by ${name}.`);
+    if (!res?.ok) { setAskAgain(!!d?.duplicate); return setErr(d?.error ?? "Couldn't save. Check your connection and try again."); }
+    setAskAgain(false);
+    setDone(`${cat.label} £${Number(amount).toFixed(2)}, entered by ${name}.`);
   }
 
-  if (done) return <Saved business={business} title="Cash In / Out" what={done} again={() => { setDone(""); setAmount(""); setReason(""); setPaidTo(""); setPhotos([]); setDate(ukToday()); }} />;
+  const reset = () => { setDone(""); setCategory(""); setWho(""); setAmount(""); setReason(""); setPaidTo(""); setPhotos([]); setDate(ukToday()); setAskAgain(false); };
+  if (done) return <Saved business={business} title="Cash In / Out" what={done} again={reset} />;
+  const list = cat?.pick === "staff" ? picks.staff : picks.suppliers;
   return (
     <Shell business={business} title="Cash In / Out">
-      <PinBox token={token} onOk={(p, n) => { setPin(p); setName(n); }} />
+      <PinBox token={token} onOk={(p, n, pk) => { setPin(p); setName(n); setPicks(pk); }} />
       <div className="grid grid-cols-2 gap-2">
         {(["out", "in"] as const).map((d) => (
-          <button key={d} onClick={() => setDirection(d)}
+          <button key={d} onClick={() => pickDirection(d)}
             className={`rounded-xl border-2 py-3 font-bold ${direction === d ? (d === "out" ? "border-[#e4473a] bg-red-50 text-[#e4473a]" : "border-emerald-600 bg-emerald-50 text-emerald-700") : "border-border bg-white text-muted-foreground"}`}>
             {d === "out" ? "− Money OUT" : "+ Money IN"}
           </button>
         ))}
       </div>
       <section className={card}>
-        <div className={head}>Amount</div>
-        <div className="flex items-center rounded-xl border border-border bg-background px-4">
-          <span className="text-2xl font-bold text-muted-foreground">£</span>
-          <input value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} inputMode="decimal" placeholder="0.00" className="w-full bg-transparent py-3 text-center text-3xl font-bold outline-none" />
+        <div className={head}>What was it for?</div>
+        <div className="grid grid-cols-2 gap-2">
+          {CASH_CATEGORIES.filter((c) => c.direction === direction).map((c) => (
+            <button key={c.key} onClick={() => { setCategory(c.key); setWho(""); setAskAgain(false); }}
+              className={`rounded-xl border-2 px-2 py-2.5 text-left text-[13.5px] font-semibold leading-tight ${category === c.key ? "border-[#e4473a] bg-red-50" : "border-border bg-white"}`}>
+              <span className="mr-1">{c.icon}</span>{c.label}
+            </button>
+          ))}
         </div>
       </section>
-      <section className={card}>
-        <div className={head}>Reason</div>
-        <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={direction === "out" ? "e.g. Vegetables from cash & carry" : "e.g. Catering deposit"} className="h-20 w-full resize-none rounded-lg border border-border bg-background px-3 py-2" />
-        <label className="mt-2 flex items-center justify-between gap-2 text-[15px]">{direction === "out" ? "Paid to" : "From"} (optional)
-          <input value={paidTo} onChange={(e) => setPaidTo(e.target.value)} className="w-40 rounded-lg border border-border bg-background px-2.5 py-2" />
-        </label>
-        <label className="mt-1 flex items-center justify-between gap-2 text-[15px]">Date
-          <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value)} className="w-40 rounded-lg border border-border bg-background px-2.5 py-2" />
-        </label>
-      </section>
-      <section className={card}>
-        <ReceiptPhotos entity="cash_movement" label={direction === "out" ? "Receipt photo" : "Photo (optional)"} required={direction === "out"} value={photos} onChange={setPhotos}
-          uploadUrl={`/api/links/${token}/photo`} extraFields={{ pin }} />
-        {!pin && <p className="mt-1 text-xs text-muted-foreground">Enter your PIN before adding a photo.</p>}
-      </section>
-      {err && <p className="text-center text-sm font-medium text-red-600">{err}</p>}
-      <button onClick={save} disabled={busy} className="w-full rounded-xl bg-[#e4473a] py-3.5 text-base font-semibold text-white disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
+      {cat && (
+        <>
+          {cat.pick && (
+            <section className={card}>
+              <div className={head}>{cat.pick === "staff" ? "Staff member" : "Supplier"}</div>
+              {!pin ? <p className="text-sm text-muted-foreground">Enter your PIN to see the list.</p> : (
+                <select value={who} onChange={(e) => { setWho(e.target.value); setAskAgain(false); }} className="w-full rounded-lg border border-border bg-background px-3 py-2.5">
+                  <option value="">Choose…</option>
+                  {list.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                </select>
+              )}
+            </section>
+          )}
+          <section className={card}>
+            <div className={head}>Amount</div>
+            <div className="flex items-center rounded-xl border border-border bg-background px-4">
+              <span className="text-2xl font-bold text-muted-foreground">£</span>
+              <input value={amount} onChange={(e) => { setAmount(e.target.value.replace(/[^0-9.]/g, "")); setAskAgain(false); }} inputMode="decimal" placeholder="0.00" className="w-full bg-transparent py-3 text-center text-3xl font-bold outline-none" />
+            </div>
+          </section>
+          <section className={card}>
+            <div className={head}>{cat.reasonRequired ? "What was it for? *" : "Note (optional)"}</div>
+            <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder={cat.reasonRequired ? "Say what it was" : "Anything useful, e.g. what was bought"} className="h-16 w-full resize-none rounded-lg border border-border bg-background px-3 py-2" />
+            {!cat.pick && cat.home !== "book" && (
+              <label className="mt-2 flex items-center justify-between gap-2 text-[15px]">Paid to (optional)
+                <input value={paidTo} onChange={(e) => setPaidTo(e.target.value)} className="w-40 rounded-lg border border-border bg-background px-2.5 py-2" />
+              </label>
+            )}
+            <label className="mt-1 flex items-center justify-between gap-2 text-[15px]">Date
+              <input type="date" value={date} max={today} onChange={(e) => { setDate(e.target.value); setAskAgain(false); }} className="w-40 rounded-lg border border-border bg-background px-2.5 py-2" />
+            </label>
+          </section>
+          {(cat.photo || cat.direction === "out") && (
+            <section className={card}>
+              <ReceiptPhotos entity="cash_movement" label={cat.photo ? "Receipt photo" : "Photo (optional)"} required={cat.photo} value={photos} onChange={setPhotos}
+                uploadUrl={`/api/links/${token}/photo`} extraFields={{ pin }} />
+              {!pin && <p className="mt-1 text-xs text-muted-foreground">Enter your PIN before adding a photo.</p>}
+            </section>
+          )}
+        </>
+      )}
+      {err && <p className={`text-center text-sm font-medium ${askAgain ? "text-amber-700" : "text-red-600"}`}>{err}</p>}
+      <button onClick={save} disabled={busy || !cat} className="w-full rounded-xl bg-[#e4473a] py-3.5 text-base font-semibold text-white disabled:opacity-50">
+        {busy ? "Saving…" : askAgain ? "Yes, a different one: save" : "Save"}
+      </button>
     </Shell>
   );
 }

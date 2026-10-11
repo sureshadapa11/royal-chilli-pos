@@ -7,12 +7,13 @@ import { addDays } from "@/lib/admin-dashboard";
 import { tradingDayStr } from "@/lib/london-date";
 import { r2 } from "@/lib/finance";
 import { sendDayEndReportEmail } from "@/lib/email";
+import { cashCategoryLabel } from "@/lib/cash-categories";
 
 // Every morning: yesterday's Day End and Cash In / Out (from the staff links,
 // lib/staff-links.ts), emailed to whoever is set in the business's
 // "day_end_report_to" setting — only businesses with one get it.
 
-export type CashLine = { direction: "in" | "out"; amount: number; reason: string; paidTo: string | null; by: string };
+export type CashLine = { direction: "in" | "out"; category: string; amount: number; reason: string; paidTo: string | null; by: string };
 
 export type DayEndReport = {
   businessId: number;
@@ -43,7 +44,7 @@ export async function buildDayEndReport(businessId: number, business: string, da
   const db = bizDb(businessId);
   const [{ data: row }, { data: moves }, { data: week }, figures] = await Promise.all([
     db.from("daily_accounts").select("*").eq("trading_date", date).maybeSingle(),
-    db.from("cash_movements").select("direction, amount, reason, paid_to, staff_id").eq("movement_date", date).order("id"),
+    db.from("cash_movements").select("direction, category, amount, reason, paid_to, staff_id").eq("movement_date", date).order("id"),
     db.from("daily_accounts").select("trading_date").eq("status", "submitted").gte("trading_date", addDays(date, -6)).lte("trading_date", date),
     accountsByDay(businessId, date, date),
   ]);
@@ -52,7 +53,7 @@ export async function buildDayEndReport(businessId: number, business: string, da
   const nameOf = (id: number | null | undefined) => (staff ?? []).find((s) => s.id === id)?.name ?? "—";
 
   const cash: CashLine[] = (moves ?? []).map((m) => ({
-    direction: m.direction as "in" | "out", amount: Number(m.amount), reason: m.reason, paidTo: m.paid_to, by: nameOf(m.staff_id),
+    direction: m.direction as "in" | "out", category: cashCategoryLabel(m.category), amount: Number(m.amount), reason: m.reason, paidTo: m.paid_to, by: nameOf(m.staff_id),
   }));
   const moneyIn = r2(cash.filter((c) => c.direction === "in").reduce((s, c) => s + c.amount, 0));
   const moneyOut = r2(cash.filter((c) => c.direction === "out").reduce((s, c) => s + c.amount, 0));

@@ -1,6 +1,7 @@
 "use client";
 
 import { roleLabel } from "@/lib/roles";
+import { balanceToPay } from "@/lib/payroll-balance";
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
 import type { Staff } from "@/lib/types";
@@ -71,7 +72,7 @@ function EmployeePicker({ selected, onSelect }: { selected: Staff | null; onSele
 // Pick a date range, see every closed shift with its hours and the pay rate,
 // then save. HR only: staff don't see payslips in the attendance app.
 type PreviewDay = { date: string; clock_in: string; clock_out: string; seconds: number };
-type Preview = { days: PreviewDay[]; total_seconds: number; hours_worked: number; pay_rate: number; total_amount: number };
+type Preview = { days: PreviewDay[]; total_seconds: number; hours_worked: number; pay_rate: number; total_amount: number; cash_paid: number; advance_outstanding: number };
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
 const dayLabel = (d: string) => new Date(d + "T12:00:00Z").toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
@@ -80,6 +81,8 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [deductAdvance, setDeductAdvance] = useState(true);
+  const owed = preview ? balanceToPay(preview.total_amount, preview.cash_paid ?? 0, preview.advance_outstanding ?? 0, deductAdvance) : null;
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const { toast } = useToast();
@@ -108,7 +111,7 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
     try {
       const res = await fetch("/api/employee-payslips", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ staff_id: staff.id, period_start: from, period_end: to }),
+        body: JSON.stringify({ staff_id: staff.id, period_start: from, period_end: to, deduct_advance: deductAdvance }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to create payslip");
@@ -179,6 +182,29 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
                     <td className="px-3 py-2 font-bold text-foreground" colSpan={2}>Total pay</td>
                     <td className="px-3 py-2 text-right font-bold text-foreground tabular-nums">{fmtMoney(preview.total_amount)}</td>
                   </tr>
+                  {preview.cash_paid > 0 && (
+                    <tr>
+                      <td className="px-3 py-2 text-muted-foreground" colSpan={2}>Already paid in cash (staff link)</td>
+                      <td className="px-3 py-2 text-right text-foreground tabular-nums">−{fmtMoney(preview.cash_paid)}</td>
+                    </tr>
+                  )}
+                  {preview.advance_outstanding > 0 && (
+                    <tr>
+                      <td className="px-3 py-2 text-muted-foreground" colSpan={2}>
+                        <label className="inline-flex items-center gap-2">
+                          <input type="checkbox" checked={deductAdvance} onChange={(e) => setDeductAdvance(e.target.checked)} />
+                          Take off advance owed ({fmtMoney(preview.advance_outstanding)})
+                        </label>
+                      </td>
+                      <td className="px-3 py-2 text-right text-foreground tabular-nums">{owed && owed.advance_deducted > 0 ? `−${fmtMoney(owed.advance_deducted)}` : "—"}</td>
+                    </tr>
+                  )}
+                  {(preview.cash_paid > 0 || preview.advance_outstanding > 0) && owed && (
+                    <tr>
+                      <td className="px-3 py-2 font-bold text-foreground" colSpan={2}>Balance to pay</td>
+                      <td className="px-3 py-2 text-right font-bold text-foreground tabular-nums">{fmtMoney(owed.balance)}</td>
+                    </tr>
+                  )}
                 </tfoot>
               </table>
             </div>
@@ -188,7 +214,7 @@ function CreatePayslip({ staff, onCreated }: { staff: Staff; onCreated: () => vo
           )}
           {preview.days.length > 0 && (
             <button onClick={create} disabled={saving} className="mt-3 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-bold rounded-lg">
-              {saving ? "Creating…" : `Create payslip · ${fmtMoney(preview.total_amount)}`}
+              {saving ? "Creating…" : `Create payslip · ${fmtMoney(preview.total_amount)}${owed && owed.balance !== preview.total_amount ? ` (to pay ${fmtMoney(owed.balance)})` : ""}`}
             </button>
           )}
         </div>

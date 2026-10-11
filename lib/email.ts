@@ -1055,7 +1055,7 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
   ].join(""));
 
   const cash = d.cash.length
-    ? section("Cash in / out", d.cash.map((c) => row(`${c.direction === "out" ? "OUT" : "IN"} · ${c.reason}${c.paidTo ? ` (${c.paidTo})` : ""} · ${c.by}`,
+    ? section("Cash in / out", d.cash.map((c) => row(`${c.direction === "out" ? "OUT" : "IN"} · ${c.category}${c.reason && c.reason !== c.category ? `: ${c.reason}` : ""}${c.paidTo ? ` (${c.paidTo})` : ""} · ${c.by}`,
         `<span style="color:${c.direction === "out" ? "#b91c1c" : "#15803d"};">${c.direction === "out" ? "−" : "+"}${gbp(c.amount)}</span>`)).join(""))
     : "";
 
