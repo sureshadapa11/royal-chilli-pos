@@ -9,13 +9,29 @@ export type AuthArea = "staff" | "customer";
 const CHANNEL = "rc-auth";
 const STORAGE_KEY = "rc-auth-change"; // fallback for browsers without BroadcastChannel
 
+// This tab's own id, sent with every message. BroadcastChannel delivers a
+// message to every listener except the sending channel object — including the
+// AuthSync listener in this same tab — so without it, signing in reloaded the
+// sign-in page in a race with going to the next page, and people landed back
+// on the sign-in page (already signed in, with no error).
+const TAB_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+// Set once this tab is on its way to a fresh page: nothing should reload it now.
+let leaving = false;
+
+type AuthMessage = { area?: string; at?: number; from?: string };
+
+/** Should a listener in this tab act on `msg`? Not on its own, nor while leaving. Pure apart from the tab state. */
+export function isFromAnotherTab(msg: AuthMessage | null | undefined): boolean {
+  return !leaving && !!msg && msg.from !== TAB_ID;
+}
+
 /** Staff Hub, till, kitchen and staff sign-in — everything else is the website. */
 export function areaOfPath(pathname: string): AuthArea {
   return /^\/(staff|pos|pin|login|print-station|os)(\/|$)/.test(pathname) ? "staff" : "customer";
 }
 
 export function announceAuthChange(area: AuthArea) {
-  const msg = { area, at: Date.now() };
+  const msg = { area, at: Date.now(), from: TAB_ID };
   try {
     const ch = new BroadcastChannel(CHANNEL);
     ch.postMessage(msg);
@@ -27,6 +43,7 @@ export function announceAuthChange(area: AuthArea) {
 
 /** After sign-in / sign-out / switching business: tell other tabs, then load `dest` fresh. */
 export function freshStart(dest: string, area: AuthArea = "staff") {
+  leaving = true;
   announceAuthChange(area);
   window.location.replace(dest);
 }
@@ -36,11 +53,14 @@ export function onAuthChange(handler: (area: AuthArea) => void): () => void {
   let ch: BroadcastChannel | null = null;
   const onStorage = (e: StorageEvent) => {
     if (e.key !== STORAGE_KEY || !e.newValue) return;
-    try { handler(JSON.parse(e.newValue).area); } catch { /* ignore */ }
+    try {
+      const msg = JSON.parse(e.newValue) as AuthMessage;
+      if (isFromAnotherTab(msg)) handler(msg.area as AuthArea);
+    } catch { /* ignore */ }
   };
   try {
     ch = new BroadcastChannel(CHANNEL);
-    ch.onmessage = (e) => handler(e.data?.area);
+    ch.onmessage = (e) => { if (isFromAnotherTab(e.data)) handler(e.data.area); };
   } catch {
     window.addEventListener("storage", onStorage);
   }
