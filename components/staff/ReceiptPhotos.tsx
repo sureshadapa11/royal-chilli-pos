@@ -77,7 +77,7 @@ function toJpeg(img: HTMLImageElement): Promise<Blob> {
   return new Promise((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Couldn't read the photo"))), "image/jpeg", 0.85));
 }
 
-export default function ReceiptPhotos({ entity, value, onChange, label = "Receipt / invoice photo", uploadUrl = "/api/receipts", extraFields, required = true }: {
+export default function ReceiptPhotos({ entity, value, onChange, label = "Receipt / invoice photo", uploadUrl = "/api/receipts", extraFields, required = true, big = false }: {
   entity: Entity;
   value: Receipt[];
   onChange: (next: Receipt[]) => void;
@@ -86,6 +86,8 @@ export default function ReceiptPhotos({ entity, value, onChange, label = "Receip
   uploadUrl?: string;
   extraFields?: Record<string, string>;
   required?: boolean;
+  /** Phone-sized buttons (staff links). */
+  big?: boolean;
 }) {
   const cameraRef = useRef<HTMLInputElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -127,8 +129,8 @@ export default function ReceiptPhotos({ entity, value, onChange, label = "Receip
     <div className="rounded-lg border border-dashed border-border bg-surface-hover/40 p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-foreground text-sm font-semibold">{label} {required && <span className="text-red-600">*</span>}</span>
-        <button type="button" disabled={!!busy} onClick={() => cameraRef.current?.click()} className="px-3 py-1.5 rounded-lg bg-foreground text-background text-xs font-semibold disabled:opacity-50">📷 Take photo</button>
-        <button type="button" disabled={!!busy} onClick={() => fileRef.current?.click()} className="px-3 py-1.5 rounded-lg border border-border text-foreground text-xs font-semibold disabled:opacity-50">Choose file</button>
+        <button type="button" disabled={!!busy} onClick={() => cameraRef.current?.click()} className={`${big ? "h-12 flex-1 rounded-xl text-[15px]" : "px-3 py-1.5 rounded-lg text-xs"} bg-foreground text-background font-semibold disabled:opacity-50`}>📷 Take photo</button>
+        <button type="button" disabled={!!busy} onClick={() => fileRef.current?.click()} className={`${big ? "h-12 flex-1 rounded-xl text-[15px]" : "px-3 py-1.5 rounded-lg text-xs"} border border-border text-foreground font-semibold disabled:opacity-50`}>Choose file</button>
         {busy && <span className="text-muted-foreground text-xs">{busy}</span>}
         <input ref={cameraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => add(e.target.files?.[0])} />
         <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => add(e.target.files?.[0])} />
