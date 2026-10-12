@@ -8,7 +8,6 @@ import BusinessSetupView from "@/components/staff/BusinessSetupView";
 import BusinessesView from "@/components/staff/BusinessesView";
 import TillDeviceCard from "@/components/staff/TillDeviceCard";
 import StaffLinksCard from "@/components/staff/StaffLinksCard";
-import TillInUseCard from "@/components/staff/TillInUseCard";
 import { isManagerRole } from "@/lib/staff-pin";
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
@@ -68,7 +67,6 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <>
               {(session.owner || isManagerRole(session.role)) && <TillDeviceCard />}
               {(session.owner || isManagerRole(session.role)) && <StaffLinksCard />}
-              {(session.owner || session.role === "admin") && <TillInUseCard />}
               <SettingsView section="general" canEditPermissions={false} />
             </>
           )}

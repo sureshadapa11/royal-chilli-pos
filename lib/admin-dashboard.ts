@@ -242,8 +242,9 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
       ...summary,
     },
     cards,
-    // Till cards only once the till is switched on in Settings (till tests
-    // left a few orders, so "any till sale" isn't a reliable signal).
+    // Till cards stay hidden until the till is in use: Claude sets the
+    // business setting till_in_use = "1" when asked (till tests left a few
+    // orders, so "any till sale" isn't a reliable signal).
     hasTill: String((await getBusinessSetting(businessId, "till_in_use")) ?? "") === "1" && sales14.orders.length > 0,
   };
 }
