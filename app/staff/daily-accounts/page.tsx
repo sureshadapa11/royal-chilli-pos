@@ -5,6 +5,10 @@ import { getBusiness } from "@/lib/business";
 import { tradingDayStr } from "@/lib/london-date";
 import DailyAccountsPage from "@/components/staff/DailyAccountsPage";
 import { canSeeSalary } from "@/lib/salary-sheet";
+import { cookies } from "next/headers";
+import { ALL_BUSINESSES_COOKIE } from "@/lib/owner-view";
+import { listBusinesses } from "@/lib/business";
+import AllBusinessesAccounts from "@/components/staff/AllBusinessesAccounts";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ date?: string; month?: string }> }) {
   const session = await getSession();
@@ -14,6 +18,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const { date, month } = await searchParams;
   const start = date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today ? date : today;
   const startMonth = month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : today.slice(0, 7);
+  // Group owner with "Working in: All businesses": every business side by side.
+  if (session.owner && (await cookies()).get(ALL_BUSINESSES_COOKIE)?.value === "1") {
+    const list = (await listBusinesses()).map((b) => ({ id: b.id, name: b.name, active: !!b.active }));
+    return <AllBusinessesAccounts startMonth={startMonth} businesses={list} />;
+  }
   const business = await getBusiness(session.businessId).catch(() => null);
   return (
     <DailyAccountsPage today={today} start={start} startMonth={startMonth}

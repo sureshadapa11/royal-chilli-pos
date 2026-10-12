@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionFromRequest } from "@/lib/auth";
+import { getBusiness } from "@/lib/business";
 import { areaAllows } from "@/lib/permissions";
 import { cashBook } from "@/lib/cash-book";
 
@@ -12,5 +13,8 @@ export async function GET(req: NextRequest) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return NextResponse.json({ error: "Pick a month" }, { status: 400 });
   const [y, m] = month.split("-").map(Number);
   const to = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
-  return NextResponse.json(await cashBook(session.businessId, `${month}-01`, to));
+  // A group owner (All businesses view) can pick any business with ?business=.
+  const pick = Number(req.nextUrl.searchParams.get("business"));
+  const businessId = session.owner && Number.isInteger(pick) && pick > 0 && (await getBusiness(pick).catch(() => null)) ? pick : session.businessId;
+  return NextResponse.json(await cashBook(businessId, `${month}-01`, to));
 }

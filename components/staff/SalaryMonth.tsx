@@ -9,22 +9,23 @@ import { roleLabel } from "@/lib/roles";
 const gbp = (n: number) => `£${n.toFixed(2)}`;
 const hm = (h: number) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
 
-export default function SalaryMonth({ startMonth }: { startMonth: string }) {
-  const [month, setMonth] = useState(startMonth);
+export default function SalaryMonth({ startMonth, businessId, month: fixedMonth }: { startMonth: string; businessId?: number; month?: string }) {
+  const [ownMonth, setMonth] = useState(startMonth);
+  const month = fixedMonth ?? ownMonth;
   const [rows, setRows] = useState<SalaryRow[] | null>(null);
   useEffect(() => {
     setRows(null);
-    fetch(`/api/staff/salary-sheet?month=${month}`).then((r) => (r.ok ? r.json() : null)).then((d) => setRows(d?.rows ?? [])).catch(() => setRows([]));
-  }, [month]);
+    fetch(`/api/staff/salary-sheet?month=${month}${businessId ? `&business=${businessId}` : ""}`).then((r) => (r.ok ? r.json() : null)).then((d) => setRows(d?.rows ?? [])).catch(() => setRows([]));
+  }, [month, businessId]);
   const t = (f: (r: SalaryRow) => number) => Math.round((rows ?? []).reduce((s, r) => s + f(r), 0) * 100) / 100;
   const noRate = (rows ?? []).filter((r) => r.hours > 0 && r.payRate === 0);
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+      {!fixedMonth && <div className="flex flex-wrap items-center gap-3">
         <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm" />
         <a href={`/api/staff/daily-accounts/month/xlsx?month=${month}`} className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">Excel (with Salary sheet)</a>
-      </div>
+      </div>}
       {noRate.length > 0 && (
         <p className="rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-800">⚠ No pay rate yet for {noRate.map((r) => r.name).join(", ")}, so their wages show £0. Add it in HR → their details.</p>
       )}

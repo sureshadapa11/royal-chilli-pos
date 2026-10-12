@@ -8,13 +8,14 @@ import type { BookDay } from "@/lib/cash-book";
 const gbp = (n: number | null | undefined) => (n == null ? "—" : `£${n.toFixed(2)}`);
 const dayName = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
-export default function CashBookMonth({ startMonth }: { startMonth: string }) {
-  const [month, setMonth] = useState(startMonth);
+export default function CashBookMonth({ startMonth, businessId, month: fixedMonth }: { startMonth: string; businessId?: number; month?: string }) {
+  const [ownMonth, setMonth] = useState(startMonth);
+  const month = fixedMonth ?? ownMonth;
   const [data, setData] = useState<{ start: string | null; days: BookDay[] } | null>(null);
   useEffect(() => {
     setData(null);
-    fetch(`/api/staff/cash-book?month=${month}`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
-  }, [month]);
+    fetch(`/api/staff/cash-book?month=${month}${businessId ? `&business=${businessId}` : ""}`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
+  }, [month, businessId]);
 
   const days = data?.days ?? [];
   const sum = (f: (d: BookDay) => number) => Math.round(days.reduce((s, d) => s + f(d), 0) * 100) / 100;
@@ -25,10 +26,10 @@ export default function CashBookMonth({ startMonth }: { startMonth: string }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+      {!fixedMonth && <div className="flex flex-wrap items-center gap-3">
         <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm" />
         <a href={`/api/staff/daily-accounts/month/xlsx?month=${month}`} className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">Excel (with Cash book sheet)</a>
-      </div>
+      </div>}
       {data && (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {[["Cash in", gbp(totalIn), "text-emerald-700"], ["Cash out", gbp(totalOut), "text-red-700"],
