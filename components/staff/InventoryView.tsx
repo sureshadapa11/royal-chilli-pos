@@ -165,42 +165,109 @@ function IngredientsTab({ suppliers }: { suppliers: Supplier[] }) {
 }
 
 // ── Suppliers ────────────────────────────────────────────────────────────────
+// Add, edit and remove (agreed 2026-10-12). Remove deletes a supplier nothing
+// uses yet, and only hides one with orders / payments behind it — "Show
+// removed" lists those to bring back.
 function SuppliersTab({ suppliers, onChange }: { suppliers: Supplier[]; onChange: () => void }) {
-  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState<Supplier | "new" | null>(null);
   const [name, setName] = useState("");
   const [contact, setContact] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [showRemoved, setShowRemoved] = useState(false);
+  const [removed, setRemoved] = useState<Supplier[]>([]);
   const { toast } = useToast();
+
+  const loadRemoved = useCallback(async () => {
+    const res = await fetch("/api/suppliers?active=0");
+    if (res.ok) { const d = await res.json(); setRemoved(d.suppliers ?? []); }
+  }, []);
+  useEffect(() => { if (showRemoved) loadRemoved(); }, [showRemoved, loadRemoved]);
+  const refresh = () => { onChange(); if (showRemoved) loadRemoved(); };
+
+  function open(s: Supplier | "new") {
+    setEditing(s);
+    setName(s === "new" ? "" : s.name);
+    setContact(s === "new" ? "" : s.contact_name ?? "");
+    setPhone(s === "new" ? "" : s.phone ?? "");
+    setEmail(s === "new" ? "" : s.email ?? "");
+  }
 
   async function save() {
     if (!name.trim()) return toast({ variant: "destructive", title: "Name is required" });
-    const res = await fetch("/api/suppliers", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, contact_name: contact, phone, email }) });
+    setBusy(true);
+    const isNew = editing === "new";
+    const res = await fetch(isNew ? "/api/suppliers" : `/api/suppliers/${(editing as Supplier).id}`, {
+      method: isNew ? "POST" : "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, contact_name: contact, phone, email }),
+    });
+    setBusy(false);
     if (!res.ok) {
-      const data = await res.json();
-      return toast({ variant: "destructive", title: "Couldn't add supplier", description: data.error });
+      const data = await res.json().catch(() => ({}));
+      return toast({ variant: "destructive", title: isNew ? "Couldn't add supplier" : "Couldn't save supplier", description: data.error });
     }
-    toast({ variant: "success", title: "Supplier added", description: `${name.trim()} is ready to use on purchase orders.` });
-    setModal(false); setName(""); setContact(""); setPhone(""); setEmail("");
-    onChange();
+    toast({ variant: "success", title: isNew ? "Supplier added" : "Supplier saved", description: isNew ? `${name.trim()} is ready to use on purchase orders.` : undefined });
+    setEditing(null);
+    refresh();
   }
 
+  async function remove(s: Supplier) {
+    if (!window.confirm(`Remove ${s.name}? If it's already on orders or payments it's hidden (those keep its name), otherwise it's deleted.`)) return;
+    const res = await fetch(`/api/suppliers/${s.id}`, { method: "DELETE" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't remove supplier", description: d.error });
+    toast(d.removed === "deleted"
+      ? { variant: "success", title: `${s.name} deleted` }
+      : { variant: "success", title: `${s.name} hidden`, description: `Used on ${d.usedOn}, so it's hidden, not deleted. "Show removed" brings it back.` });
+    refresh();
+  }
+
+  async function restore(s: Supplier) {
+    const res = await fetch(`/api/suppliers/${s.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active: 1 }) });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return toast({ variant: "destructive", title: "Couldn't bring it back", description: d.error });
+    toast({ variant: "success", title: `${s.name} is back` });
+    refresh();
+  }
+
+  const btn = "rounded-lg border border-border px-2.5 py-1 text-xs font-semibold hover:bg-surface-hover";
   return (
     <div>
-      <div className="flex justify-end"><button onClick={() => setModal(true)} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add Supplier</button></div>
+      <div className="flex justify-end"><button onClick={() => open("new")} className="px-4 py-2 bg-red-600 hover:bg-red-500 text-white text-sm font-bold rounded-lg">+ Add Supplier</button></div>
       <div className="mt-3 space-y-2">
         {suppliers.map((s) => (
-          <div key={s.id} className="rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3">
-            <p className="text-foreground font-semibold">{s.name}</p>
-            <p className="text-muted-foreground text-sm">{[s.contact_name, s.phone, s.email].filter(Boolean).join(" · ") || "No contact details"}</p>
+          <div key={s.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-foreground font-semibold">{s.name}</p>
+              <p className="text-muted-foreground text-sm">{[s.contact_name, s.phone, s.email].filter(Boolean).join(" · ") || "No contact details"}</p>
+            </div>
+            <button onClick={() => open(s)} className={`${btn} text-foreground`}>✏️ Edit</button>
+            <button onClick={() => remove(s)} className={`${btn} text-red-700 border-red-200`}>🗑️ Remove</button>
           </div>
         ))}
         {suppliers.length === 0 && <p className="text-muted-foreground text-sm text-center py-8">No suppliers yet.</p>}
       </div>
-      {modal && (
+
+      <label className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+        <input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)} /> Show removed suppliers
+      </label>
+      {showRemoved && (
+        <div className="mt-2 space-y-2">
+          {removed.map((s) => (
+            <div key={s.id} className="flex items-center gap-3 rounded-lg border border-dashed border-border px-4 py-2.5">
+              <p className="flex-1 text-sm text-muted-foreground">{s.name}</p>
+              <button onClick={() => restore(s)} className={`${btn} text-foreground`}>↩︎ Bring back</button>
+            </div>
+          ))}
+          {removed.length === 0 && <p className="text-muted-foreground text-sm">No removed suppliers.</p>}
+        </div>
+      )}
+
+      {editing && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="bg-surface border border-border rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto p-5">
-            <h2 className="text-foreground font-bold text-lg">New Supplier</h2>
+            <h2 className="text-foreground font-bold text-lg">{editing === "new" ? "New Supplier" : "Edit Supplier"}</h2>
             <div className="mt-4 space-y-2">
               <input placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
               <input placeholder="Contact name" value={contact} onChange={(e) => setContact(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -208,8 +275,8 @@ function SuppliersTab({ suppliers, onChange }: { suppliers: Supplier[]; onChange
               <input placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             </div>
             <div className="mt-4 flex gap-3">
-              <button onClick={() => setModal(false)} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
-              <button onClick={save} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl">Save</button>
+              <button onClick={() => setEditing(null)} className="flex-1 h-10 bg-elevated hover:bg-elevated-hover text-foreground font-semibold rounded-xl">Cancel</button>
+              <button onClick={save} disabled={busy} className="flex-1 h-10 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl disabled:opacity-60">{busy ? "Saving…" : "Save"}</button>
             </div>
           </div>
         </div>
