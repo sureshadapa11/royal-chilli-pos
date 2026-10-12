@@ -1,5 +1,6 @@
 import { SITE_URL } from "@/lib/site-url";
 import { DEFAULT_REWARD_MIN_SPEND, getLoyaltySetting, rewardRuleText } from "@/lib/loyalty";
+import { dayEndText, whatsAppUrl } from "@/lib/day-end-text";
 import { getBusiness } from "@/lib/business";
 import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
 import { addressOneLine, type Address } from "@/lib/business-setup";
@@ -1069,6 +1070,7 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
     ${drawer}
     ${cash}
     ${missing.length ? `<tr><td style="padding:10px 28px 0;">${warn(`Day End also missing for: ${missing.map((x) => new Date(`${x}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })).join(", ")}`)}</td></tr>` : ""}
-    <tr><td style="padding:18px 28px 26px; font-family:${SANS}; font-size:12px; color:${C.muted};">Receipt photos and every entry are in the Staff Hub → Daily accounts.</td></tr>`;
+    <tr><td align="center" style="padding:18px 28px 4px;">${button(whatsAppUrl(dayEndText(d), await getLoyaltySetting(d.businessId, "owner_whatsapp", 0).then((n) => (n ? String(n) : null)).catch(() => null)), "📲 Open in WhatsApp")}</td></tr>
+    <tr><td style="padding:12px 28px 26px; font-family:${SANS}; font-size:12px; color:${C.muted};">Receipt photos and every entry are in the Staff Hub → Daily accounts.</td></tr>`;
   await sendBrevoEmail(to, `${d.business} Day End · ${day}${f ? "" : " · NOT ENTERED"}`, shell(body, brand), undefined, brand);
 }

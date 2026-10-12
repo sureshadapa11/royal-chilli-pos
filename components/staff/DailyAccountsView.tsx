@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import WhatsAppReportButton from "@/components/staff/WhatsAppReportButton";
 import { useToast } from "@/hooks/use-toast";
 import { DAILY_FIELDS, isComputedField, platformCommission, type DailyFieldKey, type DailyValues, HIDDEN_FIELDS, cashCheck } from "@/lib/daily-accounts-fields";
 
@@ -60,7 +61,8 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
             <input id="da-date" type="date" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)}
               className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[14px]" />
             <span className="text-[13px] text-muted-foreground">{niceDate(date)}</span>
-            <span className={`ml-auto rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${
+            <span className="ml-auto"><WhatsAppReportButton date={date} /></span>
+            <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${
               status === "submitted" ? "bg-emerald-100 text-emerald-800" : status === "draft" ? "bg-amber-100 text-amber-800" : "bg-[#F6F1E6] text-muted-foreground"
             }`}>
               {status === "submitted" ? "Submitted" : status === "draft" ? "Draft" : "Not entered yet"}
