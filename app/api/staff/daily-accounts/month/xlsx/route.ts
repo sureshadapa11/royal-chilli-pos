@@ -6,6 +6,7 @@ import { getBusiness } from "@/lib/business";
 import { columnTotals } from "@/lib/daily-accounts";
 import { SHEET_FIELDS } from "@/lib/daily-accounts-fields";
 import { accountsByDay, MONEY_OUT_PARTS, totalFigures } from "@/lib/daily-figures";
+import { cashBook } from "@/lib/cash-book";
 
 // GET ?month=YYYY-MM → the month's Daily Accounts Report as a real Excel file:
 // every day of the month, each column, MONTH TOTAL. It starts with the worked-
@@ -25,7 +26,7 @@ const LEAD = [
 
 const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · Ex-VAT = Total sales ÷ 1.2 · "
   + "Money out = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
-  + "Commission & card fees = platform commissions + card fee · Variance = closing balance − opening balance · * no Z report on the sheet yet, the till's figure is used";
+  + "Commission & card fees = platform commissions + card fee · Variance = cash counted − cash expected (opening + cash sales + cash in − cash out − bank in) · * no Z report on the sheet yet, the till's figure is used";
 
 type Cell = string | number | null;
 
@@ -103,9 +104,26 @@ export async function GET(req: NextRequest) {
   ];
   const ws2 = sheet(breakdown, 3, outHead.length - 1, [16, ...outHead.slice(1).map((h) => Math.max(13, h.length + 2))]);
 
+  // Sheet 3: the cash book (lib/cash-book.ts), line by line with a running balance.
+  const book = await cashBook(session.businessId, from, to);
+  const bookRows: Cell[][] = [
+    [`${name} — Cash book`],
+    [`${monthName(month)} · cash only · each day: opening + cash sales + cash in − cash out − bank in = expected, then counted and variance (counted − expected)${book.start ? ` · book starts ${dayName(book.start)}` : " · no Day End with an opening yet"}`],
+    [],
+    ["Date", "In", "Out", "Balance", "Particulars", "Person"],
+  ];
+  for (const d of book.days) {
+    d.lines.forEach((l, i) => bookRows.push([i === 0 ? dayName(d.date) : "", l.inAmount || null, l.outAmount || null, l.balance,
+      l.label + (l.kind === "opening" && d.openingDiff != null ? ` (differs from last count by ${d.openingDiff.toFixed(2)})` : ""), l.by ?? ""]));
+    if (!d.entered) bookRows.push([d.lines.length ? "" : dayName(d.date), null, null, null, "No Day End for this day", ""]);
+    if (d.expected != null) bookRows.push(["", null, null, d.carry, `Expected ${d.expected.toFixed(2)} · Counted ${d.counted == null ? "—" : d.counted.toFixed(2)} · Variance ${d.variance == null ? "not counted" : d.variance.toFixed(2)}`, ""]);
+  }
+  const ws3 = sheet(bookRows, 3, 3, [16, 12, 12, 13, 60, 18]);
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws1, monthName(month).slice(0, 31));
   XLSX.utils.book_append_sheet(wb, ws2, "Money out");
+  XLSX.utils.book_append_sheet(wb, ws3, "Cash book");
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   const file = `Daily accounts ${business?.name ?? ""} ${month}.xlsx`.replace(/\s+/g, " ").trim();
   return new NextResponse(new Uint8Array(buf), {
