@@ -66,8 +66,12 @@ export function dayEndText(r: DayEndReport): string {
   return L.join("\n");
 }
 
-/** A WhatsApp link that opens a chat with this text (to `number`, or pick the chat). */
+/**
+ * A WhatsApp link that opens a chat with this text (to `number`, or pick the
+ * chat). Uses api.whatsapp.com/send, not the wa.me short link: wa.me's
+ * redirect turns emojis into "�" (seen 2026-10-12 on the owner's WhatsApp).
+ */
 export function whatsAppUrl(text: string, number?: string | null): string {
   const n = (number ?? "").replace(/\D/g, "");
-  return `https://wa.me/${n}?text=${encodeURIComponent(text)}`;
+  return `https://api.whatsapp.com/send?${n ? `phone=${n}&` : ""}text=${encodeURIComponent(text)}`;
 }
