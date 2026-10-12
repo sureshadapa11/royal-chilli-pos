@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { accountsAccess } from "@/lib/accounts-access";
 import * as XLSX from "xlsx";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageDailyAccounts } from "@/lib/permissions";
 import { canSeeSalary } from "@/lib/salary-sheet";
 import { monthSheets } from "@/lib/daily-accounts-workbook";
 
@@ -10,7 +10,7 @@ import { monthSheets } from "@/lib/daily-accounts-workbook";
 // Salary sheets — built in lib/daily-accounts-workbook.ts.
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageDailyAccounts(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !accountsAccess(session).seeFigures) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const month = req.nextUrl.searchParams.get("month") ?? "";
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return NextResponse.json({ error: "Pick a month" }, { status: 400 });
 

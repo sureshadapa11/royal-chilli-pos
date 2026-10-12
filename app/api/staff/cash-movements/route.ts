@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { accountsAccess } from "@/lib/accounts-access";
 import supabase from "@/lib/supabase";
 import { getSessionFromRequest } from "@/lib/auth";
-import { areaAllows } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { receiptsFor } from "@/lib/receipts";
 import { dayAmountKey, otherEntriesByDayAmount } from "@/lib/cash-duplicates";
-import { isManagerRole } from "@/lib/staff-pin";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 
 // GET ?month=YYYY-MM — Staff Hub → Daily accounts → Cash in/out: every entry
@@ -13,7 +12,7 @@ import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 // plus each Day End's Z report photo.
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !areaAllows(session.role, "daily_accounts", "GET")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !accountsAccess(session).seeFigures) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const month = req.nextUrl.searchParams.get("month") ?? "";
   if (!/^\d{4}-\d{2}$/.test(month)) return NextResponse.json({ error: "Pick a month" }, { status: 400 });
   const [y, m] = month.split("-").map(Number);
@@ -56,7 +55,7 @@ export async function GET(req: NextRequest) {
 // (kept in the audit log, with what it was).
 export async function DELETE(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !(session.owner || isManagerRole(session.role))) return NextResponse.json({ error: "Only a manager can delete entries" }, { status: 401 });
+  if (!session || !accountsAccess(session).canDelete) return NextResponse.json({ error: "Only a Super admin can delete entries" }, { status: 401 });
   const id = Number(req.nextUrl.searchParams.get("id"));
   if (!Number.isInteger(id) || id <= 0) return NextResponse.json({ error: "Which entry?" }, { status: 400 });
   const db = bizDb(session.businessId);

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { accountsAccess } from "@/lib/accounts-access";
 import { tradingRangeUtc } from "@/lib/london-date";
 import { getSessionFromRequest } from "@/lib/auth";
-import { areaAllows } from "@/lib/permissions";
 import { bizDb } from "@/lib/business-db";
 import { tillFigures } from "@/lib/daily-accounts";
 import { DAILY_KEYS, isComputedField, platformCommission } from "@/lib/daily-accounts-fields";
@@ -14,13 +14,15 @@ import { getCardFeeRate } from "@/lib/daily-figures";
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const COLUMNS = ["trading_date", ...DAILY_KEYS, "notes", "status", "submitted_at", "updated_at"].join(", ");
 
-// Super admin and Supervisor can correct a submitted day.
-const canUnlock = (s: { role: string; owner?: boolean }) => !!s.owner || s.role === "admin" || s.role === "supervisor";
+// Who may enter, correct or see figures: lib/accounts-access.ts (Super admin
+// corrects a submitted day; Supervisor views only; Managers enter).
+const canUnlock = (s: { role: string; owner?: boolean }) => accountsAccess(s).canCorrect;
 
 /** GET ?date=YYYY-MM-DD → the saved sheet (or null) and the till's figures to pre-fill it. */
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !areaAllows(session.role, "daily_accounts", req.method)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const access = session ? accountsAccess(session) : null;
+  if (!session || !access?.tabs.includes("day")) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const date = req.nextUrl.searchParams.get("date") ?? "";
   if (!DATE.test(date)) return NextResponse.json({ error: "Pick a date" }, { status: 400 });
 
@@ -37,13 +39,19 @@ export async function GET(req: NextRequest) {
   const cashMoves = { moneyIn: sum("in"), moneyOut: Math.round((sum("out") + tillOut) * 100) / 100 };
   if (error) return NextResponse.json({ error: "Couldn't load the day" }, { status: 500 });
   const submitted = (saved as { status?: string } | null)?.status === "submitted";
-  return NextResponse.json({ date, saved, till, cardFeeRate, cashMoves, locked: submitted && !canUnlock(session), canUnlock: canUnlock(session) });
+  return NextResponse.json({
+    date, saved, till, cardFeeRate,
+    // The cash check is for those who see figures (not Managers).
+    cashMoves: access.seeFigures ? cashMoves : null,
+    locked: !access.canEnter || (submitted && !canUnlock(session)), canUnlock: canUnlock(session),
+    viewOnly: !access.canEnter,
+  });
 }
 
 /** PUT { date, values: { z_report: 123.45, … }, notes, submit } — save a draft, or submit. */
 export async function PUT(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !areaAllows(session.role, "daily_accounts", req.method)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !accountsAccess(session).canEnter) return NextResponse.json({ error: "You can view Daily accounts but not change them." }, { status: 403 });
   const body = await req.json().catch(() => null);
   const date = String(body?.date ?? "");
   if (!DATE.test(date)) return NextResponse.json({ error: "Pick a date" }, { status: 400 });

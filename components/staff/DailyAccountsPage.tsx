@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import type { AccountsAccess, AccountsTab } from "@/lib/accounts-access";
 import DailyAccountsView from "@/components/staff/DailyAccountsView";
 import DailyAccountsMonth from "@/components/staff/DailyAccountsMonth";
 import CashMovementsMonth from "@/components/staff/CashMovementsMonth";
@@ -11,9 +12,10 @@ import SalaryMonth from "@/components/staff/SalaryMonth";
 // whole month like the paper report, with totals, Excel and PDF).
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 
-export default function DailyAccountsPage({ today, start, startMonth, startView, businessName, showSalary = false }: {
-  today: string; start: string; startMonth: string; startView: "day" | "month"; businessName: string; showSalary?: boolean;
+export default function DailyAccountsPage({ today, start, startMonth, startView, businessName, access }: {
+  today: string; start: string; startMonth: string; startView: AccountsTab; businessName: string; access: AccountsAccess;
 }) {
+  const has = (t: AccountsTab) => access.tabs.includes(t);
   const [view, setView] = useState<"day" | "month" | "cash" | "book" | "salary">(startView);
   const [day, setDay] = useState(start);
   const tab = (v: "day" | "month" | "cash" | "book" | "salary", label: string) => (
@@ -38,14 +40,14 @@ export default function DailyAccountsPage({ today, start, startMonth, startView,
                 : "The whole month, like the paper report — with totals, Excel download and print."}
             </p>
           </div>
-          <div className="flex gap-1 rounded-xl bg-[#F6F1E6] p-1">{tab("day", "Day")}{tab("month", "Month")}{tab("cash", "Money in/out")}{tab("book", "Cash book")}{showSalary && tab("salary", "Salary")}</div>
+          <div className="flex gap-1 rounded-xl bg-[#F6F1E6] p-1">{has("day") && tab("day", "Day")}{has("month") && tab("month", "Month")}{has("cash") && tab("cash", "Money in/out")}{has("book") && tab("book", "Cash book")}{has("salary") && tab("salary", "Salary")}</div>
         </div>
         <div className="mt-5">
           {view === "day"
-            ? <DailyAccountsView key={day} today={today} start={day} />
-            : view === "cash" ? <CashMovementsMonth startMonth={startMonth} />
+            ? <DailyAccountsView key={day} today={today} start={day} seeFigures={access.seeFigures} />
+            : view === "cash" ? <CashMovementsMonth startMonth={startMonth} canDelete={access.canDelete} />
             : view === "book" ? <CashBookMonth startMonth={startMonth} />
-            : view === "salary" && showSalary ? <SalaryMonth startMonth={startMonth} />
+            : view === "salary" && has("salary") ? <SalaryMonth startMonth={startMonth} />
             : <DailyAccountsMonth startMonth={startMonth} businessName={businessName} onOpenDay={(d) => { setDay(d > today ? today : d); setView("day"); }} />}
         </div>
       </div>

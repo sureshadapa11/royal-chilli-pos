@@ -1,10 +1,9 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import { canAccess } from "@/lib/permissions";
 import { getBusiness } from "@/lib/business";
 import { tradingDayStr } from "@/lib/london-date";
 import DailyAccountsPage from "@/components/staff/DailyAccountsPage";
-import { canSeeSalary } from "@/lib/salary-sheet";
+import { accountsAccess } from "@/lib/accounts-access";
 import { cookies } from "next/headers";
 import { ALL_BUSINESSES_COOKIE } from "@/lib/owner-view";
 import { listBusinesses } from "@/lib/business";
@@ -12,7 +11,8 @@ import AllBusinessesAccounts from "@/components/staff/AllBusinessesAccounts";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ date?: string; month?: string }> }) {
   const session = await getSession();
-  if (!session || !canAccess(session.role, "daily_accounts")) redirect("/staff");
+  const access = session ? accountsAccess(session) : null;
+  if (!session || !access || access.tabs.length === 0) redirect("/staff");
   const today = tradingDayStr();
   // ?date= from the reminder opens that day; ?month= (Summary → Open sheet) opens the month.
   const { date, month } = await searchParams;
@@ -26,6 +26,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const business = await getBusiness(session.businessId).catch(() => null);
   return (
     <DailyAccountsPage today={today} start={start} startMonth={startMonth}
-      startView={month ? "month" : "day"} businessName={business?.name ?? "Daily accounts"} showSalary={canSeeSalary(session)} />
+      startView={access.tabs.includes("day") ? (month && access.tabs.includes("month") ? "month" : "day") : access.tabs[0]}
+      businessName={business?.name ?? "Daily accounts"} access={access} />
   );
 }
