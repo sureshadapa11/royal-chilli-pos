@@ -22,6 +22,7 @@ export function dayEndText(r: DayEndReport): string {
     L.push("⚠️ *Day End not entered*", "");
   } else {
     L.push(`💷 *SALES  ${gbp(f.total_sales)}*`);
+    L.push(`   🧾 VAT (20%)  ${gbp(f.sales_vat)} · Ex-VAT ${gbp(f.ex_vat)}`);
     L.push(`› 🧾 Z report  ${gbp(f.z_report)}`);
     for (const p of f.platforms.filter((x) => x.sales)) L.push(`› 🛵 ${p.label}  ${gbp(p.sales)}`);
     if (f.catering_paid) L.push(`› 🍱 Catering  ${gbp(f.catering_paid)}`);
@@ -30,6 +31,7 @@ export function dayEndText(r: DayEndReport): string {
     L.push("");
     L.push(`📈 *Net (after costs)  ${gbp(f.net_total)}*`);
     if (f.fees) L.push(`💸 Commission & fees  ${gbp(f.fees)}`);
+    L.push(`🏛️ VAT to pay (today)  ${gbp(f.vat_to_pay)}${f.vat_claimed ? ` _(claimed back ${gbp(f.vat_claimed)})_` : ""}`);
     if (f.catering_pending) L.push(`⏳ Catering still owed  ${gbp(f.catering_pending)}`);
     if (r.notes) L.push(`📝 _${r.notes}_`);
     L.push("");

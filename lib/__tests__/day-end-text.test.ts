@@ -9,6 +9,7 @@ const report = (extra: Partial<DayEndReport> = {}): DayEndReport => ({
     z_report: 1245.6, card: 980.2, cash: 35.89, tips: 0,
     platforms: [{ label: "Just Eat", sales: 312.5, commission: 43.75 }, { label: "Deliveroo", sales: null, commission: null }],
     catering_paid: null, catering_pending: null, total_sales: 1558.1, net_total: 1100, fees: 60.32,
+    ex_vat: 1298.42, sales_vat: 259.68, vat_claimed: 5.81, vat_to_pay: 253.87,
   },
   notes: null,
   drawer: { opening: 100, cashSales: 35.89, moneyIn: 0, moneyOut: 45, bankIn: 0, expected: 90.89, counted: 120, variance: 29.11 },
@@ -25,6 +26,8 @@ describe("WhatsApp day report (style A)", () => {
     expect(t).toContain("› 🛵 Just Eat  £312.50");
     expect(t).not.toContain("Deliveroo");
     expect(t).toContain("💸 Commission & fees  £60.32");
+    expect(t).toContain("   🧾 VAT (20%)  £259.68 · Ex-VAT £1,298.42");
+    expect(t).toContain("🏛️ VAT to pay (today)  £253.87 _(claimed back £5.81)_");
     expect(t).toContain("− Money out".padEnd(13) + "£45.00".padStart(11));
     expect(t).toContain("= Expected".padEnd(13) + "£90.89".padStart(11));
     expect(t).toContain("🟠 *Variance +£29.11 (extra)*");
