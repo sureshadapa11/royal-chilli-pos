@@ -8,6 +8,7 @@ import {
 } from "recharts";
 import type { AdminDashboard as Data, AdminSummary, RangeKey } from "@/lib/admin-dashboard";
 import type { DashboardCards } from "@/lib/dashboard-cards";
+import ExtraCards from "@/components/staff/ExtraCards";
 import { AXIS, CHANNEL_COLOUR, GOOD, GRID, S, TOOLTIP, Card, gbp, gbp2, heading, money } from "@/components/staff/dashboard-kit";
 import {
   CashCheckCard, DailySalesCard, LatestDayCard, MoneyOutCard, NetByDayCard, PeriodSalesCard,
@@ -160,6 +161,9 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           <StaffCard p={p} />
         </div>
+
+        {/* Newer cards from hand-entered data (target, streak, calendar, cash…) */}
+        <ExtraCards range={range} />
       </div>
 
       {/* Till orders: only once the till is in use (they'd be empty otherwise) */}
