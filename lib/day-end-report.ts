@@ -26,6 +26,7 @@ export type DayEndReport = {
     platforms: { label: string; sales: number | null; commission: number | null }[];
     catering_paid: number | null; catering_pending: number | null;
     total_sales: number; net_total: number;
+    fees: number;            // platform commissions + card fee
   } | null;
   notes: string | null;
   drawer: { opening: number | null; cashSales: number; moneyIn: number; moneyOut: number; bankIn: number; expected: number | null; counted: number | null; variance: number | null };
@@ -76,6 +77,7 @@ export async function buildDayEndReport(businessId: number, business: string, da
         .map(([k, label]) => ({ label, sales: n(row?.[k]), commission: n(row?.[`${k}_commission`]) })),
       catering_paid: n(row?.catering_paid), catering_pending: n(row?.catering_pending),
       total_sales: day?.total_sales ?? 0, net_total: day?.net_total ?? 0,
+      fees: Math.round(((day?.out.commission ?? 0) + (day?.out.card_fee ?? 0)) * 100) / 100,
     } : null,
     notes: row?.notes ?? null,
     // Same sum as the screens (daily-figures): money out includes the till's Cash Out.
