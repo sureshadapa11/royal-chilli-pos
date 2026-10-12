@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { firstOfMonthStr, tradingDayStr } from "@/lib/london-date";
+import { PrintButton, PrintHeader } from "@/components/staff/PrintBits";
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 function firstOfMonth() { return firstOfMonthStr(tradingDayStr()); }
@@ -169,20 +170,22 @@ function InventoryTab({ from, to }: { from: string; to: string }) {
   );
 }
 
-export default function AnalyticsView() {
+export default function AnalyticsView({ tillInUse = false }: { tillInUse?: boolean }) {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
-  const [tab, setTab] = useState<"sales" | "menu" | "inventory">("sales");
+  const [tab, setTab] = useState<"sales" | "menu" | "inventory">(tillInUse ? "sales" : "inventory");
 
-  const tabs = [
-    { id: "sales", label: "Sales" },
-    { id: "menu", label: "Menu" },
-    { id: "inventory", label: "Inventory" },
-  ] as const;
+  // Sales and Menu come from till orders: hidden while the till isn't used.
+  const tabs = ([
+    { id: "sales", label: "Sales", till: true },
+    { id: "menu", label: "Menu", till: true },
+    { id: "inventory", label: "Inventory", till: false },
+  ] as const).filter((t) => tillInUse || !t.till);
+  const tabLabel = tabs.find((t) => t.id === tab)?.label ?? "";
 
   return (
     <>
-      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4">
+      <div className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur px-4 py-4 print:hidden">
         <div className="mx-auto max-w-4xl">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -191,7 +194,7 @@ export default function AnalyticsView() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
+          <div className={`flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl ${tabs.length < 2 ? "hidden" : ""}`}>
             {tabs.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap ${tab === t.id ? "bg-red-500 text-white" : "text-muted-foreground"}`}>{t.label}</button>
             ))}
@@ -201,7 +204,8 @@ export default function AnalyticsView() {
 
       <div className="px-4 py-6">
       <div className="mx-auto max-w-4xl">
-        <div className="flex items-center gap-2 flex-wrap">
+        <PrintHeader title={`Analytics · ${tabLabel}`} from={from} to={to} />
+        <div className="flex items-center gap-2 flex-wrap print:hidden">
           <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
           <span className="text-muted-foreground">to</span>
           <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -211,11 +215,12 @@ export default function AnalyticsView() {
           >
             Today
           </button>
+          <span className="ml-auto"><PrintButton /></span>
         </div>
 
         <div className="mt-5">
-          {tab === "sales" && <SalesTab from={from} to={to} />}
-          {tab === "menu" && <MenuTab from={from} to={to} />}
+          {tab === "sales" && tillInUse && <SalesTab from={from} to={to} />}
+          {tab === "menu" && tillInUse && <MenuTab from={from} to={to} />}
           {tab === "inventory" && <InventoryTab from={from} to={to} />}
         </div>
       </div>

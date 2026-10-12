@@ -192,3 +192,11 @@ img, video, svg, canvas {
   from { transform: scaleX(0); }
   to { transform: scaleX(1); }
 }
+
+/* Insights printing: keep rows and cards whole across pages; no sticky bars. */
+@media print {
+  tr { break-inside: avoid; }
+  thead { display: table-header-group; }
+  .sticky { position: static !important; }
+  body { background: #fff !important; }
+}

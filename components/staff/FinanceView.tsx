@@ -5,6 +5,7 @@ import ZReportView from "@/components/pos/ZReportView";
 import { zDateTime, type ZReport } from "@/lib/z-report";
 import { firstOfMonthStr, tradingDayStr } from "@/lib/london-date";
 import FoodCostReport from "@/components/staff/FoodCostReport";
+import { PrintButton, PrintHeader } from "@/components/staff/PrintBits";
 
 function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 function firstOfMonth() { return firstOfMonthStr(tradingDayStr()); }
@@ -13,7 +14,7 @@ function today() { return tradingDayStr(); }
 function DateRangePicker({ from, to, setFrom, setTo }: { from: string; to: string; setFrom: (v: string) => void; setTo: (v: string) => void }) {
   const isToday = from === today() && to === today();
   return (
-    <div className="flex items-center gap-2 flex-wrap">
+    <div className="flex items-center gap-2 flex-wrap print:hidden">
       <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
       <span className="text-muted-foreground">to</span>
       <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -23,6 +24,7 @@ function DateRangePicker({ from, to, setFrom, setTo }: { from: string; to: strin
       >
         Today
       </button>
+      <span className="ml-auto"><PrintButton /></span>
     </div>
   );
 }
@@ -54,19 +56,20 @@ function usePnl(from: string, to: string, path: "pnl" | "vat") {
 
 const cardClass = "mt-4 rounded-xl border border-border bg-surface shadow-[0_1px_2px_rgba(32,27,24,0.04),0_8px_24px_rgba(32,27,24,0.05)] divide-y divide-border";
 
-function PnlTab() {
+function PnlTab({ tillInUse }: { tillInUse: boolean }) {
   const [from, setFrom] = useState(firstOfMonth());
   const [to, setTo] = useState(today());
   const { data, error } = usePnl(from, to, "pnl");
 
   return (
     <div>
+      <PrintHeader title="Finance · Profit & Loss" from={from} to={to} />
       <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
       {error && <p className="mt-4 text-red-600 text-sm">{error}</p>}
       {data && (
         <>
           <div className={cardClass}>
-            <Row label="Z report net sales (till, QR, website)" value={data.sales.till} />
+            <Row label="Z report (Day End)" value={data.sales.till} />
             <Row label="Delivery platforms" value={data.sales.platforms} />
             {data.sales.catering > 0 && <Row label="Catering paid" value={data.sales.catering} />}
             <Row label="Total sales (incl. VAT)" value={data.sales.total} bold />
@@ -88,7 +91,8 @@ function PnlTab() {
             Stock is what was received on purchase orders in the period, not a stock valuation. Card fees use the rate in Settings → Business setup (1.69%).
           </p>
 
-          <div className="mt-6 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-4">
+          {/* Recipe cost of what was sold needs itemised till orders. */}
+          {tillInUse && <div className="mt-6 rounded-xl border border-dashed border-amber-500/40 bg-amber-500/5 p-4">
             <p className="text-foreground font-bold text-sm">Recipe-Based COGS (accrual)</p>
             <p className="text-muted-foreground text-xs mt-1">
               Same bottom line, but with the recipe cost of what was actually sold in place of what was bought.
@@ -102,7 +106,7 @@ function PnlTab() {
               {data.recipe.coverage_pct < 80 && " Add recipes in Inventory → Recipes & Food Cost for a fuller picture."}
               {data.sales.platforms > 0 && " Delivery-platform orders aren't itemised, so their food cost isn't included here."}
             </p>
-          </div>
+          </div>}
         </>
       )}
     </div>
@@ -126,6 +130,7 @@ function VatTab() {
 
   return (
     <div>
+      <PrintHeader title="Finance · VAT" from={from} to={to} />
       <DateRangePicker from={from} to={to} setFrom={setFrom} setTo={setTo} />
       {error && <p className="mt-4 text-red-600 text-sm">{error}</p>}
       {data && (
@@ -279,8 +284,8 @@ export default function FinanceView({ tillInUse = false }: { tillInUse?: boolean
     { id: "zreports", label: "Z Reports" },
     { id: "export", label: "Accountant export" },
   ] as const;
-  // Z Reports come from the till's Close Day: hidden while the till isn't used.
-  const shownTabs = tabs.filter((t) => t.id !== "zreports" || tillInUse);
+  // Z Reports and Food cost & GP come from the till: hidden while it isn't used.
+  const shownTabs = tabs.filter((t) => (t.id !== "zreports" && t.id !== "foodcost") || tillInUse);
 
   return (
     <>
@@ -289,9 +294,8 @@ export default function FinanceView({ tillInUse = false }: { tillInUse?: boolean
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Finance</h1>
-              <p className="text-muted-foreground text-sm">Read-only — profit, VAT, food cost and Z reports. Expenses and supplier payments are recorded in Inventory.</p>
+              <p className="text-muted-foreground text-sm">Read-only — profit, VAT and the accountant export. Expenses and supplier payments are recorded in Inventory.</p>
             </div>
-            <button onClick={() => window.print()} className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-semibold text-foreground hover:bg-surface-hover print:hidden">🖨️ Print</button>
           </div>
 
           <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
@@ -306,11 +310,11 @@ export default function FinanceView({ tillInUse = false }: { tillInUse?: boolean
       <div className="mx-auto max-w-4xl">
         <h1 className="hidden print:block text-lg font-bold">Finance — {tabs.find((t) => t.id === tab)?.label} · printed {new Date().toLocaleString("en-GB")}</h1>
         <div className="mt-5">
-          {tab === "pnl" && <PnlTab />}
+          {tab === "pnl" && <PnlTab tillInUse={tillInUse} />}
           {tab === "vat" && <VatTab />}
           {tab === "zreports" && tillInUse && <ZReportsTab />}
           {tab === "export" && <AccountantExportTab />}
-          {tab === "foodcost" && <FoodCostReport />}
+          {tab === "foodcost" && tillInUse && <FoodCostReport printTitle="Finance · Food cost & GP" />}
         </div>
       </div>
       </div>
