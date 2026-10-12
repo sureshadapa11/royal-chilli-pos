@@ -20,7 +20,7 @@ export default function WhatsAppReportButton({ date, all = false, label = "📲 
   return (
     <button type="button" onClick={go} disabled={busy} title="Open WhatsApp with this report (the text is also copied)"
       className="rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-[13px] font-semibold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60">
-      {busy ? "Opening…" : copied ? "✓ Copied too" : label}
+      {busy ? "Opening…" : copied ? "✓ Also copied (paste if needed)" : label}
     </button>
   );
 }

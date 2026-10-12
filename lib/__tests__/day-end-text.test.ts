@@ -41,7 +41,9 @@ describe("WhatsApp day report (style A)", () => {
     expect(dayEndText(report({ figures: null, entered: null }))).toContain("⚠️ *Day End not entered*");
   });
   it("links to WhatsApp with the text (to a number if given)", () => {
-    expect(whatsAppUrl("Hi & bye", "+44 7700 900123")).toBe("https://wa.me/447700900123?text=Hi%20%26%20bye");
-    expect(whatsAppUrl("x")).toBe("https://wa.me/?text=x");
+    expect(whatsAppUrl("Hi & bye", "+44 7700 900123")).toBe("https://api.whatsapp.com/send?phone=447700900123&text=Hi%20%26%20bye");
+    expect(whatsAppUrl("x")).toBe("https://api.whatsapp.com/send?text=x");
+    // emojis go through as proper UTF-8 (wa.me's redirect broke them)
+    expect(whatsAppUrl("🌶️")).toBe("https://api.whatsapp.com/send?text=%F0%9F%8C%B6%EF%B8%8F");
   });
 });
