@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import CashBookMonth from "@/components/staff/CashBookMonth";
 import SalaryMonth from "@/components/staff/SalaryMonth";
+import WhatsAppReportButton from "@/components/staff/WhatsAppReportButton";
 import type { BusinessMonth } from "@/lib/all-businesses-accounts";
 
 // Daily accounts for the group owner with "Working in: All businesses" (like
@@ -18,6 +19,8 @@ export default function AllBusinessesAccounts({ startMonth, businesses }: { star
   const [view, setView] = useState<"summary" | "book" | "salary">("summary");
   const [biz, setBiz] = useState<number>(businesses.find((b) => b.active)?.id ?? businesses[0]?.id ?? 0);
   const [rows, setRows] = useState<Row[] | null>(null);
+  // Yesterday's trading day (the day the morning report is about).
+  const yesterday = (() => { const d = new Date(Date.now() - 5 * 3600_000 - 24 * 3600_000); return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/London" }).format(d); })();
   useEffect(() => {
     if (view !== "summary") return;
     setRows(null);
@@ -53,7 +56,8 @@ export default function AllBusinessesAccounts({ startMonth, businesses }: { star
               ))}
             </div>
           )}
-          <a href={`/api/staff/all-accounts/xlsx?month=${month}`} className="ml-auto rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">Excel: all businesses</a>
+          <span className="ml-auto"><WhatsAppReportButton date={yesterday} all label="📲 WhatsApp: yesterday, all businesses" /></span>
+          <a href={`/api/staff/all-accounts/xlsx?month=${month}`} className=" rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">Excel: all businesses</a>
         </div>
 
         <div className="mt-4">
