@@ -7,8 +7,9 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { formatCurrency, hoursMinutes } from "@/lib/utils";
 import { firstOfMonthStr, tradingDayStr } from "@/lib/london-date";
 
-export default function StaffReportsView() {
-  const [tab, setTab] = useState<"sales" | "staff" | "pending">("sales");
+export default function StaffReportsView({ tillInUse = false }: { tillInUse?: boolean }) {
+  // Sales and Pending Bills come from till orders: hidden while the till isn't used.
+  const [tab, setTab] = useState<"sales" | "staff" | "pending">(tillInUse ? "sales" : "staff");
 
   return (
     <>
@@ -16,10 +17,10 @@ export default function StaffReportsView() {
         <div className="mx-auto max-w-5xl flex items-center justify-between flex-wrap gap-3">
           <div>
             <h1 style={{ fontFamily: "var(--font-space-grotesk)" }} className="text-foreground text-[22px] font-semibold tracking-[-0.02em]">Reports</h1>
-            <p className="text-muted-foreground text-sm">Sales &amp; operations, and staff hours &amp; labour cost.</p>
+            <p className="text-muted-foreground text-sm">{tillInUse ? <>Sales &amp; operations, and staff hours &amp; labour cost.</> : <>Staff hours &amp; labour cost.</>}</p>
           </div>
         </div>
-        <div className="mx-auto max-w-5xl mt-3 flex gap-1 bg-surface-hover p-1 rounded-xl w-fit">
+        <div className={`mx-auto max-w-5xl mt-3 flex gap-1 bg-surface-hover p-1 rounded-xl w-fit ${tillInUse ? "" : "hidden"}`}>
           <button
             onClick={() => setTab("sales")}
             className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all ${tab === "sales" ? "bg-red-500 text-white" : "text-muted-foreground hover:text-foreground"}`}
@@ -43,7 +44,7 @@ export default function StaffReportsView() {
 
       <div className="px-4 py-6">
         <div className="mx-auto max-w-5xl">
-          {tab === "sales" ? <SalesReport /> : tab === "staff" ? <StaffLabourReport /> : <PendingBillsReport />}
+          {tab === "staff" || !tillInUse ? <StaffLabourReport /> : tab === "sales" ? <SalesReport /> : <PendingBillsReport />}
         </div>
       </div>
     </>

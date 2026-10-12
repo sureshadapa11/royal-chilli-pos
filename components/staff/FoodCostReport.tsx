@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { tradingDayStr } from "@/lib/london-date";
+import { PrintButton, PrintHeader } from "@/components/staff/PrintBits";
 
 // Food cost & GP — what recipes say the food should have used vs what the
 // stock counts say it did. Shown in Inventory → Reconciliation (where the
@@ -11,7 +12,7 @@ function fmtMoney(n: number) { return `£${Number(n).toFixed(2)}`; }
 type ReconciliationLine = { ingredient_id: number; ingredient_name: string; unit: string; theoretical_usage: number; actual_usage: number; variance_qty: number; variance_value: number };
 type ReconciliationReport = { period: { from: string; to: string }; net_sales: number; cogs_theoretical: number; cogs_actual: number; gp_theoretical: number | null; gp_actual: number | null; gp_gap: number | null; lines: ReconciliationLine[] };
 
-export default function FoodCostReport() {
+export default function FoodCostReport({ printTitle = "Food cost & GP" }: { printTitle?: string }) {
   const today = tradingDayStr();
   const weekAgo = tradingDayStr(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
   const [from, setFrom] = useState(weekAgo);
@@ -26,10 +27,12 @@ export default function FoodCostReport() {
 
   return (
     <div>
-      <div className="flex items-center gap-2 flex-wrap">
+      <PrintHeader title={printTitle} from={from} to={to} />
+      <div className="flex items-center gap-2 flex-wrap print:hidden">
         <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
         <span className="text-muted-foreground">to</span>
         <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+        <span className="ml-auto"><PrintButton disabled={!report} /></span>
       </div>
 
       {report && (

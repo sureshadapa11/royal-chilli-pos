@@ -603,7 +603,7 @@ export default function InventoryView({ canApproveStockTakes, canRecordSpending 
           {tab === "orders" && <PurchaseOrdersTab suppliers={suppliers} ingredients={ingredients} />}
           {tab === "recipes" && <RecipesTab ingredients={ingredients} />}
           {tab === "stocktake" && <StockTakesTab canApprove={canApproveStockTakes} />}
-          {tab === "reconciliation" && <FoodCostReport />}
+          {tab === "reconciliation" && <FoodCostReport printTitle="Inventory · Reconciliation" />}
           {tab === "expenses" && canRecordSpending && <ExpensesTab />}
           {tab === "supplier_payments" && canRecordSpending && <SupplierPaymentsTab />}
         </div>
