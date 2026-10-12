@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { bizDb } from "@/lib/business-db";
-import { linkStaff } from "@/lib/staff-links";
+import { linkStaff, payableStaff } from "@/lib/staff-links";
 
 // POST { pin } → { name, staff, suppliers }: the form shows "✓ Anusha", and —
 // only once the PIN is right — the names to pick for wages / advances and
@@ -11,9 +11,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const who = await linkStaff(token, body?.pin);
   if (!who.ok) return NextResponse.json({ error: who.error }, { status: who.status });
   const db = bizDb(who.businessId);
-  const [{ data: staff }, { data: suppliers }] = await Promise.all([
-    db.from("staff").select("id, name").eq("active", 1).order("name"),
+  const [staff, { data: suppliers }] = await Promise.all([
+    payableStaff(who.businessId),
     db.from("suppliers").select("id, name").order("name"),
   ]);
-  return NextResponse.json({ name: who.staff.name, staff: staff ?? [], suppliers: suppliers ?? [] });
+  return NextResponse.json({ name: who.staff.name, staff, suppliers: suppliers ?? [] });
 }

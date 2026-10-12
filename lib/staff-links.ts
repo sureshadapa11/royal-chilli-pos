@@ -1,5 +1,7 @@
 import { randomBytes, timingSafeEqual } from "crypto";
+import supabase from "@/lib/supabase";
 import { getBusinessSetting, saveBusinessSettings } from "@/lib/business-settings";
+import { NOT_ON_ROTA } from "@/lib/roles";
 import { clearPinFailures, findStaffByPin, pinLockedFor, recordPinFailure } from "@/lib/staff-pin";
 
 // Staff links: the Day End and Cash In/Out forms, opened from a saved link or
@@ -9,6 +11,7 @@ import { clearPinFailures, findStaffByPin, pinLockedFor, recordPinFailure } from
 // nothing is ever read back through them.
 
 const KEY = "staff_links_token";
+const NOT_PAYABLE: string[] = ["admin", ...NOT_ON_ROTA];
 
 /** "<business id>-<secret>": the id says where to look, the secret proves it. */
 export async function staffLinkToken(businessId: number, rotate = false): Promise<string> {
@@ -61,4 +64,18 @@ export function money(raw: unknown): number | null | "bad" {
   const n = Number(raw);
   if (!Number.isFinite(n) || n < 0 || n > 10_000_000) return "bad";
   return Math.round(n * 100) / 100;
+}
+
+/**
+ * Who a link's "Wages in cash" / "Staff advance" can be for: this business's
+ * active staff who are on the rota — never the owners / Super admin, or HR and
+ * Supervisor (not on the rota, so not paid this way). Staff are one shared
+ * table, so this filters by business_id rather than bizDb.
+ */
+export async function payableStaff(businessId: number): Promise<{ id: number; name: string }[]> {
+  const { data } = await supabase.from("staff").select("id, name, role, is_owner")
+    .eq("business_id", businessId).eq("active", 1).order("name");
+  return (data ?? [])
+    .filter((s) => !s.is_owner && !NOT_PAYABLE.includes(String(s.role)))
+    .map((s) => ({ id: s.id as number, name: s.name as string }));
 }

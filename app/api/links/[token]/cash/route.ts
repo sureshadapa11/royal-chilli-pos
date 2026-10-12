@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { attachReceipts, checkReceiptsForSave, type ReceiptEntity } from "@/lib/receipts";
-import { DATE_RE, linkStaff, money } from "@/lib/staff-links";
+import { DATE_RE, linkStaff, money, payableStaff } from "@/lib/staff-links";
 import { cashCategory, payMethodLabel } from "@/lib/cash-categories";
 import { tradingDayStr, londonDayRangeUtc } from "@/lib/london-date";
 import { addDays } from "@/lib/admin-dashboard";
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   let supplierId: number | null = null;
   let pickedName = "";
   if (cat.pick === "staff") {
-    const { data: s } = await db.from("staff").select("id, name").eq("id", Number(body?.staff_member_id)).eq("active", 1).maybeSingle();
+    const s = (await payableStaff(who.businessId)).find((x) => x.id === Number(body?.staff_member_id));
     if (!s) return NextResponse.json({ error: "Choose the staff member.", field: "staff_member_id" }, { status: 400 });
     staffMemberId = s.id; pickedName = s.name;
   } else if (cat.pick === "supplier") {
