@@ -4,6 +4,7 @@ import { canAccess } from "@/lib/permissions";
 import { getBusiness } from "@/lib/business";
 import { tradingDayStr } from "@/lib/london-date";
 import DailyAccountsPage from "@/components/staff/DailyAccountsPage";
+import { canSeeSalary } from "@/lib/salary-sheet";
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ date?: string; month?: string }> }) {
   const session = await getSession();
@@ -16,6 +17,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const business = await getBusiness(session.businessId).catch(() => null);
   return (
     <DailyAccountsPage today={today} start={start} startMonth={startMonth}
-      startView={month ? "month" : "day"} businessName={business?.name ?? "Daily accounts"} />
+      startView={month ? "month" : "day"} businessName={business?.name ?? "Daily accounts"} showSalary={canSeeSalary(session)} />
   );
 }

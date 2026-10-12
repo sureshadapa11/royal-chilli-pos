@@ -7,6 +7,7 @@ import { columnTotals } from "@/lib/daily-accounts";
 import { SHEET_FIELDS } from "@/lib/daily-accounts-fields";
 import { accountsByDay, MONEY_OUT_PARTS, totalFigures } from "@/lib/daily-figures";
 import { cashBook } from "@/lib/cash-book";
+import { canSeeSalary, salarySheet } from "@/lib/salary-sheet";
 
 // GET ?month=YYYY-MM → the month's Daily Accounts Report as a real Excel file:
 // every day of the month, each column, MONTH TOTAL. It starts with the worked-
@@ -124,6 +125,22 @@ export async function GET(req: NextRequest) {
   XLSX.utils.book_append_sheet(wb, ws1, monthName(month).slice(0, 31));
   XLSX.utils.book_append_sheet(wb, ws2, "Money out");
   XLSX.utils.book_append_sheet(wb, ws3, "Cash book");
+
+  // Sheet 4 (Super admin, HR, Supervisor): salary.
+  if (canSeeSalary(session)) {
+    const sal = await salarySheet(session.businessId, from, to);
+    const salHead = ["Person", "Hours", "Pay rate", "Wages", "Paid (staff link)", "Advance given", "Repaid", "Taken off pay", "Advance owed", "Balance to pay"];
+    const tot = (f: (r: (typeof sal)[number]) => number) => Math.round(sal.reduce((s, r) => s + f(r), 0) * 100) / 100;
+    const salRows: Cell[][] = [
+      [`${name} — Salary`],
+      [`${monthName(month)} · wages = hours × pay rate · balance to pay = wages − paid through the staff link − advance still owed`],
+      [],
+      salHead,
+      ...sal.map((r) => [r.name, r.hours, r.payRate, r.wages, r.paid, r.advanceGiven, r.advanceRepaid, r.advanceDeducted, r.advanceOwed, r.balance]),
+      ["TOTAL", tot((r) => r.hours), null, tot((r) => r.wages), tot((r) => r.paid), tot((r) => r.advanceGiven), tot((r) => r.advanceRepaid), tot((r) => r.advanceDeducted), tot((r) => r.advanceOwed), tot((r) => r.balance)],
+    ];
+    XLSX.utils.book_append_sheet(wb, sheet(salRows, 3, salHead.length - 1, [22, ...salHead.slice(1).map((h) => Math.max(11, h.length + 2))]), "Salary");
+  }
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
   const file = `Daily accounts ${business?.name ?? ""} ${month}.xlsx`.replace(/\s+/g, " ").trim();
   return new NextResponse(new Uint8Array(buf), {

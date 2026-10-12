@@ -5,17 +5,18 @@ import DailyAccountsView from "@/components/staff/DailyAccountsView";
 import DailyAccountsMonth from "@/components/staff/DailyAccountsMonth";
 import CashMovementsMonth from "@/components/staff/CashMovementsMonth";
 import CashBookMonth from "@/components/staff/CashBookMonth";
+import SalaryMonth from "@/components/staff/SalaryMonth";
 
 // Staff Hub → Daily accounts: Day (fill in the day-end sheet) and Month (the
 // whole month like the paper report, with totals, Excel and PDF).
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 
-export default function DailyAccountsPage({ today, start, startMonth, startView, businessName }: {
-  today: string; start: string; startMonth: string; startView: "day" | "month"; businessName: string;
+export default function DailyAccountsPage({ today, start, startMonth, startView, businessName, showSalary = false }: {
+  today: string; start: string; startMonth: string; startView: "day" | "month"; businessName: string; showSalary?: boolean;
 }) {
-  const [view, setView] = useState<"day" | "month" | "cash" | "book">(startView);
+  const [view, setView] = useState<"day" | "month" | "cash" | "book" | "salary">(startView);
   const [day, setDay] = useState(start);
-  const tab = (v: "day" | "month" | "cash" | "book", label: string) => (
+  const tab = (v: "day" | "month" | "cash" | "book" | "salary", label: string) => (
     <button type="button" onClick={() => setView(v)} aria-pressed={view === v}
       className={`rounded-lg px-4 py-1.5 text-[13.5px] font-semibold ${view === v ? "bg-[#E34435] text-white" : "text-[#5B524B] hover:bg-[#F6F1E6]"}`}>
       {label}
@@ -31,18 +32,20 @@ export default function DailyAccountsPage({ today, start, startMonth, startView,
             <p className="mt-1 text-sm text-muted-foreground">
               {view === "day"
                 ? "The day-end sheet. Till figures are filled in for you — check them, add bank in, catering and any notes, then submit."
+                : view === "salary" ? "Each person's wages for the month (hours × pay rate), what's been paid through the staff link, advances, and the balance still to pay."
                 : view === "book" ? "The cash drawer day by day, line by line, with a running balance — like a paper cash book. Cash only."
                 : view === "cash" ? "Money in and out entered through the staff link (cash, card or bank), with who entered it and the receipt photos. Only cash counts in the drawer check."
                 : "The whole month, like the paper report — with totals, Excel download and print."}
             </p>
           </div>
-          <div className="flex gap-1 rounded-xl bg-[#F6F1E6] p-1">{tab("day", "Day")}{tab("month", "Month")}{tab("cash", "Money in/out")}{tab("book", "Cash book")}</div>
+          <div className="flex gap-1 rounded-xl bg-[#F6F1E6] p-1">{tab("day", "Day")}{tab("month", "Month")}{tab("cash", "Money in/out")}{tab("book", "Cash book")}{showSalary && tab("salary", "Salary")}</div>
         </div>
         <div className="mt-5">
           {view === "day"
             ? <DailyAccountsView key={day} today={today} start={day} />
             : view === "cash" ? <CashMovementsMonth startMonth={startMonth} />
             : view === "book" ? <CashBookMonth startMonth={startMonth} />
+            : view === "salary" && showSalary ? <SalaryMonth startMonth={startMonth} />
             : <DailyAccountsMonth startMonth={startMonth} businessName={businessName} onOpenDay={(d) => { setDay(d > today ? today : d); setView("day"); }} />}
         </div>
       </div>
