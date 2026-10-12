@@ -3,6 +3,7 @@ import { tradingDayStr } from "@/lib/london-date";
 import { PLATFORMS } from "@/lib/platforms";
 import { chunked, getPnl, getSalesData, labourCostByDay, r2 } from "@/lib/finance";
 import { savedDays, summarise, type DailySummary } from "@/lib/daily-accounts";
+import { getBusinessSetting } from "@/lib/business-settings";
 import { getDashboardCards, mergeDashboardCards, type DashboardCards } from "@/lib/dashboard-cards";
 
 // Admin dashboard figures (Staff Hub home, admin only). Revenue = our own paid
@@ -241,7 +242,9 @@ export async function getAdminDashboard(businessId: number, range: RangeKey): Pr
       ...summary,
     },
     cards,
-    hasTill: sales14.orders.length > 0,
+    // Till cards only once the till is switched on in Settings (till tests
+    // left a few orders, so "any till sale" isn't a reliable signal).
+    hasTill: String((await getBusinessSetting(businessId, "till_in_use")) ?? "") === "1" && sales14.orders.length > 0,
   };
 }
 
