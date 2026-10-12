@@ -201,7 +201,8 @@ function ZReportsTab() {
 }
 
 // One Excel file per month for the accountant (app/api/finance/export):
-// daily trading-day summary, payments, refunds, Z reports and money out —
+// Daily accounts summary, VAT, cash book, Money In / Out, money out, salary
+// (and the till's payments, refunds and Z reports once the till is in use) —
 // plus a zip of the month's receipt photos, named as in the Money out sheet.
 // The zip is built here in the browser from short-lived links: a month of
 // photos is far bigger than a server response may be.
@@ -244,7 +245,7 @@ function AccountantExportTab() {
     <div className="rounded-lg border border-border bg-surface px-4 py-4 space-y-3">
       <p className="text-foreground font-semibold">Monthly accounts export (Excel)</p>
       <p className="text-muted-foreground text-sm">
-        Sheets: Daily summary (trading days, 5am–5am: sales taken, card/cash/online, tips, refunds, VAT, discounts), Payments, Refunds, Z reports and Money out (expenses, supplier payments and deliveries, with their receipt photo names).
+        Sheets: Daily summary (from Daily accounts: Z report, card, cash, tips, delivery platforms and commission, catering, total sales, ex-VAT, VAT), VAT summary, Cash book, Money In / Out (the staff link entries), Money out (expenses, supplier payments and deliveries, with their receipt photo names) and Salary (pay per person). Till sheets are added once the till is in use.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
@@ -267,7 +268,7 @@ function AccountantExportTab() {
   );
 }
 
-export default function FinanceView() {
+export default function FinanceView({ tillInUse = false }: { tillInUse?: boolean }) {
   // Read-only: analysis and printing. Expenses and supplier payments are
   // recorded in Inventory.
   const [tab, setTab] = useState<"pnl" | "vat" | "foodcost" | "zreports" | "export">("pnl");
@@ -278,6 +279,8 @@ export default function FinanceView() {
     { id: "zreports", label: "Z Reports" },
     { id: "export", label: "Accountant export" },
   ] as const;
+  // Z Reports come from the till's Close Day: hidden while the till isn't used.
+  const shownTabs = tabs.filter((t) => t.id !== "zreports" || tillInUse);
 
   return (
     <>
@@ -292,7 +295,7 @@ export default function FinanceView() {
           </div>
 
           <div className="flex flex-wrap gap-1 mt-4 bg-surface-hover p-1 rounded-xl">
-            {tabs.map((t) => (
+            {shownTabs.map((t) => (
               <button key={t.id} onClick={() => setTab(t.id)} className={`px-4 py-1.5 rounded-lg text-sm font-semibold whitespace-nowrap ${tab === t.id ? "bg-red-500 text-white" : "text-muted-foreground"}`}>{t.label}</button>
             ))}
           </div>
@@ -305,7 +308,7 @@ export default function FinanceView() {
         <div className="mt-5">
           {tab === "pnl" && <PnlTab />}
           {tab === "vat" && <VatTab />}
-          {tab === "zreports" && <ZReportsTab />}
+          {tab === "zreports" && tillInUse && <ZReportsTab />}
           {tab === "export" && <AccountantExportTab />}
           {tab === "foodcost" && <FoodCostReport />}
         </div>
