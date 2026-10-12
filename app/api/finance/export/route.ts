@@ -7,11 +7,21 @@ import { allRows } from "@/lib/finance";
 import { moneyOutForMonth } from "@/lib/money-out";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import type { ZReport } from "@/lib/z-report";
+import { tillInUse } from "@/lib/till-in-use";
+import { accountsByDay } from "@/lib/daily-figures";
+import { getVatRate, extractVat } from "@/lib/finance";
+import { cashBook } from "@/lib/cash-book";
+import { salarySheet } from "@/lib/salary-sheet";
+import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
+import { getBrand } from "@/lib/brand";
+import supabase from "@/lib/supabase";
 
-// GET /api/finance/export?month=YYYY-MM — one Excel file for the accountant:
-// Daily summary (trading days, 5am-5am UK), Payments, Refunds, Z reports, and
-// Money out (with the file names of its receipt photos in the receipts zip).
-// Money is counted when it was taken (payments), matching the Z report.
+// GET /api/finance/export?month=YYYY-MM — one Excel file for the accountant
+// (agreed 2026-10-12): Daily summary from Daily accounts (Day End), VAT
+// summary, Cash book, Money In / Out (staff link entries), Money out (with the
+// file names of its receipt photos in the receipts zip) and Salary (pay per
+// person, no hours). The till's daily takings, Payments, Refunds and Z reports
+// sheets are only added once the till is in use (lib/till-in-use.ts).
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
   if (!session || !canManageFinance(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -116,18 +126,107 @@ export async function GET(req: NextRequest) {
     "Receipt photos (in receipts zip)": r.photos.map((p) => p.fileName).join(", "),
   }));
 
+  // ── From what's entered by hand (Day End / Daily accounts, staff links) ──
+  const [{ days: figDays, rows: dayRows }, vatRate, { data: vatExp }, book, { data: moves }, pay, till, brand] = await Promise.all([
+    accountsByDay(session.businessId, from, to),
+    getVatRate(session.businessId),
+    db.from("expenses").select("amount, expense_date").eq("vat_applicable", 1).gte("expense_date", from).lte("expense_date", to),
+    cashBook(session.businessId, from, to),
+    db.from("cash_movements").select("movement_date, direction, category, method, amount, reason, paid_to, staff_id, created_at")
+      .gte("movement_date", from).lte("movement_date", to).order("movement_date").order("created_at"),
+    salarySheet(session.businessId, from, to),
+    tillInUse(session.businessId),
+    getBrand(session.businessId),
+  ]);
+  const rowBy = new Map(dayRows.map((r) => [r.trading_date, r]));
+  const n = (v: unknown) => (v == null || v === "" ? 0 : Number(v));
+  const cell = (v: unknown) => (v == null || v === "" ? "" : r2(Number(v)));
+  const accountsDaily: Record<string, string | number>[] = figDays.map((f) => {
+    const r = rowBy.get(f.date);
+    const entered = r?.status === "submitted";
+    const has = entered || f.total_sales !== 0;
+    return {
+      "Trading day": f.date,
+      "Day End": entered ? "Entered" : "No Day End",
+      "Z report": cell(r?.z_report), Card: cell(r?.card), Cash: cell(r?.cash), Tips: cell(r?.tips),
+      "Just Eat": cell(r?.just_eat), "Just Eat commission": cell(r?.just_eat_commission),
+      Deliveroo: cell(r?.deliveroo), "Deliveroo commission": cell(r?.deliveroo_commission),
+      "Uber Eats": cell(r?.uber_eats), "Uber Eats commission": cell(r?.uber_eats_commission),
+      Hiest: cell(r?.hiest), "Hiest commission": cell(r?.hiest_commission),
+      "Catering paid": cell(r?.catering_paid), "Catering pending": cell(r?.catering_pending),
+      Pending: cell(r?.pending), "Bank in": cell(r?.bank_in),
+      "Total sales": has ? r2(f.total_sales) : "",
+      "Ex-VAT": has ? r2(f.ex_vat) : "",
+      VAT: has ? r2(f.total_sales - f.ex_vat) : "",
+      Notes: String(r?.notes ?? ""),
+    };
+  });
+  const enteredCount = accountsDaily.filter((d) => d["Day End"] === "Entered").length;
+  const accTotals = accountsDaily.reduce<Record<string, number | string>>((acc, row) => {
+    for (const [k, v] of Object.entries(row)) if (typeof v === "number") acc[k] = r2(Number(acc[k] ?? 0) + v);
+    return acc;
+  }, { "Trading day": "TOTAL", "Day End": `${enteredCount} of ${accountsDaily.length} entered` });
+  accountsDaily.push(accTotals);
+
+  // VAT: the same estimate as Finance and the dashboard (sales ÷ 1.2).
+  const totalSales = r2(figDays.reduce((s, f) => s + f.total_sales, 0));
+  const salesVat = r2(figDays.reduce((s, f) => s + f.total_sales - f.ex_vat, 0));
+  const claimed = r2((vatExp ?? []).reduce((s, e) => s + extractVat(n(e.amount), vatRate), 0));
+  const vatRows: Record<string, string | number>[] = [
+    { Item: "Total sales (incl. VAT)", Amount: totalSales },
+    { Item: "Sales ex-VAT", Amount: r2(totalSales - salesVat) },
+    { Item: `Sales VAT (${Math.round(vatRate * 100)}%)`, Amount: salesVat },
+    { Item: "VAT claimed back on expenses", Amount: claimed },
+    { Item: "VAT to pay", Amount: r2(salesVat - claimed) },
+    { Item: "Note", Amount: "Estimate: sales divided by 1.2. Check with the accountant before filing." },
+  ];
+
+  const bookRows = book.days.map((d) => {
+    const sum = (kinds: string[], f: "inAmount" | "outAmount") => r2(d.lines.filter((l) => kinds.includes(l.kind)).reduce((s, l) => s + l[f], 0));
+    return {
+      Date: d.date, "Day End": d.entered ? "Entered" : "No Day End",
+      Opening: d.opening ?? "", "Cash sales": sum(["sales"], "inAmount"), "Money in": sum(["in"], "inAmount"),
+      "Money out": sum(["out", "till_out"], "outAmount"), "Bank in": sum(["bank"], "outAmount"),
+      Expected: d.expected ?? "", Counted: d.counted ?? "", Variance: d.variance ?? "",
+    };
+  });
+
+  const ids = [...new Set((moves ?? []).map((m) => m.staff_id).filter(Boolean))] as number[];
+  const { data: who } = ids.length ? await supabase.from("staff").select("id, name").in("id", ids) : { data: [] as { id: number; name: string }[] };
+  const nameOf = (id: number | null) => (who ?? []).find((w) => w.id === id)?.name ?? "";
+  const moveRows = (moves ?? []).map((m) => ({
+    Date: m.movement_date, "In / Out": m.direction === "in" ? "In" : "Out", Category: cashCategoryLabel(m.category),
+    "Paid how": payMethodLabel(m.method), Amount: r2(n(m.amount)), Reason: m.reason ?? "", "Paid to": m.paid_to ?? "", "Entered by": nameOf(m.staff_id),
+  }));
+
+  // Salary: pay per person only (no hours or rates), as agreed.
+  const payRows: Record<string, string | number>[] = pay.filter((p) => p.wages || p.paid || p.advanceDeducted || p.balance).map((p) => ({
+    Name: p.name, Pay: r2(p.wages), "Paid so far": r2(p.paid), "Advance deducted": r2(p.advanceDeducted), "Still to pay": r2(p.balance),
+  }));
+  if (payRows.length) {
+    const t = (k: string) => r2(payRows.reduce((s, p) => s + Number(p[k]), 0));
+    payRows.push({ Name: "TOTAL", Pay: t("Pay"), "Paid so far": t("Paid so far"), "Advance deducted": t("Advance deducted"), "Still to pay": t("Still to pay") });
+  }
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(daily), "Daily summary");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paymentRows.length ? paymentRows : [{ Note: "No payments this month" }]), "Payments");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(refundRows.length ? refundRows : [{ Note: "No refunds this month" }]), "Refunds");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(zRows.length ? zRows : [{ Note: "No closed till shifts this month" }]), "Z reports");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(accountsDaily), "Daily summary");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vatRows), "VAT summary");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bookRows.length ? bookRows : [{ Note: "No cash book entries this month" }]), "Cash book");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moveRows.length ? moveRows : [{ Note: "No Money In / Out entries this month" }]), "Money In-Out");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moneyOutRows.length ? moneyOutRows : [{ Note: "Nothing paid out this month" }]), "Money out");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(payRows.length ? payRows : [{ Note: "No pay this month" }]), "Salary");
+  if (till) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(daily), "Till daily");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paymentRows.length ? paymentRows : [{ Note: "No payments this month" }]), "Payments");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(refundRows.length ? refundRows : [{ Note: "No refunds this month" }]), "Refunds");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(zRows.length ? zRows : [{ Note: "No closed till shifts this month" }]), "Z reports");
+  }
   const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
 
   return new NextResponse(new Uint8Array(buf), {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      "Content-Disposition": `attachment; filename="royal-chilli-accounts-${month}.xlsx"`,
+      "Content-Disposition": `attachment; filename="${brand.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-accounts-${month}.xlsx"`,
     },
   });
 }
