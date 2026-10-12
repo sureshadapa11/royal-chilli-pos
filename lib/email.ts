@@ -1050,6 +1050,14 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
       ].join("") + (d.notes ? `<tr><td colspan="2" style="font-family:${SANS}; font-size:13px; color:${C.muted}; padding-top:6px;">Notes: ${esc(d.notes)}</td></tr>` : ""))
     : `<tr><td style="padding:14px 28px 4px;">${warn("No Day End was entered for this day.")}</td></tr>`;
 
+  const hm = (sec: number) => { const m = Math.round(sec / 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
+  const worked = (d.shifts ?? []).filter((s) => s.seconds > 0);
+  const staffOn = (d.shifts ?? []).length
+    ? section(`Staff on shift · ${worked.length} · ${hm(worked.reduce((t, s) => t + s.seconds, 0))}`, [
+        ...worked.map((s) => row(s.name, hm(s.seconds))),
+        ...(d.shifts ?? []).filter((s) => s.stillIn).map((s) => row(`⚠️ ${s.name} still clocked in`, `since ${s.stillIn}`)),
+      ].join(""))
+    : "";
   const dr = d.drawer;
   const drawer = section("Cash drawer", [
     row("Opening", gbp(dr.opening)), row("+ Cash sales", gbp(dr.cashSales)), row("+ Money in (cash)", gbp(dr.moneyIn)), row("− Money out (cash)", gbp(dr.moneyOut)), row("− Bank in", gbp(dr.bankIn)),
@@ -1069,6 +1077,7 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
       <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:4px;">${esc(d.business)} · ${esc(day)}</div>
     </td></tr>
     ${dayEnd}
+    ${staffOn}
     ${drawer}
     ${cash}
     ${missing.length ? `<tr><td style="padding:10px 28px 0;">${warn(`Day End also missing for: ${missing.map((x) => new Date(`${x}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })).join(", ")}`)}</td></tr>` : ""}

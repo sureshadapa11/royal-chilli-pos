@@ -10,6 +10,8 @@ const gbp = (n: number | null | undefined) => (n == null ? "—" : `£${n.toLoca
 const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 const shortDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 const LINE = "━━━━━━━━━━━━━━━";
+/** "9h 49m" — the same hours format as everywhere else. */
+const hm = (seconds: number) => { const m = Math.round(seconds / 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
 const METHOD_ICON: Record<string, string> = { Cash: "💵", Card: "💳", "Bank transfer": "🏦" };
 
 /** One lined-up row of the monospace cash block: label left, amount right. */
@@ -34,6 +36,17 @@ export function dayEndText(r: DayEndReport): string {
     L.push(`🏛️ VAT to pay (today)  ${gbp(f.vat_to_pay)}${f.vat_claimed ? ` _(claimed back ${gbp(f.vat_claimed)})_` : ""}`);
     if (f.catering_pending) L.push(`⏳ Catering still owed  ${gbp(f.catering_pending)}`);
     if (r.notes) L.push(`📝 _${r.notes}_`);
+    L.push("");
+  }
+
+  // Who worked and for how long — hours only (agreed 2026-10-12).
+  const shifts = r.shifts ?? [];
+  if (shifts.length) {
+    const worked = shifts.filter((s) => s.seconds > 0);
+    const total = worked.reduce((t, s) => t + s.seconds, 0);
+    L.push(LINE, `👥 *STAFF ON SHIFT  (${worked.length} · ${hm(total)})*`);
+    for (const s of worked) L.push(`› ${s.name}  ${hm(s.seconds)}`);
+    for (const s of shifts.filter((x) => x.stillIn)) L.push(`⚠️ ${s.name} still clocked in (since ${s.stillIn})`);
     L.push("");
   }
 
