@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { accountsAccess } from "@/lib/accounts-access";
 import { getSessionFromRequest } from "@/lib/auth";
-import { canManageDailyAccounts } from "@/lib/permissions";
 import { columnTotals } from "@/lib/daily-accounts";
 import { accountsByDay, totalFigures } from "@/lib/daily-figures";
 
@@ -9,7 +9,7 @@ import { accountsByDay, totalFigures } from "@/lib/daily-figures";
 // day's Total sales / Ex-VAT / Money out / Net total / Variance (lib/daily-figures.ts).
 export async function GET(req: NextRequest) {
   const session = await getSessionFromRequest(req);
-  if (!session || !canManageDailyAccounts(session.role)) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session || !accountsAccess(session).seeFigures) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const month = req.nextUrl.searchParams.get("month") ?? "";
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return NextResponse.json({ error: "Pick a month" }, { status: 400 });
 

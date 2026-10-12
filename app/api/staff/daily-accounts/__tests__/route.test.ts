@@ -19,7 +19,13 @@ jest.mock("@/lib/supabase", () => ({
     },
   },
 }));
-jest.mock("@/lib/permissions", () => ({ __esModule: true, areaAllows: (role: string) => role !== "employee" }));
+jest.mock("@/lib/permissions", () => ({
+  __esModule: true,
+  areaAllows: (role: string) => role !== "employee",
+  // lib/accounts-access.ts: Managers have the Daily accounts area in full.
+  canAccess: (role: string) => role !== "employee",
+  canEdit: (role: string) => role !== "employee",
+}));
 jest.mock("@/lib/daily-accounts", () => ({ __esModule: true, tillFigures: () => Promise.resolve({ z_report: 480.5 }) }));
 
 import { GET, PUT } from "@/app/api/staff/daily-accounts/route";

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { accountsAccess } from "@/lib/accounts-access";
 import type { Metadata } from "next";
 import { getSession } from "@/lib/auth";
 import { canAccess, levelOf, isStaffManagement, canViewCrm, canManageDrivers, type TabKey } from "@/lib/permissions";
@@ -43,7 +44,7 @@ export default async function StaffHubLayout({
         ...(see("tables") ? [{ href: "/staff/tables", label: "Tables", icon: "🪑" }] : []),
         ...(see("inventory") ? [{ href: "/staff/inventory", label: "Inventory", icon: "📦" }] : []),
         ...(canManageDrivers(session.role) ? [{ href: "/staff/drivers", label: "Drivers", icon: "🚗" }] : []),
-        ...(see("daily_accounts") ? [{ href: "/staff/daily-accounts", label: "Daily accounts", icon: "🧮", note: "Day-end sheet" }] : []),
+        ...(accountsAccess(session).tabs.length ? [{ href: "/staff/daily-accounts", label: "Daily accounts", icon: "🧮", note: accountsAccess(session).tabs.length === 1 && accountsAccess(session).tabs[0] === "salary" ? "Salary" : "Day-end sheet" }] : []),
         ...(see("website") ? [{ href: "/staff/website", label: "Website", icon: "🌐" }] : []),
         ...(see("till") ? [{ href: "/pos", label: "Till", icon: "💷" }] : []),
       ],

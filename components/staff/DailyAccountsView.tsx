@@ -15,9 +15,10 @@ const gbp = (n: number) => `£${n.toFixed(2)}`;
 const toText = (n: number | null | undefined) => (n == null ? "" : String(Number(n)));
 
 type Saved = (Partial<DailyValues> & { notes: string | null; status: "draft" | "submitted"; submitted_at: string | null }) | null;
-type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; cashMoves?: { moneyIn: number; moneyOut: number }; locked: boolean; canUnlock: boolean };
+type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; cashMoves?: { moneyIn: number; moneyOut: number } | null; locked: boolean; canUnlock: boolean; viewOnly?: boolean };
 
-export default function DailyAccountsView({ today, start }: { today: string; start: string }) {
+// seeFigures: Super admin / Supervisor see the cash check and WhatsApp; Managers only enter.
+export default function DailyAccountsView({ today, start, seeFigures = false }: { today: string; start: string; seeFigures?: boolean }) {
   const { toast } = useToast();
   const [date, setDate] = useState(start);
   const [day, setDay] = useState<Day | null>(null);
@@ -61,7 +62,7 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
             <input id="da-date" type="date" value={date} max={today} onChange={(e) => e.target.value && setDate(e.target.value)}
               className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[14px]" />
             <span className="text-[13px] text-muted-foreground">{niceDate(date)}</span>
-            <span className="ml-auto"><WhatsAppReportButton date={date} /></span>
+            <span className="ml-auto">{seeFigures && <WhatsAppReportButton date={date} />}</span>
             <span className={`rounded-full px-2.5 py-0.5 text-[12px] font-semibold ${
               status === "submitted" ? "bg-emerald-100 text-emerald-800" : status === "draft" ? "bg-amber-100 text-amber-800" : "bg-[#F6F1E6] text-muted-foreground"
             }`}>
@@ -71,7 +72,7 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
 
           {locked && (
             <p className="mb-3 rounded-lg bg-[#F6F1E6] px-3 py-2 text-[13px] text-muted-foreground">
-              This day has been submitted. Ask a Super admin if something needs changing.
+              {day?.viewOnly ? "View only: you can see this day but not change it." : "This day has been submitted. Ask a Super admin if something needs changing."}
             </p>
           )}
 
@@ -126,7 +127,7 @@ export default function DailyAccountsView({ today, start }: { today: string; sta
                 })}
               </div>
 
-              <CashCheckBox values={values} moves={day.cashMoves} />
+              {seeFigures && <CashCheckBox values={values} moves={day.cashMoves ?? undefined} />}
 
               <label className="mt-4 block">
                 <span className="text-[13.5px] font-semibold">Notes</span>

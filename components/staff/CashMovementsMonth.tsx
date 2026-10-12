@@ -11,7 +11,7 @@ type DayEnd = { date: string; by: string; via: string | null; photos: { id: numb
 const gbp = (n: number) => `£${n.toFixed(2)}`;
 const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
-export default function CashMovementsMonth({ startMonth }: { startMonth: string }) {
+export default function CashMovementsMonth({ startMonth, canDelete = false }: { startMonth: string; canDelete?: boolean }) {
   const [month, setMonth] = useState(startMonth);
   const [data, setData] = useState<{ movements: Move[]; dayEnds: DayEnd[] } | null>(null);
   const load = () => fetch(`/api/staff/cash-movements?month=${month}`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
@@ -54,7 +54,7 @@ export default function CashMovementsMonth({ startMonth }: { startMonth: string 
                   <td className="px-3 py-2">{m.paid_to ?? "—"}</td>
                   <td className="px-3 py-2">{m.by}</td>
                   <td className="px-3 py-2"><ReceiptLinks photos={m.photos} /></td>
-                  <td className="px-3 py-2 text-right"><button onClick={() => remove(m)} className="text-xs font-semibold text-red-600 hover:underline">Delete</button></td>
+                  <td className="px-3 py-2 text-right">{canDelete && <button onClick={() => remove(m)} className="text-xs font-semibold text-red-600 hover:underline">Delete</button>}</td>
                 </tr>
               ))}
           </tbody>
