@@ -1044,7 +1044,9 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
         ...f.platforms.filter((p) => p.sales || p.commission).map((p) => row(p.label, `${gbp(p.sales)}${p.commission ? ` <span style="color:${C.muted};">(commission ${gbp(p.commission)})</span>` : ""}`)),
         ...(f.catering_paid || f.catering_pending ? [row("Catering paid / pending", `${gbp(f.catering_paid)} / ${gbp(f.catering_pending)}`)] : []),
         row("Total sales", gbp(f.total_sales), true),
+        row("VAT (20%) · Ex-VAT", `${gbp(f.sales_vat)} · ${gbp(f.ex_vat)}`),
         row("Net total (after costs)", gbp(f.net_total), true),
+        row(`VAT to pay (today)${f.vat_claimed ? ` · claimed back ${gbp(f.vat_claimed)}` : ""}`, gbp(f.vat_to_pay), true),
       ].join("") + (d.notes ? `<tr><td colspan="2" style="font-family:${SANS}; font-size:13px; color:${C.muted}; padding-top:6px;">Notes: ${esc(d.notes)}</td></tr>` : ""))
     : `<tr><td style="padding:14px 28px 4px;">${warn("No Day End was entered for this day.")}</td></tr>`;
 

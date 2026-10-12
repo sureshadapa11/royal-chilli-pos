@@ -5,7 +5,7 @@ import { listBusinesses } from "@/lib/business";
 import { accountsByDay } from "@/lib/daily-figures";
 import { addDays } from "@/lib/admin-dashboard";
 import { tradingDayStr } from "@/lib/london-date";
-import { r2 } from "@/lib/finance";
+import { r2, extractVat, getVatRate } from "@/lib/finance";
 import { sendDayEndReportEmail } from "@/lib/email";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 import { cashCheck } from "@/lib/daily-accounts-fields";
@@ -27,6 +27,9 @@ export type DayEndReport = {
     catering_paid: number | null; catering_pending: number | null;
     total_sales: number; net_total: number;
     fees: number;            // platform commissions + card fee
+    // VAT (agreed 2026-10-12): sales VAT = total sales − ex-VAT; VAT claimed
+    // back = the VAT inside that day's VAT-receipted expenses; to pay = the difference.
+    ex_vat: number; sales_vat: number; vat_claimed: number; vat_to_pay: number;
   } | null;
   notes: string | null;
   drawer: { opening: number | null; cashSales: number; moneyIn: number; moneyOut: number; bankIn: number; expected: number | null; counted: number | null; variance: number | null };
@@ -43,12 +46,15 @@ export function drawerCheck(opening: number | null, cashSales: number, moneyIn: 
 
 export async function buildDayEndReport(businessId: number, business: string, date: string): Promise<DayEndReport> {
   const db = bizDb(businessId);
-  const [{ data: row }, { data: moves }, { data: week }, figures] = await Promise.all([
+  const [{ data: row }, { data: moves }, { data: week }, figures, { data: vatExpenses }, vatRate] = await Promise.all([
     db.from("daily_accounts").select("*").eq("trading_date", date).maybeSingle(),
     db.from("cash_movements").select("direction, category, method, amount, reason, paid_to, staff_id").eq("movement_date", date).order("id"),
     db.from("daily_accounts").select("trading_date").eq("status", "submitted").gte("trading_date", addDays(date, -6)).lte("trading_date", date),
     accountsByDay(businessId, date, date),
+    db.from("expenses").select("amount").eq("expense_date", date).eq("vat_applicable", 1),
+    getVatRate(businessId),
   ]);
+  const vatClaimed = r2((vatExpenses ?? []).reduce((s, e) => s + extractVat(Number(e.amount), vatRate), 0));
   const staffIds = [...new Set([row?.submitted_by, ...(moves ?? []).map((m) => m.staff_id)].filter((x): x is number => !!x))];
   const { data: staff } = staffIds.length ? await supabase.from("staff").select("id, name").in("id", staffIds) : { data: [] as { id: number; name: string }[] };
   const nameOf = (id: number | null | undefined) => (staff ?? []).find((s) => s.id === id)?.name ?? "—";
@@ -78,6 +84,10 @@ export async function buildDayEndReport(businessId: number, business: string, da
       catering_paid: n(row?.catering_paid), catering_pending: n(row?.catering_pending),
       total_sales: day?.total_sales ?? 0, net_total: day?.net_total ?? 0,
       fees: Math.round(((day?.out.commission ?? 0) + (day?.out.card_fee ?? 0)) * 100) / 100,
+      ex_vat: day?.ex_vat ?? 0,
+      sales_vat: r2((day?.total_sales ?? 0) - (day?.ex_vat ?? 0)),
+      vat_claimed: vatClaimed,
+      vat_to_pay: r2((day?.total_sales ?? 0) - (day?.ex_vat ?? 0) - vatClaimed),
     } : null,
     notes: row?.notes ?? null,
     // Same sum as the screens (daily-figures): money out includes the till's Cash Out.
