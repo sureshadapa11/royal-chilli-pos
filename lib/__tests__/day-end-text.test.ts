@@ -15,6 +15,11 @@ const report = (extra: Partial<DayEndReport> = {}): DayEndReport => ({
   drawer: { opening: 100, cashSales: 35.89, moneyIn: 0, moneyOut: 45, bankIn: 0, expected: 90.89, counted: 120, variance: 29.11 },
   cash: [{ direction: "out", category: "Ingredients / stock (cash buy)", method: "Cash", amount: 45, reason: "Veg", paidTo: null, by: "Ramesh" }],
   missingDays: ["2026-10-09", "2026-10-11"],
+  shifts: [
+    { name: "Anusha", seconds: 9 * 3600 + 49 * 60, stillIn: null },
+    { name: "Vijay", seconds: 8 * 3600 + 30 * 60, stillIn: null },
+    { name: "Srikanth", seconds: 0, stillIn: "17:00" },
+  ],
   ...extra,
 });
 
@@ -35,10 +40,17 @@ describe("WhatsApp day report (style A)", () => {
     expect(t).toContain("_Ingredients / stock (cash buy) · Veg_ — Ramesh");
     expect(t).toContain("⚠️ *Day End missing:* Fri 9 Oct");
     expect(t).toContain("✍️ Entered by Anusha");
+    expect(t).toContain("👥 *STAFF ON SHIFT  (2 · 18h 19m)*");
+    expect(t).toContain("› Anusha  9h 49m");
+    expect(t).toContain("⚠️ Srikanth still clocked in (since 17:00)");
+
   });
   it("colours the variance: green when right, red when missing", () => {
     expect(dayEndText(report({ drawer: { ...report().drawer, variance: 0 } }))).toContain("🟢 *Variance £0.00 (all correct)*");
     expect(dayEndText(report({ drawer: { ...report().drawer, variance: -15.89 } }))).toContain("🔴 *Variance −£15.89 (missing)*");
+  });
+  it("leaves the staff section out when nobody clocked in", () => {
+    expect(dayEndText(report({ shifts: [] }))).not.toContain("STAFF ON SHIFT");
   });
   it("says when the Day End wasn't entered", () => {
     expect(dayEndText(report({ figures: null, entered: null }))).toContain("⚠️ *Day End not entered*");

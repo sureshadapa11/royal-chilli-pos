@@ -35,6 +35,8 @@ export type DayEndReport = {
   drawer: { opening: number | null; cashSales: number; moneyIn: number; moneyOut: number; bankIn: number; expected: number | null; counted: number | null; variance: number | null };
   cash: CashLine[];
   missingDays: string[];
+  /** Who worked that trading day and for how long (attendance, breaks taken off) — hours only, no pay. */
+  shifts: { name: string; seconds: number; stillIn: string | null }[];
 };
 
 const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
@@ -46,16 +48,17 @@ export function drawerCheck(opening: number | null, cashSales: number, moneyIn: 
 
 export async function buildDayEndReport(businessId: number, business: string, date: string): Promise<DayEndReport> {
   const db = bizDb(businessId);
-  const [{ data: row }, { data: moves }, { data: week }, figures, { data: vatExpenses }, vatRate] = await Promise.all([
+  const [{ data: row }, { data: moves }, { data: week }, figures, { data: attendance }, { data: vatExpenses }, vatRate] = await Promise.all([
     db.from("daily_accounts").select("*").eq("trading_date", date).maybeSingle(),
     db.from("cash_movements").select("direction, category, method, amount, reason, paid_to, staff_id").eq("movement_date", date).order("id"),
     db.from("daily_accounts").select("trading_date").eq("status", "submitted").gte("trading_date", addDays(date, -6)).lte("trading_date", date),
     accountsByDay(businessId, date, date),
+    db.from("attendance").select("staff_id, clock_in, clock_out, net_work_seconds").eq("work_date", date),
     db.from("expenses").select("amount").eq("expense_date", date).eq("vat_applicable", 1),
     getVatRate(businessId),
   ]);
   const vatClaimed = r2((vatExpenses ?? []).reduce((s, e) => s + extractVat(Number(e.amount), vatRate), 0));
-  const staffIds = [...new Set([row?.submitted_by, ...(moves ?? []).map((m) => m.staff_id)].filter((x): x is number => !!x))];
+  const staffIds = [...new Set([row?.submitted_by, ...(moves ?? []).map((m) => m.staff_id), ...(attendance ?? []).map((a) => a.staff_id)].filter((x): x is number => !!x))];
   const { data: staff } = staffIds.length ? await supabase.from("staff").select("id, name").in("id", staffIds) : { data: [] as { id: number; name: string }[] };
   const nameOf = (id: number | null | undefined) => (staff ?? []).find((s) => s.id === id)?.name ?? "—";
 
@@ -70,6 +73,17 @@ export async function buildDayEndReport(businessId: number, business: string, da
   const counted = n(row?.closing_balance);
   const opening = n(row?.opening_balance);
   const day = figures.days[0];
+
+  // Hours per person (two shifts in a day add up); a shift with no clock-out is flagged.
+  const byPerson = new Map<number, { seconds: number; stillIn: string | null }>();
+  for (const a of attendance ?? []) {
+    const p = byPerson.get(a.staff_id) ?? { seconds: 0, stillIn: null };
+    if (a.clock_out) p.seconds += Number(a.net_work_seconds ?? 0);
+    else if (a.clock_in) p.stillIn = new Date(a.clock_in).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/London" });
+    byPerson.set(a.staff_id, p);
+  }
+  const shifts = [...byPerson.entries()].map(([id, p]) => ({ name: nameOf(id), ...p }))
+    .sort((a, b) => b.seconds - a.seconds || a.name.localeCompare(b.name));
 
   const done = new Set((week ?? []).map((w) => w.trading_date as string));
   const missingDays = Array.from({ length: 7 }, (_, i) => addDays(date, -i)).filter((d) => !done.has(d)).reverse();
@@ -97,6 +111,7 @@ export async function buildDayEndReport(businessId: number, business: string, da
     },
     cash,
     missingDays,
+    shifts,
   };
 }
 
