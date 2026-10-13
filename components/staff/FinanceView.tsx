@@ -32,7 +32,7 @@ function DateRangePicker({ from, to, setFrom, setTo }: { from: string; to: strin
 // Same shape as lib/finance.ts Pnl — the admin dashboard summary reads the same numbers.
 type Pnl = {
   vat_rate: number;
-  sales: { till: number; platforms: number; catering: number; total: number; vat: number; ex_vat: number };
+  sales: { till: number; platforms: number; catering: number; events: number; total: number; vat: number; ex_vat: number };
   costs: { ingredients: number; staff: number; expenses: number; commission: number; card_fees: number; paid_out: number; total: number };
   profit: number;
   vat: { output: number; vat_applicable_expenses: number; input: number; net_due: number };
@@ -72,6 +72,7 @@ function PnlTab({ tillInUse }: { tillInUse: boolean }) {
             <Row label="Z report (Day End)" value={data.sales.till} />
             <Row label="Delivery platforms" value={data.sales.platforms} />
             {data.sales.catering > 0 && <Row label="Catering paid" value={data.sales.catering} />}
+            {data.sales.events > 0 && <Row label="Events paid" value={data.sales.events} />}
             <Row label="Total sales (incl. VAT)" value={data.sales.total} bold />
             <Row label="Less VAT on sales (÷ 1.2)" value={-data.sales.vat} />
             <Row label="Sales ex-VAT" value={data.sales.ex_vat} bold />
@@ -250,7 +251,7 @@ function AccountantExportTab() {
     <div className="rounded-lg border border-border bg-surface px-4 py-4 space-y-3">
       <p className="text-foreground font-semibold">Monthly accounts export (Excel)</p>
       <p className="text-muted-foreground text-sm">
-        Sheets: Daily summary (from Daily accounts: Z report, card, cash, tips, delivery platforms and commission, catering, total sales, ex-VAT, VAT), VAT summary, Cash book, Money In / Out (the staff link entries), Money out (expenses, supplier payments and deliveries, with their receipt photo names) and Salary (pay per person). Till sheets are added once the till is in use.
+        Sheets: Daily summary (from Daily accounts: Z report, card, cash, tips, delivery platforms and commission, catering, total sales, ex-VAT, VAT), VAT summary, Cash book, Money In / Out (the staff link entries), Money out (expenses, supplier payments and deliveries, with their receipt photo names), Catering &amp; events (jobs, payments, owed) and Salary (pay per person). Till sheets are added once the till is in use.
       </p>
       <div className="flex flex-wrap items-center gap-2">
         <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />

@@ -217,6 +217,7 @@ export type Pnl = {
     till: number;          // Z report net sales, tips not included
     platforms: number;     // delivery platforms' sales, commission included
     catering: number;      // catering paid
+    events: number;        // events paid (133)
     total: number;         // incl. VAT
     vat: number;           // total − ex_vat
     ex_vat: number;        // total ÷ 1.2
@@ -273,7 +274,7 @@ export function buildPnl(i: PnlInputs): Pnl {
     from: i.from,
     to: i.to,
     vat_rate: i.vatRate,
-    sales: { till: f.sales.till, platforms: f.sales.platforms, catering: f.sales.catering, total: f.total_sales, vat: outputVat, ex_vat: f.ex_vat },
+    sales: { till: f.sales.till, platforms: f.sales.platforms, catering: f.sales.catering, events: f.sales.events, total: f.total_sales, vat: outputVat, ex_vat: f.ex_vat },
     costs: {
       ingredients: f.out.stock, staff: f.out.wages, expenses: f.out.expenses,
       expense_lines: expenseLines(i, f.out.expenses), commission: f.out.commission,

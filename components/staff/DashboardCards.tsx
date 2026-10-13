@@ -114,14 +114,14 @@ export function PeriodSalesCard({ p }: { p: P }) {
 // ── 3. Daily sales by source, the period before as a line ───────────────────
 export function DailySalesCard({ p }: { p: P }) {
   const data = p.cur.map((d, i) => ({
-    label: p.label(d.date), date: d.date, till: d.till, platforms: r2(platformSales(d)), catering: d.catering,
+    label: p.label(d.date), date: d.date, till: d.till, platforms: r2(platformSales(d)), catering: d.catering, events: d.events,
     prev: p.prev[i]?.total ?? null, prevDate: p.prev[i]?.date,
   }));
   return (
     <Card title="Daily sales" sub={`Total sales per day by source · grey line: ${p.prevName.toLowerCase()}`} className="md:col-span-2">
       <Legend items={[
         { label: "Till (Z report)", colour: SOURCE_COLOUR.till }, { label: "Delivery platforms", colour: SOURCE_COLOUR.platforms },
-        { label: "Catering", colour: SOURCE_COLOUR.catering }, { label: p.prevName, colour: PREV, line: true },
+        { label: "Catering", colour: SOURCE_COLOUR.catering }, { label: "Events", colour: SOURCE_COLOUR.events }, { label: p.prevName, colour: PREV, line: true },
       ]} />
       <div className="mt-2 h-[250px]">
         <ResponsiveContainer width="100%" height="100%">
@@ -131,10 +131,11 @@ export function DailySalesCard({ p }: { p: P }) {
             <YAxis tick={AXIS} axisLine={false} tickLine={false} tickFormatter={(v) => gbp(v)} width={56} />
             <Tooltip contentStyle={TOOLTIP} cursor={{ fill: "rgba(0,0,0,0.03)" }}
               labelFormatter={(_l, items) => (items?.[0] ? dayName(items[0].payload.date) : "")}
-              formatter={(v, n) => [money(v), { till: "Till", platforms: "Platforms", catering: "Catering", prev: p.prevName }[String(n)] ?? n]} />
+              formatter={(v, n) => [money(v), { till: "Till", platforms: "Platforms", catering: "Catering", events: "Events", prev: p.prevName }[String(n)] ?? n]} />
             <Bar dataKey="till" stackId="s" fill={SOURCE_COLOUR.till} maxBarSize={24} />
             <Bar dataKey="platforms" stackId="s" fill={SOURCE_COLOUR.platforms} maxBarSize={24} />
-            <Bar dataKey="catering" stackId="s" fill={SOURCE_COLOUR.catering} maxBarSize={24} radius={[4, 4, 0, 0]} />
+            <Bar dataKey="catering" stackId="s" fill={SOURCE_COLOUR.catering} maxBarSize={24} />
+            <Bar dataKey="events" stackId="s" fill={SOURCE_COLOUR.events} maxBarSize={24} radius={[4, 4, 0, 0]} />
             <Line type="monotone" dataKey="prev" stroke={PREV} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
           </ComposedChart>
         </ResponsiveContainer>
@@ -148,6 +149,7 @@ export function SalesMixCard({ p }: { p: P }) {
   const parts = [
     { key: "till", label: "Till (Z report)", colour: SOURCE_COLOUR.till, value: sum(p.cur, (d) => d.till) },
     { key: "catering", label: "Catering", colour: SOURCE_COLOUR.catering, value: sum(p.cur, (d) => d.catering) },
+    { key: "events", label: "Events", colour: SOURCE_COLOUR.events, value: sum(p.cur, (d) => d.events) },
     ...(["uber_eats", "just_eat", "deliveroo", "hiest"] as const).map((k) => ({
       key: k, label: CARD_PLATFORMS.find((x) => x.key === k)!.label, colour: CHANNEL_COLOUR[k], value: sum(p.cur, (d) => d.platforms[k].sales),
     })),

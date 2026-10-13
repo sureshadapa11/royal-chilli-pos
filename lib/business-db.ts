@@ -24,6 +24,7 @@ export const BUSINESS_TABLES = new Set([
   "daily_accounts",
   // 129: cash in/out from the staff links
   "cash_movements",
+  "catering_jobs",
   // 130: staff advances (given, repaid, taken off a payslip)
   "staff_advances",
   // 126: guest feedback ("How was your meal?")

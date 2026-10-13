@@ -4,7 +4,7 @@ import type { CardDay } from "@/lib/dashboard-cards";
 const cardDay = (total: number, jeCommission: number, variance: number | null, sheet: boolean): CardDay => ({
   date: "2026-10-03", sheet, tillOnly: false, total, exVat: total / 1.2, net: total / 2, moneyOut: total / 2,
   out: { stock: 1, expenses: 2, card_fee: 0, paid_out: 0, wages: 3, commission: jeCommission },
-  variance, till: total, catering: 0,
+  variance, till: total, catering: 0, events: 0,
   platforms: { just_eat: { sales: 10, commission: jeCommission }, deliveroo: { sales: 0, commission: 0 }, uber_eats: { sales: 0, commission: 0 }, hiest: { sales: 0, commission: 0 } },
   card: 60, cash: 40, bankIn: 30, tips: 2, hours: 8,
 });

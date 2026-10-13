@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import { getBusiness } from "@/lib/business";
 import { columnTotals } from "@/lib/daily-accounts";
-import { SHEET_FIELDS } from "@/lib/daily-accounts-fields";
+import { SHEET_COLUMNS, sheetCell, sheetTotal } from "@/lib/sheet-columns";
 import { accountsByDay, MONEY_OUT_PARTS, totalFigures } from "@/lib/daily-figures";
 import { cashBook } from "@/lib/cash-book";
 import { salarySheet } from "@/lib/salary-sheet";
@@ -24,7 +24,7 @@ const LEAD = [
   { key: "net_total", label: "Net total" },
 ] as const;
 
-const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid · Ex-VAT = Total sales ÷ 1.2 · "
+const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid + events paid · Ex-VAT = Total sales ÷ 1.2 · "
   + "Money out = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
   + "Commission & card fees = platform commissions + card fee · Variance = cash counted − cash expected (opening + cash sales + cash in − cash out − bank in) · * no Z report on the sheet yet, the till's figure is used";
 
@@ -71,7 +71,7 @@ export async function monthSheets(businessId: number, month: string, includeSala
   const name = business?.name ?? "Daily accounts";
 
   // Sheet 1: the Daily Accounts Report.
-  const head = ["Date", ...LEAD.map((c) => c.label), ...SHEET_FIELDS.map((f) => f.label), "Variance", "Notes", "Status"];
+  const head = ["Date", ...LEAD.map((c) => c.label), ...SHEET_COLUMNS.map((f) => f.label), "Variance", "Notes", "Status"];
   const report: Cell[][] = [
     [`${name} — Daily Accounts Report`],
     [`Reporting month: ${monthName(month)} · amounts in £ · the total adds up each column on its own`],
@@ -82,18 +82,18 @@ export async function monthSheets(businessId: number, month: string, includeSala
       return [
         dayName(f.date) + (f.till_fallback ? " *" : ""),
         ...LEAD.map((c) => f[c.key]),
-        ...SHEET_FIELDS.map((x) => (x.key === "commission" ? (f.out.commission || f.out.card_fee ? Math.round((f.out.commission + f.out.card_fee) * 100) / 100 : num(r?.commission)) : num(r?.[x.key]))),
+        ...SHEET_COLUMNS.map((x) => sheetCell(x.key, r, f)),
         f.variance,
         r?.notes ?? "",
         r ? (r.status === "submitted" ? "Submitted" : "Draft") : "",
       ];
     }),
-    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_FIELDS.map((x) => (x.key === "commission" ? Math.round((ft.out.commission + ft.out.card_fee) * 100) / 100 : totals[x.key])), ft.variance, "", ""],
+    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_COLUMNS.map((x) => sheetTotal(x.key, totals, ft)), ft.variance, "", ""],
     [],
     [FORMULA],
   ];
-  const ws1 = sheet(report, 3, LEAD.length + SHEET_FIELDS.length + 1,
-    [16, ...LEAD.map((c) => Math.max(12, c.label.length + 2)), ...SHEET_FIELDS.map((f) => Math.max(11, f.label.length + 2)), 11, 40, 11]);
+  const ws1 = sheet(report, 3, LEAD.length + SHEET_COLUMNS.length + 1,
+    [16, ...LEAD.map((c) => Math.max(12, c.label.length + 2)), ...SHEET_COLUMNS.map((f) => Math.max(11, f.label.length + 2)), 11, 40, 11]);
 
   // Sheet 2: what's in each day's Money out.
   const outHead = ["Date", ...MONEY_OUT_PARTS.map((p) => p.label), "Money out"];

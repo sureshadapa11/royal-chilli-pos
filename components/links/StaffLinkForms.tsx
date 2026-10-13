@@ -23,7 +23,7 @@ const card = "rounded-2xl border border-[#eadfcc] bg-white p-3.5 shadow-sm";
 const head = "mb-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-[#7a6a60]";
 const bigBtn = "h-14 w-full rounded-2xl text-[17px] font-semibold disabled:opacity-60";
 
-type Picks = { staff: { id: number; name: string }[]; suppliers: { id: number; name: string }[] };
+type Picks = { staff: { id: number; name: string }[]; suppliers: { id: number; name: string }[]; jobs: { id: number; name: string }[] };
 
 /** What's typed, kept on this phone until it's sent (localStorage can be blocked: then just not kept). */
 function useDraft<T extends object>(key: string, initial: T): [T, (next: T | ((p: T) => T)) => void, () => void, string | null] {
@@ -122,7 +122,7 @@ function PinPad({ token, onOk }: { token: string; onOk: (pin: string, name: stri
     const res = await fetch(`/api/links/${token}/pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: next }) }).catch(() => null);
     const d = await res?.json().catch(() => ({}));
     setBusy(false);
-    if (res?.ok && d?.name) { setName(d.name); onOk(next, d.name, { staff: d.staff ?? [], suppliers: d.suppliers ?? [] }); }
+    if (res?.ok && d?.name) { setName(d.name); onOk(next, d.name, { staff: d.staff ?? [], suppliers: d.suppliers ?? [], jobs: d.jobs ?? [] }); }
     else { setErr(res ? d?.error ?? "Couldn't check the PIN." : "No connection. Try again."); setPin(""); }
   }
   if (name) {
@@ -280,11 +280,6 @@ export function DayEndForm({ token, business, today }: { token: string; business
         </div>
       </section>
       <section className={card}>
-        <div className={head}>Catering</div>
-        <Row label="Paid today"><Money value={v.catering_paid ?? ""} onChange={set("catering_paid")} /></Row>
-        <Row label="Still to be paid"><Money value={v.catering_pending ?? ""} onChange={set("catering_pending")} /></Row>
-      </section>
-      <section className={card}>
         <div className={head}>Cash drawer</div>
         <Row label="Opening cash"><Money value={v.opening_balance ?? ""} onChange={set("opening_balance")} /></Row>
         <Row label="Bank in (deposited / to owner)"><Money value={v.bank_in ?? ""} onChange={set("bank_in")} /></Row>
@@ -313,7 +308,7 @@ export function DayEndForm({ token, business, today }: { token: string; business
 export function CashForm({ token, business, today }: { token: string; business: string; today: string }) {
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
-  const [picks, setPicks] = useState<Picks>({ staff: [], suppliers: [] });
+  const [picks, setPicks] = useState<Picks>({ staff: [], suppliers: [], jobs: [] });
   const blank = { direction: "out" as "out" | "in", category: "", who: "", amount: "", reason: "", paidTo: "", date: today, method: "cash" as string };
   const [f, setF, clearDraft, savedAt] = useDraft(`cash:${token}`, blank);
   const [photos, setPhotos] = useState<Receipt[]>([]);
@@ -328,7 +323,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
     setErr("");
     if (!pin) return setErr("Enter your PIN first.");
     if (!cat) return setErr("Choose what it was for.");
-    if (cat.pick && !f.who) return setErr(cat.pick === "staff" ? "Choose the staff member." : "Choose the supplier.");
+    if (cat.pick && !f.who) return setErr(cat.pick === "staff" ? "Choose the staff member." : cat.pick === "job" ? "Choose the job." : "Choose the supplier.");
     if (!(Number(f.amount) > 0)) return setErr("Enter the amount.");
     if (cat.reasonRequired && f.reason.trim().length < 3) return setErr("Write what it was for.");
     if (cat.direction === "out" && cat.photo && photos.length === 0) return setErr("Add a photo of the receipt.");
@@ -339,6 +334,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
         pin, category: cat.key, amount: f.amount, reason: f.reason, paid_to: f.paidTo, date: f.date, method: f.method, photo_ids: photos.map((p) => p.id),
         staff_member_id: cat.pick === "staff" ? Number(f.who) : undefined,
         supplier_id: cat.pick === "supplier" ? Number(f.who) : undefined,
+        job_id: cat.pick === "job" ? Number(f.who) : undefined,
         confirm_duplicate: askAgain,
       }),
     }).catch(() => null);
@@ -353,7 +349,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
 
   const again = () => { setDone(""); setF({ ...blank, date: ukToday() }); setPhotos([]); setAskAgain(false); };
   if (done) return <Saved business={business} title="Money In / Out" what={done} again={again} />;
-  const list = cat?.pick === "staff" ? picks.staff : picks.suppliers;
+  const list = cat?.pick === "staff" ? picks.staff : cat?.pick === "job" ? picks.jobs : picks.suppliers;
   return (
     <Shell business={business} title={name ? `Money In / Out · ✓ ${name}` : "Money In / Out"} bar={<>
       {err && (askAgain
@@ -403,8 +399,10 @@ export function CashForm({ token, business, today }: { token: string; business: 
           </section>
           {cat.pick && (
             <section className={card}>
-              <div className={head}>{cat.pick === "staff" ? "Staff member" : "Supplier"}</div>
-              {!pin ? <p className="text-[15px] text-[#7a6a60]">Enter your PIN to see the list.</p> : (
+              <div className={head}>{cat.pick === "staff" ? "Staff member" : cat.pick === "job" ? "Which job?" : "Supplier"}</div>
+              {!pin ? <p className="text-[15px] text-[#7a6a60]">Enter your PIN to see the list.</p> : cat.pick === "job" && list.length === 0 ? (
+                <p className="text-[15px] text-[#7a6a60]">No catering or event is waiting for payment. A manager adds jobs in Daily accounts → Catering &amp; events.</p>
+              ) : (
                 <select value={f.who} onChange={(e) => upd({ who: e.target.value })} className="h-12 w-full rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]">
                   <option value="">Choose…</option>
                   {list.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}

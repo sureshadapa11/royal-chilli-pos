@@ -3,6 +3,7 @@ import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { attachReceipts, checkReceiptsForSave, type ReceiptEntity } from "@/lib/receipts";
 import { DATE_RE, linkStaff, money, payableStaff } from "@/lib/staff-links";
+import { addJobPayment } from "@/lib/catering-jobs-save";
 import { cashCategory, payMethodLabel } from "@/lib/cash-categories";
 import { tradingDayStr, londonDayRangeUtc } from "@/lib/london-date";
 import { addDays } from "@/lib/admin-dashboard";
@@ -28,6 +29,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const method = body?.method === "card" || body?.method === "bank" ? body.method : "cash";
   const paidTo = typeof body?.paid_to === "string" ? body.paid_to.trim().slice(0, 120) || null : null;
   const today = tradingDayStr();
+  // A catering / event payment goes to its job (133): sales by cash or bank,
+  // owed worked out on the job.
+  if (cat.home === "job") {
+    const date = DATE_RE.test(String(body?.date ?? "")) ? String(body.date) : today;
+    const res = await addJobPayment(who.businessId, Number(body?.job_id), who.staff.id, { amount, method, date, note: reason }, "link");
+    if ("error" in res) return NextResponse.json({ error: res.error, field: "job_id" }, { status: res.status ?? 400 });
+    return NextResponse.json({ ok: true });
+  }
   const date = DATE_RE.test(String(body?.date ?? "")) ? String(body.date) : today;
   if (date > today || date < addDays(today, -31)) return NextResponse.json({ error: "Pick today or a day in the last month." }, { status: 400 });
 

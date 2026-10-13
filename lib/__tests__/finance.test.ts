@@ -33,7 +33,7 @@ describe("buildPnl", () => {
   //   profit 750 − 193.69 = 556.31; VAT due 150 − 4 = 146; recipe basis 556.31 + 50 − 30 = 576.31
   const figures: FiguresTotal = {
     total_sales: 900, ex_vat: 750, money_out: 193.69, net_total: 556.31, variance: null,
-    sales: { till: 600, platforms: 240, catering: 60 },
+    sales: { till: 600, platforms: 240, catering: 60, events: 0 },
     out: { stock: 50, expenses: 32, card_fee: 1.69, paid_out: 10, wages: 40, commission: 60 },
   };
   const p = buildPnl({
@@ -42,7 +42,7 @@ describe("buildPnl", () => {
   });
 
   it("sales are Z report + platforms + catering, VAT is ÷ 1.2", () => {
-    expect(p.sales).toEqual({ till: 600, platforms: 240, catering: 60, total: 900, vat: 150, ex_vat: 750 });
+    expect(p.sales).toEqual({ till: 600, platforms: 240, catering: 60, events: 0, total: 900, vat: 150, ex_vat: 750 });
   });
 
   it("costs are every bit of money out; profit is ex-VAT sales less costs", () => {

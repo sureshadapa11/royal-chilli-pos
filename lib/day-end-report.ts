@@ -9,6 +9,7 @@ import { r2, extractVat, getVatRate } from "@/lib/finance";
 import { sendDayEndReportEmail } from "@/lib/email";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 import { cashCheck } from "@/lib/daily-accounts-fields";
+import { listJobs } from "@/lib/catering-jobs";
 
 // Every morning: yesterday's Day End and Cash In / Out (from the staff links,
 // lib/staff-links.ts), emailed to whoever is set in the business's
@@ -25,6 +26,8 @@ export type DayEndReport = {
     z_report: number | null; card: number | null; cash: number | null; tips: number | null;
     platforms: { label: string; sales: number | null; commission: number | null }[];
     catering_paid: number | null; catering_pending: number | null;
+    /** Events paid that day, and what all open catering / event jobs still owe (133). */
+    events_paid?: number | null; jobs_owed?: number;
     total_sales: number; net_total: number;
     fees: number;            // platform commissions + card fee
     // VAT (agreed 2026-10-12): sales VAT = total sales − ex-VAT; VAT claimed
@@ -85,6 +88,9 @@ export async function buildDayEndReport(businessId: number, business: string, da
   const shifts = [...byPerson.entries()].map(([id, p]) => ({ name: nameOf(id), ...p }))
     .sort((a, b) => b.seconds - a.seconds || a.name.localeCompare(b.name));
 
+  // What open catering / event jobs still owe, as of now (133).
+  const jobsOwed = r2((await listJobs(businessId, date.slice(0, 7))).owed.reduce((s, j) => s + j.owed, 0));
+
   const done = new Set((week ?? []).map((w) => w.trading_date as string));
   const missingDays = Array.from({ length: 7 }, (_, i) => addDays(date, -i)).filter((d) => !done.has(d)).reverse();
 
@@ -95,7 +101,8 @@ export async function buildDayEndReport(businessId: number, business: string, da
       z_report: n(row?.z_report), card: n(row?.card), cash: n(row?.cash), tips: n(row?.tips),
       platforms: [["just_eat", "Just Eat"], ["deliveroo", "Deliveroo"], ["uber_eats", "Uber Eats"], ["hiest", "Hiest"]]
         .map(([k, label]) => ({ label, sales: n(row?.[k]), commission: n(row?.[`${k}_commission`]) })),
-      catering_paid: n(row?.catering_paid), catering_pending: n(row?.catering_pending),
+      catering_paid: day?.sales.catering || n(row?.catering_paid), catering_pending: n(row?.catering_pending),
+      events_paid: day?.sales.events || null, jobs_owed: jobsOwed,
       total_sales: day?.total_sales ?? 0, net_total: day?.net_total ?? 0,
       fees: Math.round(((day?.out.commission ?? 0) + (day?.out.card_fee ?? 0)) * 100) / 100,
       ex_vat: day?.ex_vat ?? 0,

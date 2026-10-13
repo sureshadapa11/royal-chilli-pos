@@ -4,13 +4,16 @@ import { bizDb } from "@/lib/business-db";
 import { allRows, extractVat, getVatRate, labourCostByDay, r2 } from "@/lib/finance";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import { savedDays, type DailyRow } from "@/lib/daily-accounts";
+import { jobSalesByDay } from "@/lib/catering-jobs";
 
 // Day by day: what came in, everything that went out, and what's left. One set
 // of sums (accountant rules) behind Finance → Profit & Loss, the dashboard's
 // Summary card, the All businesses table and the Daily accounts month sheet,
 // so every screen shows the same figures:
 //   • Sales     = Z report net sales (tips not included) + Just Eat + Deliveroo
-//                 + Uber Eats + Hiest + catering paid
+//                 + Uber Eats + Hiest + catering paid + events paid
+//                 (catering / events paid = the old Day End boxes + payments
+//                  on the Catering & events list by cash or bank; 133)
 //   • Ex-VAT    = Sales ÷ (1 + VAT rate), i.e. ÷ 1.2
 //   • Money out = stock received + expenses (VAT claimed back taken off) + card fee
 //                 + cash paid out of the till + staff wages + platform commission
@@ -33,10 +36,10 @@ export const MONEY_OUT_PARTS: { key: keyof MoneyOut; label: string }[] = [
   { key: "commission", label: "Commission" },
 ];
 
-export type SalesParts = { till: number; platforms: number; catering: number };
+export type SalesParts = { till: number; platforms: number; catering: number; events: number };
 
 export type DayInputs = {
-  z_report: number; card: number; commission: number; catering_paid: number;
+  z_report: number; card: number; commission: number; catering_paid: number; events_paid: number;
   just_eat: number; deliveroo: number; uber_eats: number; hiest: number;
   opening: number | null; closing: number | null;
   // cash drawer: sheet cash, bank in, and cash in / out (staff link + till Cash Out is paid_out)
@@ -67,8 +70,9 @@ export function dayFigures(date: string, i: DayInputs, vatRate: number, cardFeeR
     till: r2(i.z_report),
     platforms: r2(i.just_eat + i.deliveroo + i.uber_eats + i.hiest),
     catering: r2(i.catering_paid),
+    events: r2(i.events_paid),
   };
-  const total = r2(sales.till + sales.platforms + sales.catering);
+  const total = r2(sales.till + sales.platforms + sales.catering + sales.events);
   const exVat = r2(total / (1 + vatRate));
   const out: MoneyOut = {
     stock: r2(i.stock), expenses: r2(i.expenses), card_fee: r2(i.card * cardFeeRate),
@@ -90,7 +94,7 @@ export function totalFigures(days: DayFigures[]): FiguresTotal {
     total_sales: sum((d) => d.total_sales), ex_vat: sum((d) => d.ex_vat),
     money_out: sum((d) => d.money_out), net_total: sum((d) => d.net_total),
     variance: withVariance.length ? sum((d) => d.variance ?? 0) : null,
-    sales: { till: sum((d) => d.sales.till), platforms: sum((d) => d.sales.platforms), catering: sum((d) => d.sales.catering) },
+    sales: { till: sum((d) => d.sales.till), platforms: sum((d) => d.sales.platforms), catering: sum((d) => d.sales.catering), events: sum((d) => d.sales.events) },
     out: Object.fromEntries(MONEY_OUT_PARTS.map(({ key }) => [key, sum((d) => d.out[key])])) as MoneyOut,
   };
 }
@@ -179,12 +183,13 @@ async function costsByDay(businessId: number, from: string, to: string, vatRate:
 
 /** Every day from..to with its sums, plus the sheet rows they came from. */
 export async function accountsByDay(businessId: number, from: string, to: string): Promise<{ days: DayFigures[]; rows: DailyRow[]; vatRate: number }> {
-  const [rows, vatRate, cardFeeRate, till, wages] = await Promise.all([
+  const [rows, vatRate, cardFeeRate, till, wages, jobs] = await Promise.all([
     savedDays(businessId, from, to),
     getVatRate(businessId),
     getCardFeeRate(businessId),
     tillByDay(businessId, from, to),
     labourCostByDay(businessId, from, to),
+    jobSalesByDay(businessId, from, to),
   ]);
   const costs = await costsByDay(businessId, from, to, vatRate);
   const byDate = new Map(rows.map((r) => [r.trading_date, r]));
@@ -198,7 +203,8 @@ export async function accountsByDay(businessId: number, from: string, to: string
       z_report: z ?? r2(till.sales.get(d) ?? 0),
       card: card ?? r2(till.card.get(d) ?? 0),
       commission: num(r?.commission) ?? 0,
-      catering_paid: num(r?.catering_paid) ?? 0,
+      catering_paid: r2((num(r?.catering_paid) ?? 0) + (jobs.catering.get(d) ?? 0)),
+      events_paid: jobs.events.get(d) ?? 0,
       just_eat: num(r?.just_eat) ?? 0, deliveroo: num(r?.deliveroo) ?? 0,
       uber_eats: num(r?.uber_eats) ?? 0, hiest: num(r?.hiest) ?? 0,
       opening: num(r?.opening_balance), closing: num(r?.closing_balance),
