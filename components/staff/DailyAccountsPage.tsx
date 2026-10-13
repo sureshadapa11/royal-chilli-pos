@@ -20,13 +20,6 @@ const heading = { fontFamily: "var(--font-space-grotesk)" };
 type View = AccountsTab;
 const LABELS: Record<View, string> = { day: "Day", month: "Month", cash: "Money in/out", book: "Cash book", salary: "Salary" };
 const ORDER: View[] = ["day", "month", "cash", "book", "salary"];
-const DESCRIPTION: Record<View, string> = {
-  day: "The day-end sheet. Till figures are filled in for you — check them, add bank in, catering and any notes, then submit.",
-  month: "The whole month, like the paper report — with totals, Excel download and print.",
-  cash: "Money in and out entered through the staff link (cash, card or bank), with who entered it and the receipt photos. Only cash counts in the drawer check.",
-  book: "The cash drawer day by day, line by line, with a running balance — like a paper cash book. Cash only.",
-  salary: "Each person's wages for the month (hours × pay rate), what's been paid through the staff link, advances, and the balance still to pay.",
-};
 
 const shiftMonth = (m: string, by: number) => {
   const [y, mo] = m.split("-").map(Number);
@@ -84,7 +77,6 @@ export default function DailyAccountsPage({ today, start, startMonth, startView,
             )}
           </div>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">{DESCRIPTION[view]}</p>
 
         <div className={`mt-5 ${view === "month" ? "" : "max-w-[900px]"}`}>
           {view === "day"
