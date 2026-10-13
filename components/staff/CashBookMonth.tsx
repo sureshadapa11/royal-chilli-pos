@@ -8,9 +8,9 @@ import type { BookDay } from "@/lib/cash-book";
 const gbp = (n: number | null | undefined) => (n == null ? "—" : `£${n.toFixed(2)}`);
 const dayName = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
-export default function CashBookMonth({ startMonth, businessId, month: fixedMonth }: { startMonth: string; businessId?: number; month?: string }) {
+export default function CashBookMonth({ startMonth, businessId, month: fixedMonth, sharedMonth }: { startMonth: string; businessId?: number; month?: string; sharedMonth?: string }) {
   const [ownMonth, setMonth] = useState(startMonth);
-  const month = fixedMonth ?? ownMonth;
+  const month = fixedMonth ?? sharedMonth ?? ownMonth;
   const [data, setData] = useState<{ start: string | null; days: BookDay[] } | null>(null);
   useEffect(() => {
     setData(null);
@@ -27,7 +27,7 @@ export default function CashBookMonth({ startMonth, businessId, month: fixedMont
   return (
     <div className="space-y-4">
       {!fixedMonth && <div className="flex flex-wrap items-center gap-3">
-        <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm" />
+        {!sharedMonth && <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm" />}
         <a href={`/api/staff/daily-accounts/month/xlsx?month=${month}`} className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">Excel (with Cash book sheet)</a>
       </div>}
       {data && (

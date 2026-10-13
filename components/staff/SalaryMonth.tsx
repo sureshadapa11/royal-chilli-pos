@@ -9,9 +9,9 @@ import { roleLabel } from "@/lib/roles";
 const gbp = (n: number) => `£${n.toFixed(2)}`;
 const hm = (h: number) => { const m = Math.round(h * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
 
-export default function SalaryMonth({ startMonth, businessId, month: fixedMonth }: { startMonth: string; businessId?: number; month?: string }) {
+export default function SalaryMonth({ startMonth, businessId, month: fixedMonth, sharedMonth }: { startMonth: string; businessId?: number; month?: string; sharedMonth?: string }) {
   const [ownMonth, setMonth] = useState(startMonth);
-  const month = fixedMonth ?? ownMonth;
+  const month = fixedMonth ?? sharedMonth ?? ownMonth;
   const [rows, setRows] = useState<SalaryRow[] | null>(null);
   useEffect(() => {
     setRows(null);
@@ -23,7 +23,7 @@ export default function SalaryMonth({ startMonth, businessId, month: fixedMonth 
   return (
     <div className="space-y-4">
       {!fixedMonth && <div className="flex flex-wrap items-center gap-3">
-        <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm" />
+        {!sharedMonth && <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm" />}
         <a href={`/api/staff/daily-accounts/month/xlsx?month=${month}`} className="rounded-lg border border-border bg-white px-3 py-2 text-sm font-semibold">Excel (with Salary sheet)</a>
       </div>}
       {noRate.length > 0 && (

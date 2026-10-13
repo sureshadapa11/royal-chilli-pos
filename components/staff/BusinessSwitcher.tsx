@@ -26,7 +26,10 @@ export default function BusinessSwitcher({ current, options, allMode = false, cl
       setError((await res.json().catch(() => ({}))).error || "Couldn't switch");
       return;
     }
-    freshStart("/staff");
+    // Stay on the same page (and tab / month) when it's a top-level page such
+    // as Daily accounts; a page for one record (an order, a person) goes home.
+    const { pathname, search } = window.location;
+    freshStart(/^\/staff\/[a-z-]+$/.test(pathname) ? pathname + search : "/staff");
   }
 
   return (

@@ -9,13 +9,13 @@ import { ALL_BUSINESSES_COOKIE } from "@/lib/owner-view";
 import { listBusinesses } from "@/lib/business";
 import AllBusinessesAccounts from "@/components/staff/AllBusinessesAccounts";
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ date?: string; month?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ date?: string; month?: string; tab?: string }> }) {
   const session = await getSession();
   const access = session ? accountsAccess(session) : null;
   if (!session || !access || access.tabs.length === 0) redirect("/staff");
   const today = tradingDayStr();
   // ?date= from the reminder opens that day; ?month= (Summary → Open sheet) opens the month.
-  const { date, month } = await searchParams;
+  const { date, month, tab } = await searchParams;
   const start = date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date <= today ? date : today;
   const startMonth = month && /^\d{4}-(0[1-9]|1[0-2])$/.test(month) ? month : today.slice(0, 7);
   // Group owner with "Working in: All businesses": every business side by side.
@@ -26,7 +26,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ d
   const business = await getBusiness(session.businessId).catch(() => null);
   return (
     <DailyAccountsPage today={today} start={start} startMonth={startMonth}
-      startView={access.tabs.includes("day") ? (month && access.tabs.includes("month") ? "month" : "day") : access.tabs[0]}
+      startView={tab && (access.tabs as string[]).includes(tab) ? (tab as typeof access.tabs[number])
+        : access.tabs.includes("day") ? (month && access.tabs.includes("month") ? "month" : "day") : access.tabs[0]}
       businessName={business?.name ?? "Daily accounts"} access={access} />
   );
 }
