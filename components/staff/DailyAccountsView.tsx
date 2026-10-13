@@ -28,7 +28,8 @@ const FIELD = Object.fromEntries(DAILY_FIELDS.map((f) => [f.key, f])) as Record<
 const LABEL: Partial<Record<DailyFieldKey, string>> = { opening_balance: "Opening", closing_balance: "Closing (counted)" };
 
 type Saved = (Partial<DailyValues> & { notes: string | null; status: "draft" | "submitted"; submitted_at: string | null }) | null;
-type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; cashMoves?: { moneyIn: number; moneyOut: number } | null; locked: boolean; canUnlock: boolean; viewOnly?: boolean };
+type JobPay = { kind: string; customer: string; amount: number; method: string };
+type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; jobPayments?: JobPay[]; cashMoves?: { moneyIn: number; moneyOut: number } | null; locked: boolean; canUnlock: boolean; viewOnly?: boolean };
 
 // seeFigures: Super admin / Supervisor see the cash check and WhatsApp; Managers only enter.
 export default function DailyAccountsView({ today, start, seeFigures = false }: { today: string; start: string; seeFigures?: boolean }) {
@@ -169,7 +170,31 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
                         ))}
                       </div>
                     ))}
-                    {group("Catering", <div className={grid}>{CATERING.map(box)}</div>)}
+                    {group("Catering & events", (() => {
+                      // From the Catering & events tab (133): read-only here. Days entered
+                      // before it keep their typed catering boxes.
+                      const pays = day.jobPayments ?? [];
+                      const legacy = CATERING.some((k) => Number(values[k] || 0) !== 0);
+                      const sales = (kind: string) => pays.filter((p) => p.kind === kind && p.method !== "card").reduce((t, p) => t + p.amount, 0);
+                      return (
+                        <>
+                          {pays.length === 0 ? (
+                            <p className="text-[13px] text-muted-foreground">No catering or event payments this day. Jobs and their payments are in the <b>Catering &amp; events</b> tab.</p>
+                          ) : (
+                            <div className="space-y-1 text-[13.5px]">
+                              {pays.map((p, i) => (
+                                <div key={i} className="flex flex-wrap justify-between gap-2">
+                                  <span>{p.kind === "event" ? "🎉" : "🍱"} {p.customer} <span className="text-muted-foreground">· {p.method === "card" ? "card (in Z report)" : p.method === "bank" ? "bank transfer" : "cash"}</span></span>
+                                  <b className="tabular-nums">{gbp(p.amount)}</b>
+                                </div>
+                              ))}
+                              <p className="pt-1 text-[12.5px] text-muted-foreground">Added to sales: catering {gbp(sales("catering"))} · events {gbp(sales("event"))}</p>
+                            </div>
+                          )}
+                          {legacy && <div className={`${grid} mt-3`}>{CATERING.map(box)}</div>}
+                        </>
+                      );
+                    })())}
                   </>
                 );
               })()}

@@ -1,7 +1,7 @@
 import { dayFigures, totalFigures, daysBetween, type DayInputs } from "@/lib/daily-figures";
 
 const blank: DayInputs = {
-  z_report: 0, card: 0, commission: 0, catering_paid: 0, just_eat: 0, deliveroo: 0, uber_eats: 0, hiest: 0,
+  z_report: 0, card: 0, commission: 0, catering_paid: 0, events_paid: 0, just_eat: 0, deliveroo: 0, uber_eats: 0, hiest: 0,
   opening: null, closing: null, stock: 0, expenses: 0, paid_out: 0, wages: 0,
   cash: 0, bank_in: 0, cash_in: 0, cash_out: 0,
 };
@@ -69,8 +69,16 @@ describe("daily figures", () => {
 describe("sales split", () => {
   it("till, platforms and catering add up to Total sales", () => {
     const f = dayFigures("d", { ...blank, z_report: 500, just_eat: 40, deliveroo: 30, uber_eats: 20, hiest: 10, catering_paid: 100 }, 0.2, 0.0169);
-    expect(f.sales).toEqual({ till: 500, platforms: 100, catering: 100 });
+    expect(f.sales).toEqual({ till: 500, platforms: 100, catering: 100, events: 0 });
     expect(f.total_sales).toBe(700);
-    expect(totalFigures([f, f]).sales).toEqual({ till: 1000, platforms: 200, catering: 200 });
+    expect(totalFigures([f, f]).sales).toEqual({ till: 1000, platforms: 200, catering: 200, events: 0 });
+  });
+});
+
+describe("events (133)", () => {
+  it("counts events paid in Total sales, separately from catering", () => {
+    const f = dayFigures("2026-10-13", { ...blank, z_report: 500, catering_paid: 100, events_paid: 400 }, 0.2, 0.0169);
+    expect(f.sales).toEqual({ till: 500, platforms: 0, catering: 100, events: 400 });
+    expect(f.total_sales).toBe(1000);
   });
 });

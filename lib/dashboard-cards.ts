@@ -25,6 +25,7 @@ export type CardDay = {
   variance: number | null; // cash counted − expected (minus = missing)
   till: number;            // Z report
   catering: number;
+  events: number;          // events paid (133)
   platforms: Record<CardPlatform, { sales: number; commission: number }>;
   card: number;
   cash: number;
@@ -70,7 +71,7 @@ export async function cardDays(businessId: number, from: string, to: string): Pr
     return {
       date: d.date, sheet: !!r, tillOnly: d.till_fallback,
       total: d.total_sales, exVat: d.ex_vat, net: d.net_total, moneyOut: d.money_out, out: d.out, variance: d.variance,
-      till: d.sales.till, catering: d.sales.catering, platforms,
+      till: d.sales.till, catering: d.sales.catering, events: d.sales.events, platforms,
       card: n(r?.card), cash: n(r?.cash), bankIn: n(r?.bank_in), tips: n(r?.tips),
       hours: r2(hours.get(d.date) ?? 0),
     };
@@ -103,7 +104,7 @@ export function mergeCardDays(lists: CardDay[][]): CardDay[] {
       date: a.date, sheet: a.sheet || b.sheet, tillOnly: !(a.sheet || b.sheet) && (a.tillOnly || b.tillOnly),
       total: r2(a.total + b.total), exVat: r2(a.exVat + b.exVat), net: r2(a.net + b.net), moneyOut: r2(a.moneyOut + b.moneyOut), out,
       variance: a.variance == null && b.variance == null ? null : r2((a.variance ?? 0) + (b.variance ?? 0)),
-      till: r2(a.till + b.till), catering: r2(a.catering + b.catering), platforms,
+      till: r2(a.till + b.till), catering: r2(a.catering + b.catering), events: r2(a.events + b.events), platforms,
       card: r2(a.card + b.card), cash: r2(a.cash + b.cash), bankIn: r2(a.bankIn + b.bankIn), tips: r2(a.tips + b.tips),
       hours: r2(a.hours + b.hours),
     };

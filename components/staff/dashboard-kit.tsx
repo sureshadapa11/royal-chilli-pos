@@ -6,8 +6,8 @@ export const S = { s1: "#2a78d6", s2: "#eb6834", s3: "#1baf7a", s4: "#eda100", s
 export const CHANNEL_COLOUR: Record<string, string> = {
   dine_in: S.s1, takeaway: S.s2, delivery: S.s3, just_eat: S.s4, uber_eats: S.s5, deliveroo: S.s6, hiest: S.s7,
 };
-// Sales by source: the till (Z report), delivery platforms together, catering.
-export const SOURCE_COLOUR = { till: S.s1, platforms: S.s2, catering: S.s3 };
+// Sales by source: the till (Z report), delivery platforms together, catering, events.
+export const SOURCE_COLOUR = { till: S.s1, platforms: S.s2, catering: S.s3, events: S.s6 };
 export const PREV = "#A79D90";     // the period before, always a quiet grey line
 export const COST = "#B4532A";     // money out
 export const HOURS = S.s6;

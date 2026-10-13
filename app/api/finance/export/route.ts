@@ -15,6 +15,7 @@ import { salarySheet } from "@/lib/salary-sheet";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 import { getBrand } from "@/lib/brand";
 import supabase from "@/lib/supabase";
+import { listJobs, jobKindLabel, countsAsSales } from "@/lib/catering-jobs";
 
 // GET /api/finance/export?month=YYYY-MM — one Excel file for the accountant
 // (agreed 2026-10-12): Daily summary from Daily accounts (Day End), VAT
@@ -153,7 +154,8 @@ export async function GET(req: NextRequest) {
       Deliveroo: cell(r?.deliveroo), "Deliveroo commission": cell(r?.deliveroo_commission),
       "Uber Eats": cell(r?.uber_eats), "Uber Eats commission": cell(r?.uber_eats_commission),
       Hiest: cell(r?.hiest), "Hiest commission": cell(r?.hiest_commission),
-      "Catering paid": cell(r?.catering_paid), "Catering pending": cell(r?.catering_pending),
+      "Catering paid": f.sales.catering ? r2(f.sales.catering) : cell(r?.catering_paid), "Events paid": f.sales.events ? r2(f.sales.events) : "",
+      "Catering pending": cell(r?.catering_pending),
       Pending: cell(r?.pending), "Bank in": cell(r?.bank_in),
       "Total sales": has ? r2(f.total_sales) : "",
       "Ex-VAT": has ? r2(f.ex_vat) : "",
@@ -208,12 +210,24 @@ export async function GET(req: NextRequest) {
     payRows.push({ Name: "TOTAL", Pay: t("Pay"), "Paid so far": t("Paid so far"), "Advance deducted": t("Advance deducted"), "Still to pay": t("Still to pay") });
   }
 
+  // Catering & events (133): the month's jobs and any still owed, with payments.
+  const jobs = await listJobs(session.businessId, month);
+  const jobList = [...new Map([...jobs.month, ...jobs.owed].map((j) => [j.id, j])).values()];
+  const jobRows = jobList.map((j) => ({
+    Type: jobKindLabel(j.kind), Customer: j.customer, Date: j.date, Total: j.total, "Paid to date": j.paid,
+    "Of which in sales (cash / bank)": r2(j.payments.filter((p) => countsAsSales(p.method)).reduce((s, p) => s + p.amount, 0)),
+    "Card (already in Z report)": r2(j.payments.filter((p) => !countsAsSales(p.method)).reduce((s, p) => s + p.amount, 0)),
+    Owed: j.owed, Status: j.cancelled ? "Cancelled" : j.owed > 0 ? "Owed" : "Paid",
+    Payments: j.payments.map((p) => `${p.date} £${p.amount.toFixed(2)} ${p.method}`).join("; "),
+  }));
+
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(accountsDaily), "Daily summary");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vatRows), "VAT summary");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bookRows.length ? bookRows : [{ Note: "No cash book entries this month" }]), "Cash book");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moveRows.length ? moveRows : [{ Note: "No Money In / Out entries this month" }]), "Money In-Out");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moneyOutRows.length ? moneyOutRows : [{ Note: "Nothing paid out this month" }]), "Money out");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(jobRows.length ? jobRows : [{ Note: "No catering or events this month" }]), "Catering & events");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(payRows.length ? payRows : [{ Note: "No pay this month" }]), "Salary");
   if (till) {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(daily), "Till daily");

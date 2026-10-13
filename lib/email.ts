@@ -1042,7 +1042,9 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
     ? section(`Day End · entered by ${esc(d.entered?.by ?? "—")}`, [
         row("Z report", gbp(f.z_report)), row("Card", gbp(f.card)), row("Cash", gbp(f.cash)), row("Tips", gbp(f.tips)),
         ...f.platforms.filter((p) => p.sales || p.commission).map((p) => row(p.label, `${gbp(p.sales)}${p.commission ? ` <span style="color:${C.muted};">(commission ${gbp(p.commission)})</span>` : ""}`)),
-        ...(f.catering_paid || f.catering_pending ? [row("Catering paid / pending", `${gbp(f.catering_paid)} / ${gbp(f.catering_pending)}`)] : []),
+        ...(f.catering_paid ? [row("Catering paid", gbp(f.catering_paid))] : []),
+        ...(f.events_paid ? [row("Events paid", gbp(f.events_paid))] : []),
+        ...((f.jobs_owed ?? 0) + (f.catering_pending ?? 0) ? [row("Catering & events still owed", gbp((f.jobs_owed ?? 0) + (f.catering_pending ?? 0)))] : []),
         row("Total sales", gbp(f.total_sales), true),
         row("VAT (20%) · Ex-VAT", `${gbp(f.sales_vat)} · ${gbp(f.ex_vat)}`),
         row("Net total (after costs)", gbp(f.net_total), true),

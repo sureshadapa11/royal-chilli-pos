@@ -28,13 +28,15 @@ export function dayEndText(r: DayEndReport): string {
     L.push(`› 🧾 Z report  ${gbp(f.z_report)}`);
     for (const p of f.platforms.filter((x) => x.sales)) L.push(`› 🛵 ${p.label}  ${gbp(p.sales)}`);
     if (f.catering_paid) L.push(`› 🍱 Catering  ${gbp(f.catering_paid)}`);
+    if (f.events_paid) L.push(`› 🎉 Events  ${gbp(f.events_paid)}`);
     L.push(`› 💳 Card ${gbp(f.card)} · 💵 Cash ${gbp(f.cash)}`);
     if (f.tips) L.push(`› 🙏 Tips ${gbp(f.tips)} _(staff's, not sales)_`);
     L.push("");
     L.push(`📈 *Net (after costs)  ${gbp(f.net_total)}*`);
     if (f.fees) L.push(`💸 Commission & fees  ${gbp(f.fees)}`);
     L.push(`🏛️ VAT to pay (today)  ${gbp(f.vat_to_pay)}${f.vat_claimed ? ` _(claimed back ${gbp(f.vat_claimed)})_` : ""}`);
-    if (f.catering_pending) L.push(`⏳ Catering still owed  ${gbp(f.catering_pending)}`);
+    const owed = (f.jobs_owed ?? 0) + (f.catering_pending ?? 0);
+    if (owed) L.push(`⏳ Catering & events still owed  ${gbp(owed)}`);
     if (r.notes) L.push(`📝 _${r.notes}_`);
     L.push("");
   }

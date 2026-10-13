@@ -34,13 +34,21 @@ export async function GET(req: NextRequest) {
     db.from("cash_movements").select("direction, amount").eq("movement_date", date).eq("method", "cash"),
     tillPaidOutOn(session.businessId, date),
   ]);
+  // Catering & events payments received that day (133) — shown on the day, read-only.
+  const { data: dayMoves } = await db.from("cash_movements").select("amount, method, job_id").eq("movement_date", date);
+  const jp = (dayMoves ?? []).filter((m) => m.job_id != null);
+  const { data: jj } = jp.length ? await db.from("catering_jobs").select("id, kind, customer").in("id", [...new Set(jp.map((p) => p.job_id))]) : { data: [] as { id: number; kind: string; customer: string }[] };
+  const jobPayments = jp.map((p) => {
+    const j = (jj ?? []).find((x) => x.id === p.job_id);
+    return { kind: j?.kind ?? "catering", customer: j?.customer ?? "", amount: Number(p.amount), method: p.method ?? "cash" };
+  });
   // Cash in / out of the drawer that day (staff link + the till's Cash Out), for the cash check.
   const sum = (dir: string) => Math.round((moves ?? []).filter((m) => m.direction === dir).reduce((s, m) => s + Number(m.amount), 0) * 100) / 100;
   const cashMoves = { moneyIn: sum("in"), moneyOut: Math.round((sum("out") + tillOut) * 100) / 100 };
   if (error) return NextResponse.json({ error: "Couldn't load the day" }, { status: 500 });
   const submitted = (saved as { status?: string } | null)?.status === "submitted";
   return NextResponse.json({
-    date, saved, till, cardFeeRate,
+    date, saved, till, cardFeeRate, jobPayments,
     // The cash check is for those who see figures (not Managers).
     cashMoves: access.seeFigures ? cashMoves : null,
     locked: !access.canEnter || (submitted && !canUnlock(session)), canUnlock: canUnlock(session),

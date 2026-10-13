@@ -8,6 +8,7 @@ import { extractVat, getVatRate } from "@/lib/finance";
 import { getBusinessNumber } from "@/lib/business-settings";
 import { cashCategoryLabel } from "@/lib/cash-categories";
 import { CARD_PLATFORMS } from "@/lib/dashboard-cards-meta";
+import { listJobs } from "@/lib/catering-jobs";
 
 // The dashboard's newer cards (agreed 2026-10-12, mock-up "New Dashboard
 // Cards"), all from what's entered by hand — Day End / Daily accounts, the
@@ -32,7 +33,7 @@ export type ExtraCards = {
     cashNow: number | null; variance: number | null; daysOff: number; varianceByDay: { date: string; variance: number }[];
     cashOut: { label: string; amount: number }[];
     vat: { sales: number; claimed: number; toPay: number; quarterToPay: number };
-    owed: { pending: number; catering: number; asOf: string | null };
+    owed: { pending: number; catering: number; asOf: string | null; jobs: { customer: string; kind: string; date: string; owed: number }[] };
   };
 };
 
@@ -162,6 +163,8 @@ export async function getExtraCards(businessId: number, range: { from: string; t
     }
 
     // ⏳ Money owed: the latest entered day's pending bills and catering still owed.
+    // Catering & events still owed, job by job (133), plus any older typed catering pending.
+    const openJobs = (await listJobs(businessId, today.slice(0, 7))).owed;
     const latestRow = [...rows].filter((r) => r.trading_date <= today).sort((a, b) => b.trading_date.localeCompare(a.trading_date))[0];
     money = {
       cashNow: lastCarry?.carry ?? null,
@@ -170,7 +173,12 @@ export async function getExtraCards(businessId: number, range: { from: string; t
       varianceByDay: withVar.map((d) => ({ date: d.date, variance: d.variance as number })),
       cashOut: [...byCat.entries()].map(([k, v]) => ({ label: cashCategoryLabel(k), amount: r2(v) })).sort((a, b) => b.amount - a.amount),
       vat: { sales: salesVat, claimed, toPay: r2(salesVat - claimed), quarterToPay: r2(quarterSalesVat - claimedIn(qFrom, lastDay)) },
-      owed: { pending: num(latestRow?.pending), catering: num(latestRow?.catering_pending), asOf: latestRow?.trading_date ?? null },
+      owed: {
+        pending: num(latestRow?.pending),
+        catering: r2(num(latestRow?.catering_pending) + openJobs.reduce((s, j) => s + j.owed, 0)),
+        asOf: latestRow?.trading_date ?? null,
+        jobs: openJobs.map((j) => ({ customer: j.customer, kind: j.kind, date: j.date, owed: j.owed })).sort((a, b) => b.owed - a.owed),
+      },
     };
   }
 
