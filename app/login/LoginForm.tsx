@@ -89,6 +89,9 @@ function SignIn({ brand }: { brand: Extract<LoginBrand, { found: true }> }) {
     }
     setLoading(true);
     setError("");
+    // Stays "Opening…" once signed in: the next page can take a moment, and a
+    // second press would sign in again and restart it.
+    let leaving = false;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -98,6 +101,7 @@ function SignIn({ brand }: { brand: Extract<LoginBrand, { found: true }> }) {
       const data = await res.json();
       if (res.ok) {
         if (brand.viaCode) rememberCode(brand.code);
+        leaving = true;
         freshStart("/staff");
       } else {
         setError(data.error || "Username or password is incorrect. Contact your manager for account recovery.");
@@ -106,7 +110,7 @@ function SignIn({ brand }: { brand: Extract<LoginBrand, { found: true }> }) {
     } catch {
       setError("Connection error. Please try again.");
     } finally {
-      setLoading(false);
+      if (!leaving) setLoading(false);
     }
   };
 
@@ -173,7 +177,7 @@ function SignIn({ brand }: { brand: Extract<LoginBrand, { found: true }> }) {
             className="pos-btn no-select w-full h-12 bg-red-500 hover:bg-red-400 disabled:opacity-50 text-white text-base font-bold rounded-xl transition-all"
             style={brand.colour ? { backgroundColor: brand.colour } : undefined}
           >
-            {loading ? "Signing in…" : "Sign in"}
+            {loading ? "Opening…" : "Sign in"}
           </button>
         </form>
 
