@@ -68,7 +68,6 @@ export default function SalaryMonth({ startMonth, businessId, month: fixedMonth,
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-muted-foreground">Wages = hours × pay rate. Balance to pay = wages − paid through the staff link − advance still owed.</p>
     </div>
   );
 }
