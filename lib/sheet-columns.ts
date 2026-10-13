@@ -7,10 +7,13 @@ import { SHEET_FIELDS, type DailyFieldKey, type DailyValues } from "@/lib/daily-
 //   • Commission & card fees — worked out (platform commissions + card fee)
 //   • Catering paid / Events paid — the day's sales parts: typed Day End
 //     catering (older days) + Catering & events payments by cash or bank
+//   • Pending — what's still owed that day; the month's figure is the latest
+//     one entered, not a sum (it's a "still owed" figure, retyped each day)
+//   • Catering pending — not shown: what's owed is on the Catering & events list
 //   • everything else — the saved Day End figure
 
 export type SheetKey = DailyFieldKey | "events_paid";
-export const SHEET_COLUMNS: { key: SheetKey; label: string }[] = SHEET_FIELDS.flatMap((f) =>
+export const SHEET_COLUMNS: { key: SheetKey; label: string }[] = SHEET_FIELDS.filter((f) => f.key !== "catering_pending").flatMap((f) =>
   f.key === "catering_paid" ? [{ key: f.key as SheetKey, label: f.label }, { key: "events_paid" as SheetKey, label: "Events paid" }] : [{ key: f.key as SheetKey, label: f.label }]);
 
 const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
@@ -23,7 +26,11 @@ export function sheetCell(key: SheetKey, r: DailyRow | undefined, fig: DayFigure
   return num(r?.[key]);
 }
 
-export function sheetTotal(key: SheetKey, totals: Partial<Record<string, number | null>> | DailyValues, ft: FiguresTotal): number | null {
+export function sheetTotal(key: SheetKey, totals: Partial<Record<string, number | null>> | DailyValues, ft: FiguresTotal, rows: DailyRow[] = []): number | null {
+  if (key === "pending") {
+    const last = [...rows].sort((a, b) => b.trading_date.localeCompare(a.trading_date)).find((r) => num(r.pending) != null);
+    return last ? num(last.pending) : null;
+  }
   if (key === "commission") return r2(ft.out.commission + ft.out.card_fee);
   if (key === "catering_paid") return ft.sales.catering;
   if (key === "events_paid") return ft.sales.events;

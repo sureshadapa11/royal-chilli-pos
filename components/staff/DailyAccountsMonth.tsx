@@ -90,7 +90,7 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
       return `<tr${r?.status === "draft" ? ' class="draft"' : ""}><td class="l">${dayName(d)}</td>${lead}${SHEET_COLUMNS.map((f) => `<td>${money(cellOf(f.key, r, fig))}</td>`).join("")}<td class="calc">${money(fig?.variance)}</td><td class="l notes">${esc(r?.notes ?? "")}</td></tr>`;
     }).join("");
     const ft = data.figuresTotal;
-    const total = `<tr class="total"><td class="l">MONTH TOTAL</td>${LEAD.map((c) => `<td>${money(ft[c.key])}</td>`).join("")}${SHEET_COLUMNS.map((f) => `<td>${money(sheetTotal(f.key, data.totals, ft))}</td>`).join("")}<td>${money(ft.variance)}</td><td></td></tr>`;
+    const total = `<tr class="total"><td class="l">MONTH TOTAL</td>${LEAD.map((c) => `<td>${money(ft[c.key])}</td>`).join("")}${SHEET_COLUMNS.map((f) => `<td>${money(sheetTotal(f.key, data.totals, ft, data.rows))}</td>`).join("")}<td>${money(ft.variance)}</td><td></td></tr>`;
     const title = `${esc(businessName)} — Daily Accounts Report`;
     const html = `<!doctype html><html><head><meta charset="utf-8"><title>Daily accounts ${esc(businessName)} ${data.month}</title><style>
       @page { size: A3 landscape; margin: 8mm; }
@@ -176,7 +176,7 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
               <tr className="bg-[#EDE7DA] font-semibold">
                 <td className="border border-[#D8CFBD] px-1.5 py-1.5 text-left">MONTH TOTAL</td>
                 {LEAD.map((c) => <td key={c.key} className={`${cell} ${c.key === "net_total" && data.figuresTotal.net_total < 0 ? "text-[#C0392B]" : ""}`}>{money(data.figuresTotal[c.key])}</td>)}
-                {SHEET_COLUMNS.map((f) => <td key={f.key} className={cell}>{money(sheetTotal(f.key, data.totals, data.figuresTotal))}</td>)}
+                {SHEET_COLUMNS.map((f) => <td key={f.key} className={cell}>{money(sheetTotal(f.key, data.totals, data.figuresTotal, data.rows))}</td>)}
                 <td className={cell}>{money(data.figuresTotal.variance)}</td>
                 <td className="border border-[#D8CFBD]" />
               </tr>
