@@ -41,6 +41,8 @@ function AuthForm() {
       return;
     }
     setSaving(true);
+    // Stays busy once signed in, so a second press can't sign in again.
+    let leaving = false;
     try {
       const res = await fetch(`/api/account/${mode}`, {
         method: "POST",
@@ -53,9 +55,10 @@ function AuthForm() {
         return;
       }
       // A new account lands on Loyalty, where its welcome voucher is waiting.
+      leaving = true;
       freshStart(safeNext || (mode === "signup" ? "/account/loyalty" : "/account"), "customer");
     } finally {
-      setSaving(false);
+      if (!leaving) setSaving(false);
     }
   }
 

@@ -18,6 +18,8 @@ export default function PinPad() {
   const submit = async (value: string) => {
     setBusy(true);
     setError("");
+    // Stays busy once signed in, so a tap while the till loads can't sign in again.
+    let leaving = false;
     try {
       const res = await fetch("/api/auth/pin-login", {
         method: "POST",
@@ -28,6 +30,7 @@ export default function PinPad() {
         // Full load so the till starts fresh as this person. Kitchen staff
         // go straight to the Kitchen Display — it's all they use.
         const data = await res.json().catch(() => ({}));
+        leaving = true;
         freshStart(data?.user?.role === "kitchen" ? "/pos/kitchen" : "/pos");
         return;
       }
@@ -38,7 +41,7 @@ export default function PinPad() {
       setError("Connection error — try again.");
       setPin("");
     } finally {
-      setBusy(false);
+      if (!leaving) setBusy(false);
     }
   };
 
