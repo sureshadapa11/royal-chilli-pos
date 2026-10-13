@@ -59,7 +59,6 @@ export default function CashBookMonth({ startMonth, businessId, month: fixedMont
             </table>
           </div>
         )}
-      <p className="text-xs text-muted-foreground">Cash only: card and bank transfer entries don&apos;t touch the drawer. Variance = counted − expected (minus = missing).</p>
     </div>
   );
 }

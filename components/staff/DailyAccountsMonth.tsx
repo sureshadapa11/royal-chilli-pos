@@ -138,7 +138,6 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
           <button onClick={printSheet} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">🖨 Print / PDF</button>
         </div>
       </div>
-      <p className="mb-3 text-[12.5px] text-muted-foreground">Reporting month: {monthName(month)} · amounts in £ · the total adds up each column on its own</p>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : !data ? <p className="py-6 text-center text-sm text-muted-foreground">Loading…</p> : (
         <div className="overflow-x-auto">
@@ -185,8 +184,6 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
           </table>
         </div>
       )}
-      <p className="da-noprint mt-2 text-[12px] text-muted-foreground">Tap a day to open it. Days in yellow are saved as drafts, not yet submitted. Point at a Money out figure to see what&apos;s in it.</p>
-      <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{FORMULA}</p>
     </div>
   );
 }
