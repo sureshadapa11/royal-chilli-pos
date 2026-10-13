@@ -11,8 +11,9 @@ type DayEnd = { date: string; by: string; via: string | null; photos: { id: numb
 const gbp = (n: number) => `£${n.toFixed(2)}`;
 const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
-export default function CashMovementsMonth({ startMonth, canDelete = false }: { startMonth: string; canDelete?: boolean }) {
-  const [month, setMonth] = useState(startMonth);
+export default function CashMovementsMonth({ startMonth, canDelete = false, sharedMonth }: { startMonth: string; canDelete?: boolean; sharedMonth?: string }) {
+  const [ownMonth, setMonth] = useState(startMonth);
+  const month = sharedMonth ?? ownMonth;
   const [data, setData] = useState<{ movements: Move[]; dayEnds: DayEnd[] } | null>(null);
   const load = () => fetch(`/api/staff/cash-movements?month=${month}`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
   useEffect(() => { setData(null); load(); }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -28,7 +29,7 @@ export default function CashMovementsMonth({ startMonth, canDelete = false }: { 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm" />
+        {!sharedMonth && <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} className="rounded-lg border border-border bg-white px-3 py-2 text-sm" />}
         {data && <span className="text-sm text-muted-foreground">In <b className="text-emerald-700">{gbp(totalIn)}</b> · Out <b className="text-red-700">{gbp(totalOut)}</b></span>}
       </div>
       <div className="overflow-x-auto rounded-xl border border-border bg-white">

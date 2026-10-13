@@ -49,6 +49,16 @@ export default function StaffShell({
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [drawer, setDrawer] = useState<null | "menu" | "notices">(null);
   const barRef = useRef<HTMLDivElement>(null);
+  // Pages' own sticky bars (e.g. Daily accounts tabs) sit just under this one.
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const set = () => document.documentElement.style.setProperty("--staff-bar-h", `${el.offsetHeight}px`);
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const pathname = usePathname();
 
   const active = (href: string) =>

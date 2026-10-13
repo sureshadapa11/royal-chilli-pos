@@ -50,10 +50,11 @@ function daysOf(from: string, to: string): string[] {
 const cellOf = (key: DailyFieldKey, r: DailyRow | undefined, fig: DayFigures | undefined) =>
   key === "commission" ? (fig && (fig.out.commission || fig.out.card_fee) ? fig.out.commission + fig.out.card_fee : r?.commission) : r?.[key];
 
-export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay }: {
-  startMonth: string; businessName: string; onOpenDay: (date: string) => void;
+export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay, sharedMonth }: {
+  startMonth: string; businessName: string; onOpenDay: (date: string) => void; sharedMonth?: string;
 }) {
-  const [month, setMonth] = useState(startMonth);
+  const [ownMonth, setMonth] = useState(startMonth);
+  const month = sharedMonth ?? ownMonth;
   const [data, setData] = useState<Month | null>(null);
   const [error, setError] = useState("");
 
@@ -132,8 +133,8 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
       <div className="mb-3 flex flex-wrap items-center gap-3">
         <h2 className="text-[16px] font-semibold">{businessName} — Daily Accounts Report</h2>
         <div className="da-noprint ml-auto flex flex-wrap items-center gap-2">
-          <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)}
-            className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[14px]" />
+          {!sharedMonth && <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)}
+            className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[14px]" />}
           <button onClick={downloadExcel} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">⬇ Excel</button>
           <button onClick={printSheet} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">🖨 Print / PDF</button>
         </div>
