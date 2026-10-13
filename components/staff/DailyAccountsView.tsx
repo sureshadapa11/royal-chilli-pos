@@ -218,7 +218,7 @@ function CashCheckLine({ values, moves }: { values: Record<string, string>; move
         {tile("Expected", g(c.expected))}
         {tile("Counted", g(n("closing_balance")))}
         {tile(off ? (c.variance! < 0 ? "Variance (missing)" : "Variance (extra)") : "Variance",
-          c.variance == null ? "—" : `${c.variance > 0 ? "+" : ""}£${c.variance.toFixed(2)}`,
+          c.variance == null ? "—" : `${c.variance > 0 ? "+" : c.variance < 0 ? "−" : ""}£${Math.abs(c.variance).toFixed(2)}`,
           c.variance == null ? "" : off ? "text-red-700" : "text-emerald-700")}
       </div>
       <p className="mt-1 text-[11.5px] text-muted-foreground">
