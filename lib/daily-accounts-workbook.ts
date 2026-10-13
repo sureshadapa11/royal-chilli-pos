@@ -67,7 +67,6 @@ export async function monthSheets(businessId: number, month: string, includeSala
   const byDate = new Map(rows.map((r) => [r.trading_date, r]));
   const totals = columnTotals(rows);
   const ft = totalFigures(days);
-  const num = (v: unknown) => (v == null || v === "" ? null : Number(v));
   const name = business?.name ?? "Daily accounts";
 
   // Sheet 1: the Daily Accounts Report.
@@ -88,7 +87,7 @@ export async function monthSheets(businessId: number, month: string, includeSala
         r ? (r.status === "submitted" ? "Submitted" : "Draft") : "",
       ];
     }),
-    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_COLUMNS.map((x) => sheetTotal(x.key, totals, ft)), ft.variance, "", ""],
+    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_COLUMNS.map((x) => sheetTotal(x.key, totals, ft, rows)), ft.variance, "", ""],
     [],
     [FORMULA],
   ];

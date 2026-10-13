@@ -155,7 +155,6 @@ export async function GET(req: NextRequest) {
       "Uber Eats": cell(r?.uber_eats), "Uber Eats commission": cell(r?.uber_eats_commission),
       Hiest: cell(r?.hiest), "Hiest commission": cell(r?.hiest_commission),
       "Catering paid": f.sales.catering ? r2(f.sales.catering) : cell(r?.catering_paid), "Events paid": f.sales.events ? r2(f.sales.events) : "",
-      "Catering pending": cell(r?.catering_pending),
       Pending: cell(r?.pending), "Bank in": cell(r?.bank_in),
       "Total sales": has ? r2(f.total_sales) : "",
       "Ex-VAT": has ? r2(f.ex_vat) : "",
@@ -168,6 +167,9 @@ export async function GET(req: NextRequest) {
     for (const [k, v] of Object.entries(row)) if (typeof v === "number") acc[k] = r2(Number(acc[k] ?? 0) + v);
     return acc;
   }, { "Trading day": "TOTAL", "Day End": `${enteredCount} of ${accountsDaily.length} entered` });
+  // Pending is "still owed that day", so the month shows the latest one, not a sum.
+  const lastPending = [...dayRows].sort((a, b) => b.trading_date.localeCompare(a.trading_date)).find((r) => r.pending != null && r.pending !== "");
+  accTotals.Pending = lastPending ? r2(n(lastPending.pending)) : "";
   accountsDaily.push(accTotals);
 
   // VAT: the same estimate as Finance and the dashboard (sales ÷ 1.2).
