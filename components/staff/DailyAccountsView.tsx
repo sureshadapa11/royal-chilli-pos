@@ -18,14 +18,14 @@ const toText = (n: number | null | undefined) => (n == null ? "" : String(Number
 // takings, the cash drawer (with its live check), delivery platforms as a
 // small table, catering. Same boxes as before (Takeaway stays hidden).
 const TAKINGS: DailyFieldKey[] = ["z_report", "card", "cash", "tips", "pending", "commission"];
-const DRAWER: DailyFieldKey[] = ["opening_balance", "bank_in", "closing_balance"];
+const DRAWER: DailyFieldKey[] = ["opening_balance", "closing_balance", "bank_in"];
 const CATERING: DailyFieldKey[] = ["catering_paid", "catering_pending"];
 const PLATFORMS: { key: keyof typeof PLATFORM_COMMISSION; label: string }[] = [
   { key: "just_eat", label: "Just Eat" }, { key: "deliveroo", label: "Deliveroo" },
   { key: "uber_eats", label: "Uber Eats" }, { key: "hiest", label: "Hiest" },
 ];
 const FIELD = Object.fromEntries(DAILY_FIELDS.map((f) => [f.key, f])) as Record<DailyFieldKey, (typeof DAILY_FIELDS)[number]>;
-const LABEL: Partial<Record<DailyFieldKey, string>> = { opening_balance: "Opening", closing_balance: "Closing (counted)", pending: "Bills owed" };
+const LABEL: Partial<Record<DailyFieldKey, string>> = { opening_balance: "Opening", closing_balance: "Closing (counted)", pending: "Bills owed", bank_in: "To Safe (after count)" };
 
 type Saved = (Partial<DailyValues> & { notes: string | null; status: "draft" | "submitted"; submitted_at: string | null }) | null;
 type JobPay = { kind: string; customer: string; amount: number; method: string };
@@ -80,6 +80,7 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
   const input = "w-full rounded-lg border border-border bg-background px-2.5 py-2 text-right text-[14px] tabular-nums focus:outline-none focus:ring-2 focus:ring-red-600/30 disabled:opacity-70";
 
   return (
+    <>
         <div className="rounded-[14px] border border-border bg-surface p-4 md:p-5">
           <div className="mb-4 flex flex-wrap items-center gap-3">
             <label className="text-[13px] font-medium text-muted-foreground" htmlFor="da-date">Day</label>
@@ -246,6 +247,45 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
             </>
           )}
         </div>
+        {day && !day.viewOnly && <SafeCount />}
+    </>
+  );
+}
+
+// "Count the Safe" (136): a blind count — type what's in the Safe; the Super
+// admin sees the difference in the Cash book. For anyone who enters days.
+function SafeCount() {
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    if (amount === "" || !(Number(amount) >= 0)) return toast({ title: "Enter the amount in the Safe", variant: "destructive" });
+    setBusy(true);
+    const res = await fetch("/api/staff/safe-counts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amount, note }) });
+    setBusy(false);
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return toast({ title: "Not saved", description: d.error, variant: "destructive" });
+    toast({ title: `Safe count saved: £${Number(amount).toFixed(2)}` });
+    setOpen(false); setAmount(""); setNote("");
+  }
+  return (
+    <div className="mt-4 rounded-[14px] border border-border bg-surface p-4">
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="text-[14px] font-semibold text-foreground">🔒 Count the Safe</button>
+      ) : (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="block"><span className="text-[13px] font-semibold">Cash in the Safe now</span>
+            <input autoFocus inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ""))} placeholder="£0.00"
+              className="mt-1 block w-36 rounded-lg border border-border bg-background px-2.5 py-2 text-right text-[14px] tabular-nums" /></label>
+          <label className="block min-w-[160px] flex-1"><span className="text-[13px] font-semibold">Note (optional)</span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} className="mt-1 block w-full rounded-lg border border-border bg-background px-2.5 py-2 text-[14px]" /></label>
+          <button onClick={save} disabled={busy} className="rounded-lg bg-red-600 px-4 py-2 text-[14px] font-semibold text-white disabled:opacity-60">{busy ? "Saving…" : "Save count"}</button>
+          <button onClick={() => setOpen(false)} className="rounded-lg border border-border px-3 py-2 text-[14px]">Cancel</button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -271,7 +311,8 @@ function CashCheckLine({ values, moves }: { values: Record<string, string>; move
           c.variance == null ? "" : off ? "text-red-700" : "text-emerald-700")}
       </div>
       <p className="mt-1 text-[11.5px] text-muted-foreground">
-        Opening {g(n("opening_balance"))} + cash sales {g(n("cash") ?? 0)} + money in {g(m.moneyIn)} − money out {g(m.moneyOut)} − bank in {g(n("bank_in") ?? 0)}
+        Opening {g(n("opening_balance"))} + cash sales {g(n("cash") ?? 0)} + till money in {g(m.moneyIn)} − till money out {g(m.moneyOut)}
+        {n("bank_in") ? <> · then {g(n("bank_in"))} to the Safe, {g((n("closing_balance") ?? c.expected ?? 0) - (n("bank_in") ?? 0))} left in the till</> : null}
       </p>
     </div>
   );

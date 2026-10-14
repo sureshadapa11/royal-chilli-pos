@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
     db.from("daily_accounts").select(COLUMNS).eq("trading_date", date).maybeSingle(),
     tillFigures(session.businessId, date),
     getCardFeeRate(session.businessId),
-    db.from("cash_movements").select("direction, amount").eq("movement_date", date).eq("method", "cash"),
+    db.from("cash_movements").select("direction, amount").eq("movement_date", date).eq("method", "cash").eq("place", "till"),
     tillPaidOutOn(session.businessId, date),
   ]);
   // Catering & events payments received that day (133) — shown on the day, read-only.

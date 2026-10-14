@@ -12,13 +12,14 @@ import { staffLinkUrl } from "@/lib/staff-link-url";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 import { cashCheck } from "@/lib/daily-accounts-fields";
 import { listJobs } from "@/lib/catering-jobs";
+import { safeBook } from "@/lib/cash-book";
 import { listBills } from "@/lib/pending-bills";
 
 // Every morning: yesterday's Day End and Cash In / Out (from the staff links,
 // lib/staff-links.ts), emailed to whoever is set in the business's
 // "day_end_report_to" setting — only businesses with one get it.
 
-export type CashLine = { direction: "in" | "out"; category: string; method: string; amount: number; reason: string; paidTo: string | null; by: string };
+export type CashLine = { direction: "in" | "out"; category: string; method: string; amount: number; reason: string; paidTo: string | null; by: string; place?: "till" | "safe" };
 
 export type DayEndReport = {
   businessId: number;
@@ -45,6 +46,8 @@ export type DayEndReport = {
   missingDays: string[];
   /** Who worked that trading day and for how long (attendance, breaks taken off) — hours only, no pay. */
   shifts: { name: string; seconds: number; stillIn: string | null }[];
+  /** The Safe after this day (136): balance and last count. */
+  safe?: { balance: number; lastCount: { date: string; counted: number; difference: number } | null };
 };
 
 const n = (v: unknown) => (v == null || v === "" ? null : Number(v));
@@ -58,7 +61,7 @@ export async function buildDayEndReport(businessId: number, business: string, da
   const db = bizDb(businessId);
   const [{ data: row }, { data: moves }, { data: week }, figures, { data: attendance }, { data: vatExpenses }, vatRate] = await Promise.all([
     db.from("daily_accounts").select("*").eq("trading_date", date).maybeSingle(),
-    db.from("cash_movements").select("direction, category, method, amount, reason, paid_to, staff_id").eq("movement_date", date).order("id"),
+    db.from("cash_movements").select("direction, category, method, amount, reason, paid_to, staff_id, place").eq("movement_date", date).order("id"),
     db.from("daily_accounts").select("trading_date").eq("status", "submitted").gte("trading_date", addDays(date, -6)).lte("trading_date", date),
     accountsByDay(businessId, date, date),
     db.from("attendance").select("staff_id, clock_in, clock_out, net_work_seconds").eq("work_date", date),
@@ -72,10 +75,13 @@ export async function buildDayEndReport(businessId: number, business: string, da
 
   const cash: CashLine[] = (moves ?? []).map((m) => ({
     direction: m.direction as "in" | "out", category: cashCategoryLabel(m.category), method: payMethodLabel(m.method), amount: Number(m.amount), reason: m.reason, paidTo: m.paid_to, by: nameOf(m.staff_id),
+    place: (m.place === "safe" ? "safe" : "till") as "till" | "safe",
   }));
   // Only cash moves the drawer.
-  const moneyIn = r2(cash.filter((c) => c.direction === "in" && c.method === "Cash").reduce((s, c) => s + c.amount, 0));
-  const moneyOut = r2(cash.filter((c) => c.direction === "out" && c.method === "Cash").reduce((s, c) => s + c.amount, 0));
+  // Only Till cash moves the drawer (Safe money doesn't, 136).
+  const tillCash = (c: CashLine) => c.method === "Cash" && c.place !== "safe";
+  const moneyIn = r2(cash.filter((c) => c.direction === "in" && tillCash(c)).reduce((s, c) => s + c.amount, 0));
+  const moneyOut = r2(cash.filter((c) => c.direction === "out" && tillCash(c)).reduce((s, c) => s + c.amount, 0));
   const submitted = row?.status === "submitted";
   const cashSales = n(row?.cash) ?? 0;
   const counted = n(row?.closing_balance);
@@ -96,6 +102,9 @@ export async function buildDayEndReport(businessId: number, business: string, da
   // What open catering / event jobs still owe, as of now (133).
   const jobsOwed = r2((await listJobs(businessId, date.slice(0, 7))).owed.reduce((s, j) => s + j.owed, 0));
   const billsOwed = r2((await listBills(businessId, date.slice(0, 7))).owed.reduce((s, b) => s + b.owed, 0));
+
+  // The Safe as it stood at the end of this day (136).
+  const safe = await safeBook(businessId, date, date);
 
   const done = new Set((week ?? []).map((w) => w.trading_date as string));
   const missingDays = Array.from({ length: 7 }, (_, i) => addDays(date, -i)).filter((d) => !done.has(d)).reverse();
@@ -125,6 +134,7 @@ export async function buildDayEndReport(businessId: number, business: string, da
     cash,
     missingDays,
     shifts,
+    safe: { balance: safe.balance, lastCount: safe.lastCount },
   };
 }
 

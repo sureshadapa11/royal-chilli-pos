@@ -279,7 +279,7 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           {[
             ["Cash", data.dailyAccounts.cash],
-            ["Bank in", data.dailyAccounts.bankIn],
+            ["To Safe", data.dailyAccounts.bankIn],
             ["Cash not banked", data.dailyAccounts.notBanked],
             ["Pending bills", data.dailyAccounts.pending],
             ["Catering paid", data.dailyAccounts.cateringPaid],

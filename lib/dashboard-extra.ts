@@ -2,7 +2,7 @@ import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { accountsByDay } from "@/lib/daily-figures";
 import { savedDays } from "@/lib/daily-accounts";
-import { cashBook } from "@/lib/cash-book";
+import { cashBook, safeBook } from "@/lib/cash-book";
 import { addDays } from "@/lib/admin-dashboard";
 import { extractVat, getVatRate } from "@/lib/finance";
 import { getBusinessNumber } from "@/lib/business-settings";
@@ -31,7 +31,7 @@ export type ExtraCards = {
   staffHours: { name: string; seconds: number }[];
   stillIn: number;
   money: null | {
-    cashNow: number | null; variance: number | null; daysOff: number; varianceByDay: { date: string; variance: number }[];
+    cashNow: number | null; safeNow: number | null; variance: number | null; daysOff: number; varianceByDay: { date: string; variance: number }[];
     cashOut: { label: string; amount: number }[];
     vat: { sales: number; claimed: number; toPay: number; quarterToPay: number };
     owed: { pending: number; catering: number; asOf: string | null; jobs: { customer: string; kind: string; date: string; owed: number }[] };
@@ -172,6 +172,7 @@ export async function getExtraCards(businessId: number, range: { from: string; t
     const latestRow = [...rows].filter((r) => r.trading_date <= today).sort((a, b) => b.trading_date.localeCompare(a.trading_date))[0];
     money = {
       cashNow: lastCarry?.carry ?? null,
+      safeNow: (await safeBook(businessId, range.from, range.to)).balance,
       variance: withVar.length ? r2(withVar.reduce((s, d) => s + (d.variance ?? 0), 0)) : null,
       daysOff: withVar.filter((d) => Math.abs(d.variance ?? 0) >= 0.005).length,
       varianceByDay: withVar.map((d) => ({ date: d.date, variance: d.variance as number })),

@@ -211,6 +211,7 @@ function PayForm({ job, today, onClose, onSave }: { job: Job; today: string; onC
       </div>
       <div><span className={label}>Paid how?</span><MethodPick value={method} onChange={setMethod} /></div>
       {method === "card" && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-800">Card on our machine is already in the Z report, so it counts toward this job but isn&apos;t added to sales again.</p>}
+      {method === "cash" && <p className="text-[12.5px] text-muted-foreground">🔒 Cash goes into the Safe.</p>}
       <label className="block"><span className={label}>Note (optional)</span><input className={field} value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. second instalment" /></label>
       <div className="flex gap-2 pt-1">
         <button onClick={onClose} className="flex-1 rounded-xl border border-border py-2.5 font-semibold">Cancel</button>

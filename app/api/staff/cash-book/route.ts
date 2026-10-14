@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { accountsAccess } from "@/lib/accounts-access";
 import { getSessionFromRequest } from "@/lib/auth";
 import { getBusiness } from "@/lib/business";
-import { cashBook } from "@/lib/cash-book";
+import { cashBook, safeBook } from "@/lib/cash-book";
 
 // GET ?month=YYYY-MM — Staff Hub → Daily accounts → Cash book: this business's
 // cash drawer day by day with a running balance (lib/cash-book.ts).
@@ -16,5 +16,7 @@ export async function GET(req: NextRequest) {
   // A group owner (All businesses view) can pick any business with ?business=.
   const pick = Number(req.nextUrl.searchParams.get("business"));
   const businessId = session.owner && Number.isInteger(pick) && pick > 0 && (await getBusiness(pick).catch(() => null)) ? pick : session.businessId;
-  return NextResponse.json(await cashBook(businessId, `${month}-01`, to));
+  // Both books (136): the till drawer and the Safe.
+  const [till, safe] = await Promise.all([cashBook(businessId, `${month}-01`, to), safeBook(businessId, `${month}-01`, to)]);
+  return NextResponse.json({ ...till, safe });
 }

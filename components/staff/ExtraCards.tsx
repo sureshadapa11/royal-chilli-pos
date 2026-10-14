@@ -279,7 +279,8 @@ function CashHealthCard({ d }: { d: D }) {
   const max = Math.max(1, ...m.varianceByDay.map((x) => Math.abs(x.variance)));
   return (
     <Card title="💰 Cash health" sub="From the Cash book" action={<Tag owner />}>
-      <Big>{m.cashNow != null ? gbp2(m.cashNow) : "—"} <span className="text-[13px] font-normal text-muted-foreground">in the drawer</span></Big>
+      <Big>{m.cashNow != null ? gbp2(m.cashNow) : "—"} <span className="text-[13px] font-normal text-muted-foreground">in the till</span></Big>
+      <p className="text-[13px] font-semibold">🔒 Safe {m.safeNow != null ? gbp2(m.safeNow) : "—"}</p>
       <p className="text-[12.5px] text-muted-foreground">
         Variance {m.variance == null ? "—" : <b className={Math.abs(m.variance) < 0.005 ? "text-[#1f8a4c]" : "text-[#C0392B]"}>{m.variance > 0 ? "+" : ""}{gbp2(m.variance)}</b>} · {m.daysOff} day{m.daysOff === 1 ? "" : "s"} off
       </p>

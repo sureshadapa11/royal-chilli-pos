@@ -42,10 +42,12 @@ const SECTIONS: { title: string; lines: string[] }[] = [
     ],
   },
   {
-    title: "Cash drawer",
+    title: "Cash books: Till and Safe",
     lines: [
-      "Expected = Opening + Cash sales + Money in (cash) − Money out (cash) − Bank in.",
-      "Variance = Counted − Expected (minus = missing, plus = extra). Only cash counts; card and bank entries don't touch the drawer.",
+      "Till: Expected = Opening + Cash sales + Till money in − Till money out. Variance = Counted − Expected (minus = missing, plus = extra).",
+      "After the till is counted, the Day End's \"Cash taken to Safe\" moves the takings to the Safe; the float stays in the till.",
+      "Safe: Takings from till + Safe money in (owner, catering / events, other income, advance repaid) − Safe money out (wages, advances, bills, paid into bank, given to owner) = Safe balance. A Safe count shows counted − expected.",
+      "Only cash is in the cash books; card and bank transfer entries aren't. Safe money never changes the till's variance or the sales.",
     ],
   },
   {
