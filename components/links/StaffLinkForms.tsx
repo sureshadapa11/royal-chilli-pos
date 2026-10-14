@@ -367,7 +367,17 @@ export function CashForm({ token, business, today }: { token: string; business: 
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
   const [picks, setPicks] = useState<Picks>({ staff: [], suppliers: [], jobs: [], bills: [] });
-  const blank = { direction: "out" as "out" | "in", category: "", who: "", amount: "", reason: "", paidTo: "", date: today, method: "cash" as string };
+  // The jobs list is fetched with the PIN; fetch it again when Catering / event
+  // is picked, so a job added since then shows up.
+  async function refreshPicks() {
+    if (!pin) return;
+    const res = await fetch(`/api/links/${token}/pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin }) }).catch(() => null);
+    const d = await res?.json().catch(() => null);
+    if (res?.ok && d) setPicks({ staff: d.staff ?? [], suppliers: d.suppliers ?? [], jobs: d.jobs ?? [], bills: d.bills ?? [] });
+  }
+  const blank = { direction: "out" as "out" | "in", category: "", who: "", amount: "", reason: "", paidTo: "", date: today, method: "cash" as string,
+    // "+ New catering / event" from the link (agreed 2026-10-14): the job and its first payment together.
+    jobKind: "catering" as "catering" | "event", jobName: "", jobDate: today, jobTotal: "" };
   const [f, setF, clearDraft, savedAt] = useDraft(`cash:${token}`, blank);
   const [photos, setPhotos] = useState<Receipt[]>([]);
   const [busy, setBusy] = useState(false);
@@ -381,7 +391,12 @@ export function CashForm({ token, business, today }: { token: string; business: 
     setErr("");
     if (!pin) return setErr("Enter your PIN first.");
     if (!cat) return setErr("Choose what it was for.");
-    if (cat.pick && !f.who) return setErr(cat.pick === "staff" ? "Choose the staff member." : cat.pick === "job" ? "Choose the job." : "Choose the supplier.");
+    if (cat.pick && !f.who) return setErr(cat.pick === "staff" ? "Choose the staff member." : cat.pick === "job" ? "Choose the job, or + New catering / event." : "Choose the supplier.");
+    if (cat.pick === "job" && f.who === "new") {
+      if (!f.jobName.trim()) return setErr("Enter the customer or event name.");
+      if (!(Number(f.jobTotal) > 0)) return setErr("Enter the job's total price.");
+      if (Number(f.amount) > Number(f.jobTotal)) return setErr("The amount paid can't be more than the job's total.");
+    }
     if (!(Number(f.amount) > 0)) return setErr("Enter the amount.");
     if (cat.reasonRequired && f.reason.trim().length < 3) return setErr("Write what it was for.");
     if (cat.direction === "out" && cat.photo && photos.length === 0) return setErr("Add a photo of the receipt.");
@@ -392,7 +407,8 @@ export function CashForm({ token, business, today }: { token: string; business: 
         pin, category: cat.key, amount: f.amount, reason: f.reason, paid_to: f.paidTo, date: f.date, method: f.method, photo_ids: photos.map((p) => p.id),
         staff_member_id: cat.pick === "staff" ? Number(f.who) : undefined,
         supplier_id: cat.pick === "supplier" ? Number(f.who) : undefined,
-        job_id: cat.pick === "job" ? Number(f.who) : undefined,
+        job_id: cat.pick === "job" && f.who !== "new" ? Number(f.who) : undefined,
+        new_job: cat.pick === "job" && f.who === "new" ? { kind: f.jobKind, customer: f.jobName, date: f.jobDate, total: f.jobTotal } : undefined,
         confirm_duplicate: askAgain,
       }),
     }).catch(() => null);
@@ -431,7 +447,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
         <div className={head}>What was it for?</div>
         <div className="grid grid-cols-2 gap-2">
           {CASH_CATEGORIES.filter((c) => c.direction === f.direction && !c.hidden).map((c) => (
-            <button key={c.key} onClick={() => upd({ category: c.key, who: "" })}
+            <button key={c.key} onClick={() => { upd({ category: c.key, who: "" }); if (c.pick === "job") refreshPicks(); }}
               className={`flex min-h-[56px] items-center gap-1.5 rounded-2xl border-2 px-2.5 py-2 text-left text-[14px] font-semibold leading-tight ${f.category === c.key ? "border-[#e4473a] bg-red-50" : "border-[#eadfcc] bg-white"}`}>
               <span>{c.icon}</span><span>{c.label}</span>
             </button>
@@ -458,13 +474,27 @@ export function CashForm({ token, business, today }: { token: string; business: 
           {cat.pick && (
             <section className={card}>
               <div className={head}>{cat.pick === "staff" ? "Staff member" : cat.pick === "job" ? "Which job?" : "Supplier"}</div>
-              {!pin ? <p className="text-[15px] text-[#7a6a60]">Enter your PIN to see the list.</p> : cat.pick === "job" && list.length === 0 ? (
-                <p className="text-[15px] text-[#7a6a60]">No catering or event is waiting for payment. A manager adds jobs in Daily accounts → Catering &amp; events.</p>
-              ) : (
+              {!pin ? <p className="text-[15px] text-[#7a6a60]">Enter your PIN to see the list.</p> : (
                 <select value={f.who} onChange={(e) => upd({ who: e.target.value })} className="h-12 w-full rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]">
                   <option value="">Choose…</option>
                   {list.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+                  {cat.pick === "job" && <option value="new">+ New catering / event</option>}
                 </select>
+              )}
+              {cat.pick === "job" && f.who === "new" && (
+                <div className="mt-3 space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["catering", "event"] as const).map((k) => (
+                      <button key={k} onClick={() => upd({ jobKind: k })}
+                        className={`h-12 rounded-xl border-2 text-[15px] font-semibold ${f.jobKind === k ? "border-[#e4473a] bg-red-50" : "border-[#eadfcc] bg-white"}`}>{k === "event" ? "🎉 Event" : "🍱 Catering"}</button>
+                    ))}
+                  </div>
+                  <input value={f.jobName} onChange={(e) => upd({ jobName: e.target.value })} placeholder="Customer / event name"
+                    className="h-12 w-full rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]" />
+                  <Row label="Date of the job"><span className="w-44"><DateBox value={f.jobDate} max="2099-12-31" onChange={(d) => upd({ jobDate: d })} /></span></Row>
+                  <Row label="Total price"><Money value={f.jobTotal} onChange={(v) => upd({ jobTotal: v })} /></Row>
+                  <p className="text-[13px] text-[#7a6a60]">The amount below is saved as the first payment; what&apos;s still owed is worked out.</p>
+                </div>
               )}
             </section>
           )}
