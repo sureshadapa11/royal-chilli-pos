@@ -33,7 +33,8 @@ export const CASH_CATEGORIES: CashCategory[] = [
   { key: "owner_out", label: "Given to owner / management", icon: "👤", direction: "out", home: "book", photo: false, hidden: true },
   { key: "event_costs", label: "Event costs", icon: "🎪", direction: "out", home: "expense", expenseCategory: "event_costs", vat: true, photo: true },
   { key: "customer_refund", label: "Refund to customer", icon: "↩️", direction: "out", home: "expense", expenseCategory: "customer_refund", vat: false, photo: true },
-  { key: "other", label: "Other", icon: "❓", direction: "out", home: "expense", expenseCategory: "other", vat: true, photo: true, reasonRequired: true },
+  // Photo optional (agreed 2026-10-14); the reason is still required.
+  { key: "other", label: "Other", icon: "❓", direction: "out", home: "expense", expenseCategory: "other", vat: true, photo: false, reasonRequired: true },
   // Replaced by job payments (133); kept so older entries still read right.
   { key: "catering", label: "Catering payment received", icon: "🍱", direction: "in", home: "book", photo: false, hidden: true },
   { key: "job_payment", label: "Catering / event payment received", icon: "🎉", direction: "in", home: "job", pick: "job", photo: false },
