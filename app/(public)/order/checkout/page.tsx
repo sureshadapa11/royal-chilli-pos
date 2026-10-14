@@ -8,12 +8,15 @@ import { readCart, readOrderType, writeOrderType, type CartLine, type OrderType,
 import { isRestaurantOpen, formatHoursForDate, getScheduleSlotOptions, nextValidScheduleSlot, toDateInputValue, type WeekHours } from "@/lib/hours";
 import type { BusyState } from "@/lib/busy-mode";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
-import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-fees";
+import { computeDeliveryFee, DELIVERY_FEE, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-fees";
 import { useWeekHours } from "@/components/site/HoursProvider";
 import AllergyQuestion from "@/components/site/AllergyQuestion";
 import { NO_ANSWER, allergyPayload, allergyProblem, type AllergyAnswer } from "@/lib/allergy";
 
-type ZoneCheck = { deliverable: boolean };
+// The business's own delivery rules come back with the postcode check
+// (Settings: delivery_fee, free_delivery_threshold, min_delivery_order,
+// max_delivery_miles) — never the built-in defaults.
+type ZoneCheck = { deliverable: boolean; fee?: number; free_over?: number; min_order?: number; max_miles?: number };
 
 // Hidden entirely (falls back to pay-on-collection/delivery only) until
 // STRIPE_SECRET_KEY + the Stripe webhook are configured server-side — this
@@ -121,7 +124,9 @@ export default function CheckoutPage() {
   }
 
   const subtotal = cartTotal(cart, orderType);
-  const deliveryFee = orderType === "delivery" && zoneCheck?.deliverable ? computeDeliveryFee(subtotal) : 0;
+  const rules = { deliveryFee: zoneCheck?.fee ?? DELIVERY_FEE, freeDeliveryThreshold: zoneCheck?.free_over ?? FREE_DELIVERY_THRESHOLD };
+  const minOrder = zoneCheck?.min_order ?? MIN_DELIVERY_ORDER;
+  const deliveryFee = orderType === "delivery" && zoneCheck?.deliverable ? computeDeliveryFee(subtotal, rules) : 0;
   const total = subtotal + deliveryFee;
 
   // Re-derived whenever the picked date changes, since Friday's opening
@@ -167,9 +172,9 @@ export default function CheckoutPage() {
     if (!isValidUkMobile(phone)) return setError("Please enter a valid UK mobile number (starts with 07, 11 digits).");
     if (!isValidEmail(email)) return setError("Please enter a valid email address.");
     if (orderType === "delivery" && (!address.trim() || !postcode.trim())) return setError("Please enter a delivery address and postcode.");
-    if (orderType === "delivery" && zoneCheck && !zoneCheck.deliverable) return setError("Sorry, we don't currently deliver to that postcode — we deliver within 5 miles of the restaurant.");
-    if (orderType === "delivery" && zoneCheck?.deliverable && subtotal < MIN_DELIVERY_ORDER) {
-      return setError(`Minimum order for delivery is £${MIN_DELIVERY_ORDER.toFixed(2)}.`);
+    if (orderType === "delivery" && zoneCheck && !zoneCheck.deliverable) return setError(`Sorry, we don't currently deliver to that postcode — we deliver within ${zoneCheck.max_miles ?? 5} miles of the restaurant.`);
+    if (orderType === "delivery" && zoneCheck?.deliverable && subtotal < minOrder) {
+      return setError(`Minimum order for delivery is £${minOrder.toFixed(2)}.`);
     }
     if (!isScheduled && !acceptingAsap) {
       return setError(openNow ? "We're very busy right now — please schedule your order for later." : "We're closed right now — please schedule your order for later.");
@@ -423,11 +428,11 @@ export default function CheckoutPage() {
             {!checkingZone && zoneCheck && (
               zoneCheck.deliverable ? (
                 <p className="text-xs text-primary">
-                  ✓ We deliver here · {formatCurrency(computeDeliveryFee(subtotal))} delivery fee (free over £{FREE_DELIVERY_THRESHOLD})
-                  · £{MIN_DELIVERY_ORDER.toFixed(2)} minimum order
+                  ✓ We deliver here · {formatCurrency(computeDeliveryFee(subtotal, rules))} delivery fee (free over £{rules.freeDeliveryThreshold})
+                  · £{minOrder.toFixed(2)} minimum order
                 </p>
               ) : (
-                <p className="text-xs text-red-500">Sorry, we don&apos;t deliver there — we deliver within 5 miles of the restaurant.</p>
+                <p className="text-xs text-red-500">Sorry, we don&apos;t deliver there — we deliver within {zoneCheck.max_miles ?? 5} miles of the restaurant.</p>
               )
             )}
           </>
