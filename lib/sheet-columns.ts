@@ -7,8 +7,9 @@ import { SHEET_FIELDS, type DailyFieldKey, type DailyValues } from "@/lib/daily-
 //   • Commission & card fees — worked out (platform commissions + card fee)
 //   • Catering paid / Events paid — the day's sales parts: typed Day End
 //     catering (older days) + Catering & events payments by cash or bank
-//   • Pending — what's still owed that day; the month's figure is the latest
-//     one entered, not a sum (it's a "still owed" figure, retyped each day)
+//   • Pending — bills still owed at the end of that day: the Pending bills
+//     list (134) plus any figure typed on older days; the month's figure is
+//     the latest day's, not a sum
 //   • Catering pending — not shown: what's owed is on the Catering & events list
 //   • everything else — the saved Day End figure
 
@@ -23,13 +24,19 @@ export function sheetCell(key: SheetKey, r: DailyRow | undefined, fig: DayFigure
   if (key === "commission") return fig && (fig.out.commission || fig.out.card_fee) ? r2(fig.out.commission + fig.out.card_fee) : num(r?.commission);
   if (key === "catering_paid") return fig?.sales.catering ? fig.sales.catering : num(r?.catering_paid);
   if (key === "events_paid") return fig?.sales.events ? fig.sales.events : null;
+  if (key === "pending") {
+    const v = (num(r?.pending) ?? 0) + (fig?.pending_owed ?? 0);
+    return v || num(r?.pending) != null ? r2(v) : null;
+  }
   return num(r?.[key]);
 }
 
-export function sheetTotal(key: SheetKey, totals: Partial<Record<string, number | null>> | DailyValues, ft: FiguresTotal, rows: DailyRow[] = []): number | null {
+export function sheetTotal(key: SheetKey, totals: Partial<Record<string, number | null>> | DailyValues, ft: FiguresTotal, rows: DailyRow[] = [], days: DayFigures[] = [], today = "9999-12-31"): number | null {
   if (key === "pending") {
-    const last = [...rows].sort((a, b) => b.trading_date.localeCompare(a.trading_date)).find((r) => num(r.pending) != null);
-    return last ? num(last.pending) : null;
+    // The last day of the month that's been reached (today, for this month).
+    const last = [...days].filter((d) => d.date <= today).sort((a, b) => b.date.localeCompare(a.date))[0];
+    if (!last) return null;
+    return sheetCell("pending", rows.find((r) => r.trading_date === last.date), last);
   }
   if (key === "commission") return r2(ft.out.commission + ft.out.card_fee);
   if (key === "catering_paid") return ft.sales.catering;

@@ -8,13 +8,14 @@ import { moneyOutForMonth } from "@/lib/money-out";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import type { ZReport } from "@/lib/z-report";
 import { tillInUse } from "@/lib/till-in-use";
-import { accountsByDay } from "@/lib/daily-figures";
+import { accountsByDay, totalFigures } from "@/lib/daily-figures";
 import { getVatRate, extractVat } from "@/lib/finance";
 import { cashBook } from "@/lib/cash-book";
 import { salarySheet } from "@/lib/salary-sheet";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 import { getBrand } from "@/lib/brand";
 import supabase from "@/lib/supabase";
+import { sheetCell, sheetTotal } from "@/lib/sheet-columns";
 import { listJobs, jobKindLabel, countsAsSales } from "@/lib/catering-jobs";
 
 // GET /api/finance/export?month=YYYY-MM — one Excel file for the accountant
@@ -155,7 +156,7 @@ export async function GET(req: NextRequest) {
       "Uber Eats": cell(r?.uber_eats), "Uber Eats commission": cell(r?.uber_eats_commission),
       Hiest: cell(r?.hiest), "Hiest commission": cell(r?.hiest_commission),
       "Catering paid": f.sales.catering ? r2(f.sales.catering) : cell(r?.catering_paid), "Events paid": f.sales.events ? r2(f.sales.events) : "",
-      Pending: cell(r?.pending), "Bank in": cell(r?.bank_in),
+      Pending: sheetCell("pending", r, f) ?? "", "Bank in": cell(r?.bank_in),
       "Total sales": has ? r2(f.total_sales) : "",
       "Ex-VAT": has ? r2(f.ex_vat) : "",
       VAT: has ? r2(f.total_sales - f.ex_vat) : "",
@@ -168,8 +169,7 @@ export async function GET(req: NextRequest) {
     return acc;
   }, { "Trading day": "TOTAL", "Day End": `${enteredCount} of ${accountsDaily.length} entered` });
   // Pending is "still owed that day", so the month shows the latest one, not a sum.
-  const lastPending = [...dayRows].sort((a, b) => b.trading_date.localeCompare(a.trading_date)).find((r) => r.pending != null && r.pending !== "");
-  accTotals.Pending = lastPending ? r2(n(lastPending.pending)) : "";
+  accTotals.Pending = sheetTotal("pending", {}, totalFigures(figDays), dayRows, figDays, tradingDayStr()) ?? "";
   accountsDaily.push(accTotals);
 
   // VAT: the same estimate as Finance and the dashboard (sales ÷ 1.2).

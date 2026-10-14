@@ -9,6 +9,7 @@ import { getBusinessNumber } from "@/lib/business-settings";
 import { cashCategoryLabel } from "@/lib/cash-categories";
 import { CARD_PLATFORMS } from "@/lib/dashboard-cards-meta";
 import { listJobs } from "@/lib/catering-jobs";
+import { listBills } from "@/lib/pending-bills";
 
 // The dashboard's newer cards (agreed 2026-10-12, mock-up "New Dashboard
 // Cards"), all from what's entered by hand — Day End / Daily accounts, the
@@ -164,7 +165,10 @@ export async function getExtraCards(businessId: number, range: { from: string; t
 
     // ⏳ Money owed: the latest entered day's pending bills and catering still owed.
     // Catering & events still owed, job by job (133), plus any older typed catering pending.
-    const openJobs = (await listJobs(businessId, today.slice(0, 7))).owed;
+    const [openJobs, openBills] = await Promise.all([
+      listJobs(businessId, today.slice(0, 7)).then((l) => l.owed),
+      listBills(businessId, today.slice(0, 7)).then((l) => l.owed),
+    ]);
     const latestRow = [...rows].filter((r) => r.trading_date <= today).sort((a, b) => b.trading_date.localeCompare(a.trading_date))[0];
     money = {
       cashNow: lastCarry?.carry ?? null,
@@ -174,10 +178,14 @@ export async function getExtraCards(businessId: number, range: { from: string; t
       cashOut: [...byCat.entries()].map(([k, v]) => ({ label: cashCategoryLabel(k), amount: r2(v) })).sort((a, b) => b.amount - a.amount),
       vat: { sales: salesVat, claimed, toPay: r2(salesVat - claimed), quarterToPay: r2(quarterSalesVat - claimedIn(qFrom, lastDay)) },
       owed: {
-        pending: num(latestRow?.pending),
+        // Pending bills list (134) + any figure typed on an older Day End.
+        pending: r2(num(latestRow?.pending) + openBills.reduce((s, b) => s + b.owed, 0)),
         catering: r2(num(latestRow?.catering_pending) + openJobs.reduce((s, j) => s + j.owed, 0)),
         asOf: latestRow?.trading_date ?? null,
-        jobs: openJobs.map((j) => ({ customer: j.customer, kind: j.kind, date: j.date, owed: j.owed })).sort((a, b) => b.owed - a.owed),
+        jobs: [
+          ...openJobs.map((j) => ({ customer: j.customer, kind: j.kind as string, date: j.date, owed: j.owed })),
+          ...openBills.map((b) => ({ customer: b.customer, kind: "bill", date: b.date, owed: b.owed })),
+        ].sort((a, b) => b.owed - a.owed),
       },
     };
   }

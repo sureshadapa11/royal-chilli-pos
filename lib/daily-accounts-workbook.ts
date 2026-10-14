@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { getBusiness } from "@/lib/business";
 import { columnTotals } from "@/lib/daily-accounts";
+import { tradingDayStr } from "@/lib/london-date";
 import { SHEET_COLUMNS, sheetCell, sheetTotal } from "@/lib/sheet-columns";
 import { accountsByDay, MONEY_OUT_PARTS, totalFigures } from "@/lib/daily-figures";
 import { cashBook } from "@/lib/cash-book";
@@ -87,7 +88,7 @@ export async function monthSheets(businessId: number, month: string, includeSala
         r ? (r.status === "submitted" ? "Submitted" : "Draft") : "",
       ];
     }),
-    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_COLUMNS.map((x) => sheetTotal(x.key, totals, ft, rows)), ft.variance, "", ""],
+    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_COLUMNS.map((x) => sheetTotal(x.key, totals, ft, rows, days, tradingDayStr())), ft.variance, "", ""],
     [],
     [FORMULA],
   ];

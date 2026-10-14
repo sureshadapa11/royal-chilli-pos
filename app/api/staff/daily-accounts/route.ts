@@ -1,3 +1,4 @@
+import { billsOwedByDay } from "@/lib/pending-bills";
 import { NextRequest, NextResponse } from "next/server";
 import { accountsAccess } from "@/lib/accounts-access";
 import { tradingRangeUtc } from "@/lib/london-date";
@@ -49,6 +50,8 @@ export async function GET(req: NextRequest) {
   const submitted = (saved as { status?: string } | null)?.status === "submitted";
   return NextResponse.json({
     date, saved, till, cardFeeRate, jobPayments,
+    // Pending bills still owed at the end of the day (134), shown read-only.
+    billsOwed: (await billsOwedByDay(session.businessId, date, date)).get(date) ?? 0,
     // The cash check is for those who see figures (not Managers).
     cashMoves: access.seeFigures ? cashMoves : null,
     locked: !access.canEnter || (submitted && !canUnlock(session)), canUnlock: canUnlock(session),

@@ -25,11 +25,11 @@ const PLATFORMS: { key: keyof typeof PLATFORM_COMMISSION; label: string }[] = [
   { key: "uber_eats", label: "Uber Eats" }, { key: "hiest", label: "Hiest" },
 ];
 const FIELD = Object.fromEntries(DAILY_FIELDS.map((f) => [f.key, f])) as Record<DailyFieldKey, (typeof DAILY_FIELDS)[number]>;
-const LABEL: Partial<Record<DailyFieldKey, string>> = { opening_balance: "Opening", closing_balance: "Closing (counted)" };
+const LABEL: Partial<Record<DailyFieldKey, string>> = { opening_balance: "Opening", closing_balance: "Closing (counted)", pending: "Bills owed" };
 
 type Saved = (Partial<DailyValues> & { notes: string | null; status: "draft" | "submitted"; submitted_at: string | null }) | null;
 type JobPay = { kind: string; customer: string; amount: number; method: string };
-type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; jobPayments?: JobPay[]; cashMoves?: { moneyIn: number; moneyOut: number } | null; locked: boolean; canUnlock: boolean; viewOnly?: boolean };
+type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; jobPayments?: JobPay[]; billsOwed?: number; cashMoves?: { moneyIn: number; moneyOut: number } | null; locked: boolean; canUnlock: boolean; viewOnly?: boolean };
 
 // seeFigures: Super admin / Supervisor see the cash check and WhatsApp; Managers only enter.
 export default function DailyAccountsView({ today, start, seeFigures = false }: { today: string; start: string; seeFigures?: boolean }) {
@@ -110,6 +110,16 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
                       <span className="text-[11.5px] text-muted-foreground">{right}</span>
                     </span>
                   );
+                  if (k === "pending" && !Number(values.pending || 0)) {
+                    // From the Pending bills list (134): what's still owed at the end of this day.
+                    return (
+                      <div key={k}>
+                        {head("Pending bills tab")}
+                        <output className={`${input} mt-1 block bg-[#F6F1E6]`}>£{(day.billsOwed ?? 0).toFixed(2)}</output>
+                        {help === k && <span className="mt-0.5 block text-[11.5px] text-muted-foreground">Bills still owed at the end of this day. Add or settle them in the Pending bills tab.</span>}
+                      </div>
+                    );
+                  }
                   if (k === "commission") {
                     // Worked out from the platform commissions + the card fee, never typed.
                     const platforms = platformCommission(values) ?? 0;

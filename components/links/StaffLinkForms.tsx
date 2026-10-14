@@ -23,7 +23,7 @@ const card = "rounded-2xl border border-[#eadfcc] bg-white p-3.5 shadow-sm";
 const head = "mb-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-[#7a6a60]";
 const bigBtn = "h-14 w-full rounded-2xl text-[17px] font-semibold disabled:opacity-60";
 
-type Picks = { staff: { id: number; name: string }[]; suppliers: { id: number; name: string }[]; jobs: { id: number; name: string }[] };
+type Picks = { staff: { id: number; name: string }[]; suppliers: { id: number; name: string }[]; jobs: { id: number; name: string }[]; bills: { id: number; name: string }[] };
 
 /** What's typed, kept on this phone until it's sent (localStorage can be blocked: then just not kept). */
 function useDraft<T extends object>(key: string, initial: T): [T, (next: T | ((p: T) => T)) => void, () => void, string | null] {
@@ -122,7 +122,7 @@ function PinPad({ token, onOk }: { token: string; onOk: (pin: string, name: stri
     const res = await fetch(`/api/links/${token}/pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: next }) }).catch(() => null);
     const d = await res?.json().catch(() => ({}));
     setBusy(false);
-    if (res?.ok && d?.name) { setName(d.name); onOk(next, d.name, { staff: d.staff ?? [], suppliers: d.suppliers ?? [], jobs: d.jobs ?? [] }); }
+    if (res?.ok && d?.name) { setName(d.name); onOk(next, d.name, { staff: d.staff ?? [], suppliers: d.suppliers ?? [], jobs: d.jobs ?? [], bills: d.bills ?? [] }); }
     else { setErr(res ? d?.error ?? "Couldn't check the PIN." : "No connection. Try again."); setPin(""); }
   }
   if (name) {
@@ -182,7 +182,15 @@ const gbp = (v: string | undefined) => (v === undefined || v === "" ? "—" : `�
 export function DayEndForm({ token, business, today }: { token: string; business: string; today: string }) {
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
-  const [draft, setDraft, clearDraft, savedAt] = useDraft(`dayend:${token}`, { date: today, v: {} as Record<string, string>, notes: "" });
+  const [draft, setDraft, clearDraft, savedAt] = useDraft(`dayend:${token}`, {
+    date: today, v: {} as Record<string, string>, notes: "",
+    bills: [] as { customer: string; amount: string }[], paid: [] as { bill: string; amount: string; method: string }[],
+  });
+  const [owedBills, setOwedBills] = useState<{ id: number; name: string }[]>([]);
+  const bills = draft.bills ?? [];
+  const paid = draft.paid ?? [];
+  const setBills = (b: typeof bills) => setDraft((d) => ({ ...d, bills: b }));
+  const setPaid = (p: typeof paid) => setDraft((d) => ({ ...d, paid: p }));
   const [photos, setPhotos] = useState<Receipt[]>([]);
   const [step, setStep] = useState<"form" | "check">("form");
   const [busy, setBusy] = useState(false);
@@ -195,6 +203,9 @@ export function DayEndForm({ token, business, today }: { token: string; business
     setErr("");
     if (!pin) return setErr("Enter your PIN first.");
     if (!v.z_report) return setErr("Enter the Z report total (0 if closed).");
+    const badBill = bills.find((b) => (b.customer.trim() || b.amount) && (!b.customer.trim() || !(Number(b.amount) > 0)));
+    if (badBill) return setErr("Each unpaid bill needs a name and an amount (or remove it).");
+    if (paid.some((p) => (p.bill || p.amount) && (!p.bill || !(Number(p.amount) > 0)))) return setErr("Each bill paid needs the bill and the amount (or remove it).");
     setStep("check");
     window.scrollTo({ top: 0 });
   }
@@ -204,7 +215,11 @@ export function DayEndForm({ token, business, today }: { token: string; business
     setBusy(true);
     const res = await fetch(`/api/links/${token}/day-end`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin, date: draft.date, values: v, notes: draft.notes, photo_ids: photos.map((p) => p.id) }),
+      body: JSON.stringify({
+        pin, date: draft.date, values: v, notes: draft.notes, photo_ids: photos.map((p) => p.id),
+        new_bills: bills.filter((b) => b.customer.trim() && Number(b.amount) > 0),
+        bills_paid: paid.filter((p) => p.bill && Number(p.amount) > 0).map((p) => ({ bill_id: Number(p.bill), amount: p.amount, method: p.method })),
+      }),
     }).catch(() => null);
     setBusy(false);
     const d = await res?.json().catch(() => ({}));
@@ -237,7 +252,8 @@ export function DayEndForm({ token, business, today }: { token: string; business
           {line("Opening cash", gbp(v.opening_balance))}
           {line("Bank in", gbp(v.bank_in))}
           {line("Cash counted", gbp(v.closing_balance))}
-          {line("Pending bills", gbp(v.pending))}
+          {bills.filter((b) => b.customer.trim()).map((b, i) => <div key={`b${i}`}>{line(`Unpaid bill · ${b.customer}`, gbp(b.amount))}</div>)}
+          {paid.filter((p) => p.bill).map((p, i) => <div key={`p${i}`}>{line(`Bill paid · ${owedBills.find((x) => String(x.id) === p.bill)?.name.split(" · ")[0] ?? ""}`, gbp(p.amount))}</div>)}
           {photos.length > 0 && line("Z report photo", "✓ added")}
           {draft.notes && line("Notes", draft.notes)}
         </section>
@@ -252,7 +268,7 @@ export function DayEndForm({ token, business, today }: { token: string; business
       <button onClick={toCheck} className={`${bigBtn} bg-[#e4473a] text-white`}>Check my figures →</button>
     </>}>
       {savedAt && <span className="inline-block rounded-full bg-[#fdf0c9] px-2.5 py-1 text-[11.5px] font-semibold text-[#8a6400]">Kept on this phone · {savedAt}</span>}
-      <PinPad token={token} onOk={(p, n) => { setPin(p); setName(n); }} />
+      <PinPad token={token} onOk={(p, n, pk) => { setPin(p); setName(n); setOwedBills(pk.bills); }} />
       <section className={card}>
         <div className={head}>Trading day</div>
         <DateBox value={draft.date} max={today} onChange={(d) => setDraft((x) => ({ ...x, date: d }))} />
@@ -286,8 +302,45 @@ export function DayEndForm({ token, business, today }: { token: string; business
         <Row label="Cash counted at close"><Money value={v.closing_balance ?? ""} onChange={set("closing_balance")} /></Row>
       </section>
       <section className={card}>
-        <div className={head}>Owed to us</div>
-        <Row label="Pending bills"><Money value={v.pending ?? ""} onChange={set("pending")} /></Row>
+        <div className={head}>Unpaid bills today</div>
+        <p className="mb-2 text-[13px] text-[#7a6a60]">A customer who didn&apos;t pay their bill today. Each one once: it stays on the list until it&apos;s paid.</p>
+        {bills.map((b, i) => (
+          <div key={i} className="mb-2 flex items-center gap-2">
+            <input value={b.customer} onChange={(e) => setBills(bills.map((x, j) => (j === i ? { ...x, customer: e.target.value } : x)))} placeholder="Name / table"
+              className="h-12 min-w-0 flex-1 rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]" />
+            <Money value={b.amount} onChange={(val) => setBills(bills.map((x, j) => (j === i ? { ...x, amount: val } : x)))} />
+            <button type="button" onClick={() => setBills(bills.filter((_, j) => j !== i))} aria-label="Remove" className="h-12 w-10 rounded-xl text-[18px] text-[#7a6a60]">✕</button>
+          </div>
+        ))}
+        <button type="button" onClick={() => setBills([...bills, { customer: "", amount: "" }])} className="h-12 w-full rounded-xl border-[1.5px] border-dashed border-[#eadfcc] text-[15px] font-semibold">+ Add an unpaid bill</button>
+      </section>
+      <section className={card}>
+        <div className={head}>Old bills paid today</div>
+        {!pin ? <p className="text-[14px] text-[#7a6a60]">Enter your PIN to see the bills still owed.</p> : owedBills.length === 0 ? <p className="text-[14px] text-[#7a6a60]">No bills are waiting to be paid.</p> : (
+          <>
+            {paid.map((p, i) => (
+              <div key={i} className="mb-2 space-y-2 rounded-xl border border-[#eadfcc] p-2.5">
+                <div className="flex items-center gap-2">
+                  <select value={p.bill} onChange={(e) => setPaid(paid.map((x, j) => (j === i ? { ...x, bill: e.target.value } : x)))}
+                    className="h-12 min-w-0 flex-1 rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[15px]">
+                    <option value="">Which bill?</option>
+                    {owedBills.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                  </select>
+                  <button type="button" onClick={() => setPaid(paid.filter((_, j) => j !== i))} aria-label="Remove" className="h-12 w-10 rounded-xl text-[18px] text-[#7a6a60]">✕</button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Money value={p.amount} onChange={(val) => setPaid(paid.map((x, j) => (j === i ? { ...x, amount: val } : x)))} />
+                  <select value={p.method} onChange={(e) => setPaid(paid.map((x, j) => (j === i ? { ...x, method: e.target.value } : x)))}
+                    className="h-12 flex-1 rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[15px]">
+                    <option value="cash">💷 Cash</option><option value="card">💳 Card</option><option value="bank">🏦 Bank</option>
+                  </select>
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={() => setPaid([...paid, { bill: "", amount: "", method: "cash" }])} className="h-12 w-full rounded-xl border-[1.5px] border-dashed border-[#eadfcc] text-[15px] font-semibold">+ A bill was paid</button>
+            <p className="mt-1.5 text-[13px] text-[#7a6a60]">Taken at the till as usual — this just marks the bill as paid.</p>
+          </>
+        )}
       </section>
       <section className={card}>
         <ReceiptPhotos entity="daily_account" label="Z report photo (optional)" required={false} value={photos} onChange={setPhotos}
@@ -308,7 +361,7 @@ export function DayEndForm({ token, business, today }: { token: string; business
 export function CashForm({ token, business, today }: { token: string; business: string; today: string }) {
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
-  const [picks, setPicks] = useState<Picks>({ staff: [], suppliers: [], jobs: [] });
+  const [picks, setPicks] = useState<Picks>({ staff: [], suppliers: [], jobs: [], bills: [] });
   const blank = { direction: "out" as "out" | "in", category: "", who: "", amount: "", reason: "", paidTo: "", date: today, method: "cash" as string };
   const [f, setF, clearDraft, savedAt] = useDraft(`cash:${token}`, blank);
   const [photos, setPhotos] = useState<Receipt[]>([]);

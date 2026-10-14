@@ -5,6 +5,7 @@ import { allRows, extractVat, getVatRate, labourCostByDay, r2 } from "@/lib/fina
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import { savedDays, type DailyRow } from "@/lib/daily-accounts";
 import { jobSalesByDay } from "@/lib/catering-jobs";
+import { billsOwedByDay } from "@/lib/pending-bills";
 
 // Day by day: what came in, everything that went out, and what's left. One set
 // of sums (accountant rules) behind Finance → Profit & Loss, the dashboard's
@@ -60,6 +61,8 @@ export type DayFigures = {
   sales: SalesParts;
   out: MoneyOut;
   till_fallback: boolean; // Z report / card taken from the till, not the sheet
+  /** Pending bills still owed at the end of the day (134; tracking only, not in any sum). */
+  pending_owed?: number;
 };
 
 export type FiguresTotal = Omit<DayFigures, "date" | "till_fallback" | "expected">;
@@ -183,13 +186,14 @@ async function costsByDay(businessId: number, from: string, to: string, vatRate:
 
 /** Every day from..to with its sums, plus the sheet rows they came from. */
 export async function accountsByDay(businessId: number, from: string, to: string): Promise<{ days: DayFigures[]; rows: DailyRow[]; vatRate: number }> {
-  const [rows, vatRate, cardFeeRate, till, wages, jobs] = await Promise.all([
+  const [rows, vatRate, cardFeeRate, till, wages, jobs, billsOwed] = await Promise.all([
     savedDays(businessId, from, to),
     getVatRate(businessId),
     getCardFeeRate(businessId),
     tillByDay(businessId, from, to),
     labourCostByDay(businessId, from, to),
     jobSalesByDay(businessId, from, to),
+    billsOwedByDay(businessId, from, to),
   ]);
   const costs = await costsByDay(businessId, from, to, vatRate);
   const byDate = new Map(rows.map((r) => [r.trading_date, r]));
@@ -213,6 +217,6 @@ export async function accountsByDay(businessId: number, from: string, to: string
       stock: costs.stock.get(d) ?? 0, expenses: costs.spent.get(d) ?? 0,
       paid_out: costs.paidOut.get(d) ?? 0, wages: wages.get(d) ?? 0,
     }, vatRate, cardFeeRate, (z == null && till.sales.has(d)) || (card == null && till.card.has(d)));
-  });
+  }).map((f) => ({ ...f, pending_owed: billsOwed.get(f.date) ?? 0 }));
   return { days, rows, vatRate };
 }

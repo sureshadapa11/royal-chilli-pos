@@ -344,9 +344,9 @@ function OwedCard({ d }: { d: D }) {
       {o.jobs.length > 0 && (
         <div className="mt-3 space-y-1 border-t border-dashed border-[#ECE5D6] pt-2 text-[12.5px]">
           {o.jobs.slice(0, 5).map((j, i) => (
-            <div key={i} className="flex justify-between gap-2"><span className="truncate">{j.kind === "event" ? "🎉" : "🍱"} {j.customer} <span className="text-muted-foreground">· {dayName(j.date, { day: "numeric", month: "short" })}</span></span><b className="tabular-nums">{gbp2(j.owed)}</b></div>
+            <div key={i} className="flex justify-between gap-2"><span className="truncate">{j.kind === "event" ? "🎉" : j.kind === "bill" ? "🧾" : "🍱"} {j.customer} <span className="text-muted-foreground">· {dayName(j.date, { day: "numeric", month: "short" })}</span></span><b className="tabular-nums">{gbp2(j.owed)}</b></div>
           ))}
-          {o.jobs.length > 5 && <p className="text-muted-foreground">+{o.jobs.length - 5} more in Daily accounts → Catering &amp; events</p>}
+          {o.jobs.length > 5 && <p className="text-muted-foreground">+{o.jobs.length - 5} more in Daily accounts</p>}
         </div>
       )}
     </Card>
