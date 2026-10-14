@@ -1034,7 +1034,8 @@ export async function sendApologyEmail(
 
 // ---------- Morning Day End report (lib/day-end-report.ts) ----------
 
-export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end-report").DayEndReport) {
+// `correction`: a note at the top and "Correction:" in the subject, for resending a report that went out wrong.
+export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end-report").DayEndReport, correction?: string) {
   const brand = await getEmailBrand(d.businessId);
   const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toFixed(2)}`);
   const day = new Date(`${d.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
@@ -1074,13 +1075,12 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
   const dr = d.drawer;
   const drawer = section("Cash drawer", [
     row("Opening", gbp(dr.opening)), row("+ Cash sales", gbp(dr.cashSales)), row("+ Money in (cash)", gbp(dr.moneyIn)), row("− Money out (cash)", gbp(dr.moneyOut)),
-    row("Expected at close", gbp(dr.expected), true), row("Counted", gbp(dr.counted), true), row("→ Taken to Safe", gbp(dr.bankIn)),
+    row("Expected at close", gbp(dr.expected), true), row("Counted", gbp(dr.counted), true),
     row("Variance (counted − expected)", dr.variance == null ? "—" : `<span style="color:${Math.abs(dr.variance) < 0.01 ? "#15803d" : "#b91c1c"};">${dr.variance > 0 ? "+" : ""}${gbp(dr.variance)}</span>`, true),
-    ...(d.safe ? [row("🔒 Safe balance", gbp(d.safe.balance), true), ...(d.safe.lastCount ? [row(`Last Safe count (${d.safe.lastCount.date})`, `${gbp(d.safe.lastCount.counted)} · ${Math.abs(d.safe.lastCount.difference) < 0.005 ? "correct" : `${d.safe.lastCount.difference > 0 ? "+" : ""}${gbp(d.safe.lastCount.difference)}`}`)] : [])] : []),
   ].join(""));
 
   const cash = d.cash.length
-    ? section("Money in / out", d.cash.map((c) => row(`${c.direction === "out" ? "OUT" : "IN"} · ${c.method}${c.method === "Cash" ? (c.place === "safe" ? " (Safe)" : " (Till)") : ""} · ${c.category}${c.reason && c.reason !== c.category ? `: ${c.reason}` : ""}${c.paidTo ? ` (${c.paidTo})` : ""} · ${c.by}`,
+    ? section("Money in / out", d.cash.map((c) => row(`${c.direction === "out" ? "OUT" : "IN"} · ${c.method} · ${c.category}${c.reason && c.reason !== c.category ? `: ${c.reason}` : ""}${c.paidTo ? ` (${c.paidTo})` : ""} · ${c.by}`,
         `<span style="color:${c.direction === "out" ? "#b91c1c" : "#15803d"};">${c.direction === "out" ? "−" : "+"}${gbp(c.amount)}</span>`)).join(""))
     : "";
 
@@ -1090,6 +1090,7 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
       ${cardLabel("Day End report")}
       <div style="font-family:${SERIF}; font-size:22px; color:${C.ink}; margin-top:4px;">${esc(d.business)} · ${esc(day)}</div>
     </td></tr>
+    ${correction ? `<tr><td style="padding:10px 28px 0;"><div style="font-family:${SANS}; font-size:14px; line-height:1.55; color:${C.ink}; background:#fef9c3; border:1px solid #fde68a; border-radius:8px; padding:12px 14px;">${esc(correction)}</div></td></tr>` : ""}
     ${dayEnd}
     ${staffOn}
     ${drawer}
@@ -1097,7 +1098,7 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
     ${missing.length ? `<tr><td style="padding:10px 28px 0;">${warn(`Day End also missing for: ${missing.map((x) => new Date(`${x}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })).join(", ")}`)}</td></tr>` : ""}
     <tr><td align="center" style="padding:18px 28px 4px;">${button(whatsAppUrl(dayEndText(d), await getLoyaltySetting(d.businessId, "owner_whatsapp", 0).then((n) => (n ? String(n) : null)).catch(() => null)), "📲 Open in WhatsApp")}</td></tr>
     <tr><td style="padding:12px 28px 26px; font-family:${SANS}; font-size:12px; color:${C.muted};">Receipt photos and every entry are in the Staff Hub → Daily accounts.</td></tr>`;
-  await sendBrevoEmail(to, `${d.business} Day End · ${day}${f ? "" : " · NOT ENTERED"}`, shell(body, brand), undefined, brand);
+  await sendBrevoEmail(to, `${correction ? "Correction: " : ""}${d.business} Day End · ${day}${f ? "" : " · NOT ENTERED"}`, shell(body, brand), undefined, brand);
 }
 
 // "Day End not entered" reminder (agreed 2026-10-14): sent with the morning
