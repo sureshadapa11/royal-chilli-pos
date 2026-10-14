@@ -73,7 +73,6 @@ function SummaryCard({ summary, loading, error }: { summary: AdminSummary; loadi
           <span className="border-t border-[#ECE5D6] pt-1 font-semibold text-foreground">Total costs</span>
           <span className="border-t border-[#ECE5D6] pt-1 text-right font-semibold tabular-nums text-foreground">{gbp2(summary.costs.total)}</span>
         </div>
-        <p className="mt-2 text-[12px] text-muted-foreground">Total sales = Z report (tips not included) + delivery platforms + catering. Profit = sales ÷ 1.2 − costs. Staff pay is clocked-out hours × pay rate. Same figures as Finance and All businesses.</p>
       </div>
     </Card>
   );
@@ -296,7 +295,6 @@ export default function AdminDashboard({ data }: { data: Data; businessName?: st
           <span>{data.dailyAccounts.submitted} of {data.dailyAccounts.daysSoFar} days submitted</span>
           {dailyAccountsMissing > 0 && <span>{dailyAccountsMissing} day{dailyAccountsMissing === 1 ? "" : "s"} not submitted</span>}
         </div>
-        <p className="mt-2 text-[11.5px] text-muted-foreground">Daily Accounts figures include saved drafts. They are shown separately and do not change sales or profit.</p>
       </Card>
     </div>
   );

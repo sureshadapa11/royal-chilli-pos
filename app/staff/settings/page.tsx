@@ -8,6 +8,7 @@ import BusinessSetupView from "@/components/staff/BusinessSetupView";
 import BusinessesView from "@/components/staff/BusinessesView";
 import TillDeviceCard from "@/components/staff/TillDeviceCard";
 import StaffLinksCard from "@/components/staff/StaffLinksCard";
+import FiguresExplained from "@/components/staff/FiguresExplained";
 import { isManagerRole } from "@/lib/staff-pin";
 
 const heading = { fontFamily: "var(--font-space-grotesk)" };
@@ -20,6 +21,7 @@ const TABS = [
   { key: "setup", label: "Business setup", icon: "🏢" },
   { key: "permissions", label: "Roles & Permissions", icon: "🔐", superAdminOnly: true },
   { key: "businesses", label: "Businesses", icon: "🗂️", ownerOnly: true },
+  { key: "figures", label: "How figures work", icon: "🧮", superAdminOnly: true },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -79,6 +81,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
               <BusinessSetupView />
             </>
           )}
+          {tab === "figures" && <FiguresExplained />}
           {tab === "businesses" && (
             <>
               <p className="mb-4 text-sm text-muted-foreground">Every business in the group. Each one runs on its own — only you can see across them.</p>
