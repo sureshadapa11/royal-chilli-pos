@@ -13,7 +13,10 @@ import ParticleButton from "@/components/kokonutui/particle-button";
 import { CategoryHeading, CategoryNavBar, CategoryRail, slugify, useCategoryNav, useIsNarrow } from "./CategoryNav";
 import { useWeekHours } from "@/components/site/HoursProvider";
 
-export default function OrderMenu({ categories }: { categories: MenuCategory[] }) {
+export default function OrderMenu({ categories, delivery }: {
+  categories: MenuCategory[];
+  delivery?: { fee: number; freeOver: number; minOrder: number; miles: number };
+}) {
   const week = useWeekHours();
   const router = useRouter();
   const isNarrow = useIsNarrow();
@@ -255,10 +258,22 @@ export default function OrderMenu({ categories }: { categories: MenuCategory[] }
             </a>
           </p>
         ) : (
-          <p className="mx-auto mt-1 max-w-xs text-center text-xs text-muted-foreground">
-            Delivery fee and minimum order depend on your postcode — checked at checkout.
+          <p className="mx-auto mt-1 max-w-sm text-center text-xs text-muted-foreground">
+            {delivery
+              ? <>Delivery {formatCurrency(delivery.fee)}{delivery.freeOver > 0 && <> · <strong className="text-foreground">free over {formatCurrency(delivery.freeOver)}</strong></>} · minimum order {formatCurrency(delivery.minOrder)} · up to {delivery.miles} miles (we check your postcode at checkout)</>
+              : "Delivery fee and minimum order depend on your postcode — checked at checkout."}
           </p>
         )}
+        {/* What the dots mean, and where to ask about allergies (customer test 2026-10-14). */}
+        <div className="mx-auto mt-3 flex max-w-md flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-green-500" /> Vegetarian</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Non-vegetarian</span>
+          <span>
+            Allergies or dietary needs? Please call{" "}
+            <a href={`tel:${siteContent.contact.phone.replace(/\s/g, "")}`} className="font-semibold text-foreground underline">{siteContent.contact.phone}</a>{" "}
+            before ordering.
+          </span>
+        </div>
       </div>
 
       <CategoryNavBar
