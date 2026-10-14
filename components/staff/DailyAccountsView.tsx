@@ -53,6 +53,15 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
   }, [date, toast]);
   useEffect(() => { load(); }, [load]);
 
+  async function removeDay() {
+    if (!window.confirm(`Delete everything entered for ${niceDate(date)}? It will show as not entered, and can be entered again.`)) return;
+    const res = await fetch(`/api/staff/daily-accounts?date=${date}`, { method: "DELETE" });
+    const d = await res.json().catch(() => ({}));
+    if (!res.ok) return toast({ title: "Not deleted", description: d.error ?? "Please try again", variant: "destructive" });
+    toast({ title: `${niceDate(date)} deleted` });
+    load();
+  }
+
   async function save(submit: boolean) {
     setBusy(submit ? "submit" : "save");
     const res = await fetch("/api/staff/daily-accounts", {
@@ -215,6 +224,11 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
                   className="mt-1 w-full rounded-lg border border-border bg-background px-2.5 py-2 text-[14px] focus:outline-none focus:ring-2 focus:ring-red-600/30 disabled:opacity-70" />
               </label>
 
+              {day.canUnlock && day.saved && (
+                <div className="mt-4 flex justify-start">
+                  <button onClick={removeDay} className="text-[13px] font-semibold text-red-700 hover:underline">🗑 Delete this day</button>
+                </div>
+              )}
               {!locked && (
                 <div className="mt-4 flex flex-wrap justify-end gap-2">
                   {status !== "submitted" && (

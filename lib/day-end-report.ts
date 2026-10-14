@@ -149,7 +149,7 @@ export async function sendDayEndReports(): Promise<{ business: string; to: strin
       let reminded: string[] | undefined;
       if (!report.entered && remind.length) {
         const linkUrl = staffLinkUrl(await staffLinkToken(b.id), b.domain, "https://staff.theroyalchilli.com");
-        for (const addr of remind) await sendDayEndReminderEmail(addr, { businessId: b.id, business: b.name, date, linkUrl: `${linkUrl}/day-end`, missingDays: report.missingDays });
+        for (const addr of remind) await sendDayEndReminderEmail(addr, { businessId: b.id, business: b.name, date, linkUrl: `${linkUrl}/day-end?date=${date}`, missingDays: report.missingDays });
         reminded = remind;
       }
       out.push({ business: b.name, to, reminded });

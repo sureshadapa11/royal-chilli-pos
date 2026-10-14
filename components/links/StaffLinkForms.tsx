@@ -179,13 +179,18 @@ const gbp = (v: string | undefined) => (v === undefined || v === "" ? "—" : `�
 
 // ── Day End ──────────────────────────────────────────────────────────────
 
-export function DayEndForm({ token, business, today }: { token: string; business: string; today: string }) {
+export function DayEndForm({ token, business, today, startDate }: { token: string; business: string; today: string; startDate?: string }) {
   const [pin, setPin] = useState("");
   const [name, setName] = useState("");
   const [draft, setDraft, clearDraft, savedAt] = useDraft(`dayend:${token}`, {
     date: today, v: {} as Record<string, string>, notes: "",
     bills: [] as { customer: string; amount: string }[], paid: [] as { bill: string; amount: string; method: string }[],
   });
+  // Opened for a particular day (the reminder email): that day, over any saved draft's.
+  useEffect(() => {
+    if (startDate) setDraft((d) => ({ ...d, date: startDate }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [startDate]);
   const [owedBills, setOwedBills] = useState<{ id: number; name: string }[]>([]);
   const bills = draft.bills ?? [];
   const paid = draft.paid ?? [];
