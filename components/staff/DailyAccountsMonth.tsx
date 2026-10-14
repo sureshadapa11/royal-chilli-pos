@@ -17,17 +17,12 @@ type Month = {
   days: DayFigures[]; figuresTotal: FiguresTotal;
 };
 
-// The worked-out columns: four before the sheet's own, Variance after.
+// The worked-out columns before the sheet's own, Variance after. Only Total
+// sales for now (owner, 2026-10-15): Ex-VAT, Money out and Net total are hidden
+// on this tab (still in the Excel, Dashboard and morning email) — add them back here.
 const LEAD: { key: "total_sales" | "ex_vat" | "money_out" | "net_total"; label: string }[] = [
   { key: "total_sales", label: "Total sales" },
-  { key: "ex_vat", label: "Ex-VAT" },
-  { key: "money_out", label: "Money out" },
-  { key: "net_total", label: "Net total" },
 ];
-
-const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid + events paid · Ex-VAT = Total sales ÷ 1.2 · "
-  + "Money out = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
-  + "Commission & card fees = platform commissions + card fee · Variance = closing balance − opening balance · * no Z report on the sheet yet, the till's figure is used";
 
 const moneyOutTitle = (f: DayFigures) =>
   `Stock received £${f.out.stock.toFixed(2)}\nExpenses £${f.out.expenses.toFixed(2)}\nCard fee £${f.out.card_fee.toFixed(2)}\n`
@@ -113,9 +108,8 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
       thead { display: table-header-group; }
     </style></head><body>
       <h1>${title}</h1>
-      <p>Reporting month: ${monthName(data.month)} · amounts in £ · the total adds up each column on its own</p>
+      <p>${monthName(data.month)}</p>
       <table><thead>${head}</thead><tbody>${body}${total}</tbody></table>
-      <p style="margin-top:6px">${esc(FORMULA)}</p>
       <script>window.onload = function () { window.focus(); window.print(); };<\/script>
     </body></html>`;
     const w = window.open("", "_blank");
