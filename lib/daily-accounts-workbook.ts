@@ -25,11 +25,10 @@ const LEAD = [
   { key: "net_total", label: "Net total" },
 ] as const;
 
-const FORMULA = "Total sales = Z report (tips not included) + Just Eat + Deliveroo + Uber Eats + Hiest + catering paid + events paid · Ex-VAT = Total sales ÷ 1.2 · "
-  + "Money out = stock received + expenses (VAT claimed back taken off) + card fee + till paid out + staff wages + commission · Net total = Ex-VAT − Money out · "
-  + "Commission & card fees = platform commissions + card fee · Variance = cash counted − cash expected (opening + cash sales + cash in − cash out − bank in) · * no Z report on the sheet yet, the till's figure is used";
-
 export type Cell = string | number | null;
+
+/** Hours as "9h 49m", never 9.82 (owner's rule for screens, prints and sheets). */
+const hm = (hours: number) => { const m = Math.round(hours * 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
 
 /** A sheet with a two-line title, money formatting from column 1 to `lastMoney`, and widths. */
 export function sheet(aoa: Cell[][], headerRow: number, lastMoney: number, widths: number[]): XLSX.WorkSheet {
@@ -74,7 +73,7 @@ export async function monthSheets(businessId: number, month: string, includeSala
   const head = ["Date", ...LEAD.map((c) => c.label), ...SHEET_COLUMNS.map((f) => f.label), "Variance", "Notes", "Status"];
   const report: Cell[][] = [
     [`${name} — Daily Accounts Report`],
-    [`Reporting month: ${monthName(month)} · amounts in £ · the total adds up each column on its own`],
+    [monthName(month)],
     [],
     head,
     ...days.map((f) => {
@@ -88,9 +87,8 @@ export async function monthSheets(businessId: number, month: string, includeSala
         r ? (r.status === "submitted" ? "Submitted" : "Draft") : "",
       ];
     }),
-    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_COLUMNS.map((x) => sheetTotal(x.key, totals, ft, rows, days, tradingDayStr())), ft.variance, "", ""],
-    [],
-    [FORMULA],
+    // Opening / closing balances can't be added up, so their total is blank.
+    ["MONTH TOTAL", ...LEAD.map((c) => ft[c.key]), ...SHEET_COLUMNS.map((x) => (x.key === "opening_balance" || x.key === "closing_balance" ? null : sheetTotal(x.key, totals, ft, rows, days, tradingDayStr()))), ft.variance, "", ""],
   ];
   const ws1 = sheet(report, 3, LEAD.length + SHEET_COLUMNS.length + 1,
     [16, ...LEAD.map((c) => Math.max(12, c.label.length + 2)), ...SHEET_COLUMNS.map((f) => Math.max(11, f.label.length + 2)), 11, 40, 11]);
@@ -99,7 +97,7 @@ export async function monthSheets(businessId: number, month: string, includeSala
   const outHead = ["Date", ...MONEY_OUT_PARTS.map((p) => p.label), "Money out"];
   const breakdown: Cell[][] = [
     [`${name} — Money out by day`],
-    [`${monthName(month)} · stock = deliveries received · expenses = VAT claimed back taken off · card fee = card × card fee rate · till paid out = cash taken out of the till · staff wages = hours × pay rate`],
+    [monthName(month)],
     [],
     outHead,
     ...days.map((f) => [dayName(f.date), ...MONEY_OUT_PARTS.map((p) => f.out[p.key]), f.money_out]),
@@ -111,18 +109,21 @@ export async function monthSheets(businessId: number, month: string, includeSala
   const [book, safe] = await Promise.all([cashBook(businessId, from, to), safeBook(businessId, from, to)]);
   const bookRows: Cell[][] = [
     [`${name} — Cash book 1: Till`],
-    [`${monthName(month)} · cash only · each day: opening + cash sales + till cash in − till cash out = expected, then counted and variance (counted − expected), then cash taken to the Safe${book.start ? ` · book starts ${dayName(book.start)}` : " · no Day End with an opening yet"}`],
+    [monthName(month)],
     [],
     ["Date", "In", "Out", "Balance", "Particulars", "Person"],
   ];
-  for (const d of book.days) {
-    d.lines.forEach((l, i) => bookRows.push([i === 0 ? dayName(d.date) : "", l.inAmount || null, l.outAmount || null, l.balance,
-      l.label + (l.kind === "opening" && d.openingDiff != null ? ` (differs from last count by ${d.openingDiff.toFixed(2)})` : ""), l.by ?? ""]));
+  const today = tradingDayStr();
+  for (const d of book.days.filter((x) => x.entered || x.date < today)) {
+    const line = (l: (typeof d.lines)[number], first: boolean): Cell[] => [first ? dayName(d.date) : "", l.inAmount || null, l.outAmount || null, l.balance,
+      l.label + (l.kind === "opening" && d.openingDiff != null ? ` (differs from last count by ${d.openingDiff.toFixed(2)})` : ""), l.by ?? ""];
+    d.lines.filter((l) => l.kind !== "bank").forEach((l, i) => bookRows.push(line(l, i === 0)));
     if (!d.entered) bookRows.push([d.lines.length ? "" : dayName(d.date), null, null, null, "No Day End for this day", ""]);
     if (d.expected != null) bookRows.push(["", null, null, d.counted ?? d.expected, `Expected ${d.expected.toFixed(2)} · Counted ${d.counted == null ? "—" : d.counted.toFixed(2)} · Variance ${d.variance == null ? "not counted" : d.variance.toFixed(2)}`, ""]);
+    d.lines.filter((l) => l.kind === "bank").forEach((l) => bookRows.push(line(l, false)));
   }
   // Cash book 2: the Safe (136), under the till.
-  bookRows.push([], [], [`${name} — Cash book 2: Safe`], [`${monthName(month)} · takings from the till + Safe cash in − Safe cash out = balance; Safe counts show the difference`], [],
+  bookRows.push([], [], [`${name} — Cash book 2: Safe`], [],
     ["Date", "In", "Out", "Balance", "Particulars", "Person"]);
   if (safe.opening) bookRows.push(["", null, null, safe.opening, "Brought forward", ""]);
   safe.lines.forEach((l, i) => bookRows.push([i === 0 || safe.lines[i - 1].date !== l.date ? dayName(l.date) : "", l.inAmount || null, l.outAmount || null, l.balance,
@@ -143,11 +144,11 @@ export async function monthSheets(businessId: number, month: string, includeSala
     const tot = (f: (r: (typeof sal)[number]) => number) => Math.round(sal.reduce((s, r) => s + f(r), 0) * 100) / 100;
     const salRows: Cell[][] = [
       [`${name} — Salary`],
-      [`${monthName(month)} · wages = hours × pay rate · balance to pay = wages − paid through the staff link − advance still owed`],
+      [monthName(month)],
       [],
       salHead,
-      ...sal.map((r) => [r.name, r.hours, r.payRate, r.wages, r.paid, r.advanceGiven, r.advanceRepaid, r.advanceDeducted, r.advanceOwed, r.balance]),
-      ["TOTAL", tot((r) => r.hours), null, tot((r) => r.wages), tot((r) => r.paid), tot((r) => r.advanceGiven), tot((r) => r.advanceRepaid), tot((r) => r.advanceDeducted), tot((r) => r.advanceOwed), tot((r) => r.balance)],
+      ...sal.map((r) => [r.name, hm(r.hours), r.payRate, r.wages, r.paid, r.advanceGiven, r.advanceRepaid, r.advanceDeducted, r.advanceOwed, r.balance]),
+      ["TOTAL", hm(sal.reduce((s, r) => s + r.hours, 0)), null, tot((r) => r.wages), tot((r) => r.paid), tot((r) => r.advanceGiven), tot((r) => r.advanceRepaid), tot((r) => r.advanceDeducted), tot((r) => r.advanceOwed), tot((r) => r.balance)],
     ];
     sheets.push({ title: "Salary", ws: sheet(salRows, 3, salHead.length - 1, [22, ...salHead.slice(1).map((h) => Math.max(11, h.length + 2))]) });
   }
