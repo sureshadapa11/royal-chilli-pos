@@ -116,3 +116,22 @@ async function tillPaidOutOn(businessId: number, date: string): Promise<number> 
   const { data } = await db.from("cash_paid_outs").select("amount").in("work_period_id", periods.map((p) => p.id));
   return Math.round((data ?? []).reduce((s, p) => s + Number(p.amount), 0) * 100) / 100;
 }
+
+/**
+ * DELETE ?date= — remove a day entered by mistake (Super admin only, agreed
+ * 2026-10-14), so it shows as not entered and can be entered again (also
+ * through the staff link). Any receipt photos stay in storage.
+ */
+export async function DELETE(req: NextRequest) {
+  const session = await getSessionFromRequest(req);
+  if (!session || !canUnlock(session)) return NextResponse.json({ error: "Only a Super admin can delete a day." }, { status: 403 });
+  const date = req.nextUrl.searchParams.get("date") ?? "";
+  if (!DATE.test(date)) return NextResponse.json({ error: "Pick a date" }, { status: 400 });
+  const db = bizDb(session.businessId);
+  const { data: row } = await db.from("daily_accounts").select("*").eq("trading_date", date).maybeSingle();
+  if (!row) return NextResponse.json({ error: "Nothing entered for that day." }, { status: 404 });
+  const { error } = await db.from("daily_accounts").delete().eq("trading_date", date);
+  if (error) return NextResponse.json({ error: "Couldn't delete the day." }, { status: 500 });
+  await db.from("audit_logs").insert({ staff_id: session.id, action: "daily_accounts_deleted", entity_type: "daily_accounts", entity_id: row.id, changes: { date, deleted: row } });
+  return NextResponse.json({ ok: true });
+}
