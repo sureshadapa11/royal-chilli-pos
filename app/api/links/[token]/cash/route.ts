@@ -26,7 +26,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (amount === "bad" || amount == null || amount <= 0) return NextResponse.json({ error: "Enter the amount.", field: "amount" }, { status: 400 });
   const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, 500) : "";
   if (cat.reasonRequired && reason.length < 3) return NextResponse.json({ error: "Write what it was for.", field: "reason" }, { status: 400 });
-  const method = body?.method === "card" || body?.method === "bank" ? body.method : "cash";
+  // Safe-only entries (Paid into bank / Given to owner) are always Safe cash (136).
+  const method = cat.safeOnly ? "cash" : body?.method === "card" || body?.method === "bank" ? body.method : "cash";
+  // Cash goes through the Safe (136): the till only holds the float and cash sales.
+  const place = method === "cash" ? "safe" : "till";
   const paidTo = typeof body?.paid_to === "string" ? body.paid_to.trim().slice(0, 120) || null : null;
   const today = tradingDayStr();
   // A catering / event payment goes to its job (133): sales by cash or bank,
@@ -43,7 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
       if (error || !created) return NextResponse.json({ error: "Couldn't save the job. Please try again." }, { status: 500 });
       jobId = created.id;
     }
-    const res = await addJobPayment(who.businessId, jobId, who.staff.id, { amount, method, date, note: reason }, "link");
+    const res = await addJobPayment(who.businessId, jobId, who.staff.id, { amount, method, date, note: reason, place }, "link");
     if ("error" in res) {
       // A job made just now for this payment goes too, so nothing is left half-saved.
       if (body?.new_job) await bizDb(who.businessId).from("catering_jobs").delete().eq("id", jobId);
@@ -122,7 +125,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
 
   const { data: saved, error } = await db.from("cash_movements").insert({
-    movement_date: date, direction: cat.direction, category: cat.key, amount, method,
+    movement_date: date, direction: cat.direction, category: cat.key, amount, method, place,
     reason: reason || cat.label, paid_to: paidTo ?? (pickedName || null), staff_id: who.staff.id, source: "link",
     staff_member_id: staffMemberId, supplier_id: supplierId, expense_id: expenseId, supplier_payment_id: supplierPaymentId,
   }).select("id").single();

@@ -255,7 +255,7 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
           {PLATFORMS.map((p) => (v[p.key] || v[`${p.key}_commission`]) ? <div key={p.key}>{line(p.label, `${gbp(v[p.key])} · comm ${gbp(v[`${p.key}_commission`])}`)}</div> : null)}
           {(v.catering_paid || v.catering_pending) && line("Catering paid / pending", `${gbp(v.catering_paid)} / ${gbp(v.catering_pending)}`)}
           {line("Opening cash", gbp(v.opening_balance))}
-          {line("Bank in", gbp(v.bank_in))}
+          {line("Cash taken to Safe", gbp(v.bank_in))}
           {line("Cash counted", gbp(v.closing_balance))}
           {bills.filter((b) => b.customer.trim()).map((b, i) => <div key={`b${i}`}>{line(`Unpaid bill · ${b.customer}`, gbp(b.amount))}</div>)}
           {paid.filter((p) => p.bill).map((p, i) => <div key={`p${i}`}>{line(`Bill paid · ${owedBills.find((x) => String(x.id) === p.bill)?.name.split(" · ")[0] ?? ""}`, gbp(p.amount))}</div>)}
@@ -303,8 +303,9 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
       <section className={card}>
         <div className={head}>Cash drawer</div>
         <Row label="Opening cash"><Money value={v.opening_balance ?? ""} onChange={set("opening_balance")} /></Row>
-        <Row label="Bank in (deposited / to owner)"><Money value={v.bank_in ?? ""} onChange={set("bank_in")} /></Row>
         <Row label="Cash counted at close"><Money value={v.closing_balance ?? ""} onChange={set("closing_balance")} /></Row>
+        <Row label="Cash taken to Safe (after counting)"><Money value={v.bank_in ?? ""} onChange={set("bank_in")} /></Row>
+        <p className="mt-1 text-[13px] text-[#7a6a60]">Count the till first, then take the cash to the Safe, leaving tomorrow&apos;s float.</p>
       </section>
       <section className={card}>
         <div className={head}>Unpaid bills today</div>
@@ -447,7 +448,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
         <div className={head}>What was it for?</div>
         <div className="grid grid-cols-2 gap-2">
           {CASH_CATEGORIES.filter((c) => c.direction === f.direction && !c.hidden).map((c) => (
-            <button key={c.key} onClick={() => { upd({ category: c.key, who: "" }); if (c.pick === "job") refreshPicks(); }}
+            <button key={c.key} onClick={() => { upd({ category: c.key, who: "", ...(c.safeOnly ? { method: "cash" } : {}) }); if (c.pick === "job") refreshPicks(); }}
               className={`flex min-h-[56px] items-center gap-1.5 rounded-2xl border-2 px-2.5 py-2 text-left text-[14px] font-semibold leading-tight ${f.category === c.key ? "border-[#e4473a] bg-red-50" : "border-[#eadfcc] bg-white"}`}>
               <span>{c.icon}</span><span>{c.label}</span>
             </button>
@@ -459,7 +460,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
           {CATEGORY_HINT[cat.key] && (
             <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">ℹ️ {CATEGORY_HINT[cat.key]}</p>
           )}
-          <section className={card}>
+          {!cat.safeOnly && <section className={card}>
             <div className={head}>Paid how?</div>
             <div className="grid grid-cols-3 gap-2">
               {PAY_METHODS.map((m) => (
@@ -469,8 +470,8 @@ export function CashForm({ token, business, today }: { token: string; business: 
                 </button>
               ))}
             </div>
-            {f.method !== "cash" && <p className="mt-2 text-[13px] text-[#7a6a60]">Not cash, so it doesn't count in the cash drawer.</p>}
-          </section>
+            <p className="mt-2 text-[13px] text-[#7a6a60]">{f.method === "cash" ? (cat.direction === "in" ? "🔒 Cash goes into the Safe." : "🔒 Cash comes out of the Safe.") : "Not cash, so it isn't in the Safe."}</p>
+          </section>}
           {cat.pick && (
             <section className={card}>
               <div className={head}>{cat.pick === "staff" ? "Staff member" : cat.pick === "job" ? "Which job?" : "Supplier"}</div>

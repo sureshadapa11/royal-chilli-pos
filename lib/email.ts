@@ -1073,13 +1073,14 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
     : "";
   const dr = d.drawer;
   const drawer = section("Cash drawer", [
-    row("Opening", gbp(dr.opening)), row("+ Cash sales", gbp(dr.cashSales)), row("+ Money in (cash)", gbp(dr.moneyIn)), row("− Money out (cash)", gbp(dr.moneyOut)), row("− Bank in", gbp(dr.bankIn)),
-    row("Expected at close", gbp(dr.expected), true), row("Counted", gbp(dr.counted), true),
+    row("Opening", gbp(dr.opening)), row("+ Cash sales", gbp(dr.cashSales)), row("+ Money in (cash)", gbp(dr.moneyIn)), row("− Money out (cash)", gbp(dr.moneyOut)),
+    row("Expected at close", gbp(dr.expected), true), row("Counted", gbp(dr.counted), true), row("→ Taken to Safe", gbp(dr.bankIn)),
     row("Variance (counted − expected)", dr.variance == null ? "—" : `<span style="color:${Math.abs(dr.variance) < 0.01 ? "#15803d" : "#b91c1c"};">${dr.variance > 0 ? "+" : ""}${gbp(dr.variance)}</span>`, true),
+    ...(d.safe ? [row("🔒 Safe balance", gbp(d.safe.balance), true), ...(d.safe.lastCount ? [row(`Last Safe count (${d.safe.lastCount.date})`, `${gbp(d.safe.lastCount.counted)} · ${Math.abs(d.safe.lastCount.difference) < 0.005 ? "correct" : `${d.safe.lastCount.difference > 0 ? "+" : ""}${gbp(d.safe.lastCount.difference)}`}`)] : [])] : []),
   ].join(""));
 
   const cash = d.cash.length
-    ? section("Money in / out", d.cash.map((c) => row(`${c.direction === "out" ? "OUT" : "IN"} · ${c.method} · ${c.category}${c.reason && c.reason !== c.category ? `: ${c.reason}` : ""}${c.paidTo ? ` (${c.paidTo})` : ""} · ${c.by}`,
+    ? section("Money in / out", d.cash.map((c) => row(`${c.direction === "out" ? "OUT" : "IN"} · ${c.method}${c.method === "Cash" ? (c.place === "safe" ? " (Safe)" : " (Till)") : ""} · ${c.category}${c.reason && c.reason !== c.category ? `: ${c.reason}` : ""}${c.paidTo ? ` (${c.paidTo})` : ""} · ${c.by}`,
         `<span style="color:${c.direction === "out" ? "#b91c1c" : "#15803d"};">${c.direction === "out" ? "−" : "+"}${gbp(c.amount)}</span>`)).join(""))
     : "";
 

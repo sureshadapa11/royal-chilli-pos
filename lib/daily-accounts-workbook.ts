@@ -4,7 +4,7 @@ import { columnTotals } from "@/lib/daily-accounts";
 import { tradingDayStr } from "@/lib/london-date";
 import { SHEET_COLUMNS, sheetCell, sheetTotal } from "@/lib/sheet-columns";
 import { accountsByDay, MONEY_OUT_PARTS, totalFigures } from "@/lib/daily-figures";
-import { cashBook } from "@/lib/cash-book";
+import { cashBook, safeBook } from "@/lib/cash-book";
 import { salarySheet } from "@/lib/salary-sheet";
 
 // The month's Daily Accounts workbook sheets (one business), shared by the
@@ -108,10 +108,10 @@ export async function monthSheets(businessId: number, month: string, includeSala
   const ws2 = sheet(breakdown, 3, outHead.length - 1, [16, ...outHead.slice(1).map((h) => Math.max(13, h.length + 2))]);
 
   // Sheet 3: the cash book (lib/cash-book.ts), line by line with a running balance.
-  const book = await cashBook(businessId, from, to);
+  const [book, safe] = await Promise.all([cashBook(businessId, from, to), safeBook(businessId, from, to)]);
   const bookRows: Cell[][] = [
-    [`${name} — Cash book`],
-    [`${monthName(month)} · cash only · each day: opening + cash sales + cash in − cash out − bank in = expected, then counted and variance (counted − expected)${book.start ? ` · book starts ${dayName(book.start)}` : " · no Day End with an opening yet"}`],
+    [`${name} — Cash book 1: Till`],
+    [`${monthName(month)} · cash only · each day: opening + cash sales + till cash in − till cash out = expected, then counted and variance (counted − expected), then cash taken to the Safe${book.start ? ` · book starts ${dayName(book.start)}` : " · no Day End with an opening yet"}`],
     [],
     ["Date", "In", "Out", "Balance", "Particulars", "Person"],
   ];
@@ -119,8 +119,15 @@ export async function monthSheets(businessId: number, month: string, includeSala
     d.lines.forEach((l, i) => bookRows.push([i === 0 ? dayName(d.date) : "", l.inAmount || null, l.outAmount || null, l.balance,
       l.label + (l.kind === "opening" && d.openingDiff != null ? ` (differs from last count by ${d.openingDiff.toFixed(2)})` : ""), l.by ?? ""]));
     if (!d.entered) bookRows.push([d.lines.length ? "" : dayName(d.date), null, null, null, "No Day End for this day", ""]);
-    if (d.expected != null) bookRows.push(["", null, null, d.carry, `Expected ${d.expected.toFixed(2)} · Counted ${d.counted == null ? "—" : d.counted.toFixed(2)} · Variance ${d.variance == null ? "not counted" : d.variance.toFixed(2)}`, ""]);
+    if (d.expected != null) bookRows.push(["", null, null, d.counted ?? d.expected, `Expected ${d.expected.toFixed(2)} · Counted ${d.counted == null ? "—" : d.counted.toFixed(2)} · Variance ${d.variance == null ? "not counted" : d.variance.toFixed(2)}`, ""]);
   }
+  // Cash book 2: the Safe (136), under the till.
+  bookRows.push([], [], [`${name} — Cash book 2: Safe`], [`${monthName(month)} · takings from the till + Safe cash in − Safe cash out = balance; Safe counts show the difference`], [],
+    ["Date", "In", "Out", "Balance", "Particulars", "Person"]);
+  if (safe.opening) bookRows.push(["", null, null, safe.opening, "Brought forward", ""]);
+  safe.lines.forEach((l, i) => bookRows.push([i === 0 || safe.lines[i - 1].date !== l.date ? dayName(l.date) : "", l.inAmount || null, l.outAmount || null, l.balance,
+    l.kind === "count" ? `${l.label}: ${l.counted?.toFixed(2)} (difference ${l.difference?.toFixed(2)})` : l.label, l.by ?? ""]));
+  bookRows.push(["TOTAL", safe.totalIn, safe.totalOut, safe.balance, "Should be in the Safe", ""]);
   const ws3 = sheet(bookRows, 3, 3, [16, 12, 12, 13, 60, 18]);
 
   const sheets: NamedSheet[] = [

@@ -4,20 +4,25 @@ import { allRows } from "@/lib/finance";
 import { londonDateStr, tradingRangeUtc } from "@/lib/london-date";
 import { cashCategoryLabel } from "@/lib/cash-categories";
 
-// The Cash Book (Staff Hub → Daily accounts → Cash book, agreed 2026-10-12,
-// like the INSOMNIA sheet): each business's own cash drawer, day by day, line
-// by line, with a running balance. It starts from the first Day End's opening
-// cash. Each day:
-//   Opening (typed, or carried from the last count)
-//   + cash sales (Day End "Cash")          + cash Money IN (staff link)
-//   − cash Money OUT (staff link)          − till Cash Out
-//   − Bank in (deposited / given to owner)
+// The Cash Books (Staff Hub → Daily accounts → Cash book, agreed 2026-10-12,
+// like the INSOMNIA sheet; split into Till and Safe 2026-10-14):
+//
+// 🧾 TILL — the cash drawer, day by day, from the first Day End's opening:
+//   Opening (typed — the float changes — or carried)
+//   + cash sales (Day End "Cash")   + Till cash Money IN
+//   − Till cash Money OUT           − till Cash Out
 //   = Expected  → Counted → Variance (counted − expected)
-// The next day carries on from what was counted (or expected, if no count).
-// Only cash: card / bank transfer entries never touch the drawer.
+//   − Cash taken to Safe (after the count)  → what's left for tomorrow
+//
+// 🔒 SAFE — cash that doesn't go through the till, from £0 on the same start:
+//   + Takings from till (the Day End's "Cash taken to Safe")
+//   + Safe cash Money IN (owner, catering / events, other income, advance repaid)
+//   − Safe cash Money OUT (wages, advances, bills, paid into bank, given to owner)
+//   = running balance; a Safe count shows counted − expected.
+// Only cash: card / bank transfer entries are in neither book.
 
 export type BookLine = {
-  kind: "opening" | "sales" | "in" | "out" | "till_out" | "bank";
+  kind: "opening" | "sales" | "in" | "out" | "till_out" | "bank" | "takings" | "count";
   label: string;
   by: string | null;
   inAmount: number;
@@ -66,10 +71,15 @@ export function buildCashBook(days: DayInput[], carryIn: number | null): BookDay
     for (const m of d.moves.filter((x) => x.direction === "in")) push("in", m.label, m.by, m.amount, 0);
     for (const m of d.moves.filter((x) => x.direction === "out")) push("out", m.label, m.by, 0, m.amount);
     for (const t of d.tillOut) push("till_out", `Till cash out: ${t.reason}`, t.by, 0, t.amount);
-    if (de?.bankIn) push("bank", "Bank in (deposited / given to owner)", de.by, 0, de.bankIn);
 
+    // Counted first; then the takings go to the Safe (136).
     const expected = opening == null ? null : bal;
     const counted = de?.closing ?? null;
+    const toSafe = de?.bankIn ?? 0;
+    if (toSafe) {
+      bal = r2((counted ?? bal) - toSafe);
+      lines.push({ kind: "bank", label: "Cash taken to Safe", by: de?.by ?? null, inAmount: 0, outAmount: r2(toSafe), balance: bal });
+    }
     out.push({
       date: d.date,
       entered: !!de,
@@ -79,9 +89,9 @@ export function buildCashBook(days: DayInput[], carryIn: number | null): BookDay
       expected,
       counted,
       variance: expected != null && counted != null ? r2(counted - expected) : null,
-      carry: counted ?? expected,
+      carry: counted != null || expected != null ? r2((counted ?? expected ?? 0) - toSafe) : null,
     });
-    carry = counted ?? expected;
+    carry = counted != null || expected != null ? r2((counted ?? expected ?? 0) - toSafe) : null;
   }
   return out;
 }
@@ -106,7 +116,7 @@ export async function cashBook(businessId: number, from: string, to: string): Pr
       db.from("daily_accounts").select("trading_date, opening_balance, cash, bank_in, closing_balance, submitted_by, updated_by")
         .gte("trading_date", calcFrom).lte("trading_date", realTo).order("trading_date").range(a, b)),
     allRows<{ movement_date: string; direction: string; category: string; amount: number; reason: string; paid_to: string | null; staff_id: number | null }>((a, b) =>
-      db.from("cash_movements").select("movement_date, direction, category, amount, reason, paid_to, staff_id").eq("method", "cash")
+      db.from("cash_movements").select("movement_date, direction, category, amount, reason, paid_to, staff_id").eq("method", "cash").eq("place", "till")
         .gte("movement_date", calcFrom).lte("movement_date", realTo).order("id").range(a, b)),
     allRows<{ id: number; opened_at: string }>((a, b) =>
       db.from("work_periods").select("id, opened_at").gte("opened_at", tStart).lte("opened_at", tEnd).order("id").range(a, b)),
@@ -143,5 +153,89 @@ export async function cashBook(businessId: number, from: string, to: string): Pr
 function nextDay(d: string): string {
   const x = new Date(`${d}T12:00:00Z`);
   x.setUTCDate(x.getUTCDate() + 1);
+  return x.toISOString().slice(0, 10);
+}
+
+// ── 🔒 Safe ────────────────────────────────────────────────────────────────
+
+export type SafeLine = { date: string; kind: "takings" | "in" | "out" | "count"; label: string; by: string | null; inAmount: number; outAmount: number; balance: number; counted?: number; difference?: number };
+export type SafeBook = { start: string | null; opening: number; lines: SafeLine[]; totalIn: number; totalOut: number; balance: number; lastCount: { date: string; counted: number; difference: number } | null };
+
+/** Builds the Safe book (pure): every line in date order with a running balance from £0. */
+export function buildSafeBook(
+  entries: { date: string; kind: "takings" | "in" | "out"; label: string; by: string | null; amount: number }[],
+  counts: { date: string; amount: number; by: string | null; note: string | null }[],
+  from: string,
+): Omit<SafeBook, "start"> {
+  // Takings and money in first each day, then money out, then any count.
+  const order = { takings: 0, in: 1, out: 2 } as const;
+  const sorted = [...entries].sort((a, b) => a.date.localeCompare(b.date) || order[a.kind] - order[b.kind]);
+  let bal = 0;
+  let opening = 0;
+  const lines: SafeLine[] = [];
+  let totalIn = 0, totalOut = 0;
+  let lastCount: SafeBook["lastCount"] = null;
+  const countsSorted = [...counts].sort((a, b) => a.date.localeCompare(b.date));
+  let ci = 0;
+  const flushCounts = (upTo: string) => {
+    while (ci < countsSorted.length && countsSorted[ci].date <= upTo) {
+      const c = countsSorted[ci++];
+      const difference = r2(c.amount - bal);
+      if (c.date >= from) lines.push({ date: c.date, kind: "count", label: c.note ? `Safe counted · ${c.note}` : "Safe counted", by: c.by, inAmount: 0, outAmount: 0, balance: bal, counted: r2(c.amount), difference });
+      lastCount = { date: c.date, counted: r2(c.amount), difference };
+    }
+  };
+  for (const e of sorted) {
+    flushCounts(prevDay(e.date));
+    if (e.date < from) {
+      bal = r2(bal + (e.kind === "out" ? -e.amount : e.amount));
+      opening = bal;
+      continue;
+    }
+    const inAmount = e.kind === "out" ? 0 : r2(e.amount);
+    const outAmount = e.kind === "out" ? r2(e.amount) : 0;
+    bal = r2(bal + inAmount - outAmount);
+    totalIn = r2(totalIn + inAmount); totalOut = r2(totalOut + outAmount);
+    lines.push({ date: e.date, kind: e.kind, label: e.label, by: e.by, inAmount, outAmount, balance: bal });
+  }
+  flushCounts("9999-12-31");
+  return { opening, lines, totalIn, totalOut, balance: bal, lastCount };
+}
+
+/** The Safe for `from`..`to`: lines in the period, carried from the start. */
+export async function safeBook(businessId: number, from: string, to: string): Promise<SafeBook> {
+  const db = bizDb(businessId);
+  const { data: first } = await db.from("daily_accounts").select("trading_date")
+    .not("opening_balance", "is", null).order("trading_date").limit(1).maybeSingle();
+  const { data: firstMove } = await db.from("cash_movements").select("movement_date").eq("method", "cash").eq("place", "safe").order("movement_date").limit(1).maybeSingle();
+  const start = [first?.trading_date, firstMove?.movement_date].filter(Boolean).sort()[0] as string | undefined;
+  const empty = { start: start ?? null, opening: 0, lines: [], totalIn: 0, totalOut: 0, balance: 0, lastCount: null };
+  if (!start || start > to) return empty;
+  const [rows, moves, counts] = await Promise.all([
+    allRows<{ trading_date: string; bank_in: number | null; submitted_by: number | null; updated_by: number | null }>((a, b) =>
+      db.from("daily_accounts").select("trading_date, bank_in, submitted_by, updated_by").gte("trading_date", start).lte("trading_date", to).order("trading_date").range(a, b)),
+    allRows<{ movement_date: string; direction: string; category: string; amount: number; reason: string; paid_to: string | null; staff_id: number | null }>((a, b) =>
+      db.from("cash_movements").select("movement_date, direction, category, amount, reason, paid_to, staff_id").eq("method", "cash").eq("place", "safe")
+        .gte("movement_date", start).lte("movement_date", to).order("id").range(a, b)),
+    allRows<{ count_date: string; amount: number; note: string | null; counted_by: number | null }>((a, b) =>
+      db.from("safe_counts").select("count_date, amount, note, counted_by").lte("count_date", to).order("count_date").order("id").range(a, b)),
+  ]);
+  const ids = [...new Set([...rows.flatMap((r) => [r.submitted_by, r.updated_by]), ...moves.map((m) => m.staff_id), ...counts.map((c) => c.counted_by)].filter((x): x is number => !!x))];
+  const { data: staff } = ids.length ? await supabase.from("staff").select("id, name").in("id", ids) : { data: [] as { id: number; name: string }[] };
+  const nameOf = (id: number | null) => (id ? (staff ?? []).find((s) => s.id === id)?.name ?? null : null);
+  const entries = [
+    ...rows.filter((r) => Number(r.bank_in) > 0).map((r) => ({ date: r.trading_date, kind: "takings" as const, label: "Takings from till", by: nameOf(r.submitted_by ?? r.updated_by), amount: Number(r.bank_in) })),
+    ...moves.map((m) => ({
+      date: m.movement_date, kind: (m.direction === "in" ? "in" : "out") as "in" | "out", by: nameOf(m.staff_id), amount: Number(m.amount),
+      label: [cashCategoryLabel(m.category), m.reason && m.reason !== cashCategoryLabel(m.category) ? m.reason : null, m.paid_to].filter(Boolean).join(" · "),
+    })),
+  ];
+  const book = buildSafeBook(entries, counts.map((c) => ({ date: c.count_date, amount: Number(c.amount), by: nameOf(c.counted_by), note: c.note })), from);
+  return { start, ...book };
+}
+
+function prevDay(d: string): string {
+  const x = new Date(`${d}T12:00:00Z`);
+  x.setUTCDate(x.getUTCDate() - 1);
   return x.toISOString().slice(0, 10);
 }

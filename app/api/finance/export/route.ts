@@ -10,7 +10,7 @@ import type { ZReport } from "@/lib/z-report";
 import { tillInUse } from "@/lib/till-in-use";
 import { accountsByDay, totalFigures } from "@/lib/daily-figures";
 import { getVatRate, extractVat } from "@/lib/finance";
-import { cashBook } from "@/lib/cash-book";
+import { cashBook, safeBook } from "@/lib/cash-book";
 import { salarySheet } from "@/lib/salary-sheet";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 import { getBrand } from "@/lib/brand";
@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
     getVatRate(session.businessId),
     db.from("expenses").select("amount, expense_date").eq("vat_applicable", 1).gte("expense_date", from).lte("expense_date", to),
     cashBook(session.businessId, from, to),
-    db.from("cash_movements").select("movement_date, direction, category, method, amount, reason, paid_to, staff_id, created_at")
+    db.from("cash_movements").select("movement_date, direction, category, method, place, amount, reason, paid_to, staff_id, created_at")
       .gte("movement_date", from).lte("movement_date", to).order("movement_date").order("created_at"),
     salarySheet(session.businessId, from, to),
     tillInUse(session.businessId),
@@ -190,8 +190,8 @@ export async function GET(req: NextRequest) {
     return {
       Date: d.date, "Day End": d.entered ? "Entered" : "No Day End",
       Opening: d.opening ?? "", "Cash sales": sum(["sales"], "inAmount"), "Money in": sum(["in"], "inAmount"),
-      "Money out": sum(["out", "till_out"], "outAmount"), "Bank in": sum(["bank"], "outAmount"),
-      Expected: d.expected ?? "", Counted: d.counted ?? "", Variance: d.variance ?? "",
+      "Money out": sum(["out", "till_out"], "outAmount"),
+      Expected: d.expected ?? "", Counted: d.counted ?? "", Variance: d.variance ?? "", "Taken to Safe": sum(["bank"], "outAmount"),
     };
   });
 
@@ -200,7 +200,7 @@ export async function GET(req: NextRequest) {
   const nameOf = (id: number | null) => (who ?? []).find((w) => w.id === id)?.name ?? "";
   const moveRows = (moves ?? []).map((m) => ({
     Date: m.movement_date, "In / Out": m.direction === "in" ? "In" : "Out", Category: cashCategoryLabel(m.category),
-    "Paid how": payMethodLabel(m.method), Amount: r2(n(m.amount)), Reason: m.reason ?? "", "Paid to": m.paid_to ?? "", "Entered by": nameOf(m.staff_id),
+    "Paid how": payMethodLabel(m.method), "Till / Safe": m.method === "cash" ? (m.place === "safe" ? "Safe" : "Till") : "", Amount: r2(n(m.amount)), Reason: m.reason ?? "", "Paid to": m.paid_to ?? "", "Entered by": nameOf(m.staff_id),
   }));
 
   // Salary: pay per person only (no hours or rates), as agreed.
@@ -226,7 +226,16 @@ export async function GET(req: NextRequest) {
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(accountsDaily), "Daily summary");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(vatRows), "VAT summary");
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bookRows.length ? bookRows : [{ Note: "No cash book entries this month" }]), "Cash book");
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(bookRows.length ? bookRows : [{ Note: "No cash book entries this month" }]), "Cash book (Till)");
+  // Cash book 2: the Safe (136).
+  const safe = await safeBook(session.businessId, from, to);
+  const safeRows: Record<string, string | number>[] = [
+    ...(safe.opening ? [{ Date: "", Particulars: "Brought forward", In: "", Out: "", Balance: safe.opening, Person: "" }] : []),
+    ...safe.lines.map((l) => ({ Date: l.date, Particulars: l.kind === "count" ? `${l.label}: ${l.counted?.toFixed(2)} (difference ${l.difference?.toFixed(2)})` : l.label,
+      In: l.inAmount || "", Out: l.outAmount || "", Balance: l.balance, Person: l.by ?? "" })),
+  ];
+  if (safeRows.length) safeRows.push({ Date: "TOTAL", Particulars: "Should be in the Safe", In: safe.totalIn, Out: safe.totalOut, Balance: safe.balance, Person: "" });
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(safeRows.length ? safeRows : [{ Note: "Nothing in the Safe this month" }]), "Cash book (Safe)");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moveRows.length ? moveRows : [{ Note: "No Money In / Out entries this month" }]), "Money In-Out");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(moneyOutRows.length ? moneyOutRows : [{ Note: "Nothing paid out this month" }]), "Money out");
   XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(jobRows.length ? jobRows : [{ Note: "No catering or events this month" }]), "Catering & events");

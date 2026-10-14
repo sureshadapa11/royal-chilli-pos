@@ -29,10 +29,10 @@ describe("daily figures", () => {
     expect(f.variance).toBe(-15.89);
   });
 
-  it("money in, money out (link + till Cash Out) and bank in all move the expected cash", () => {
-    // 200 + 265.40 cash + 100 in − 40 link out − 10 till cash out − 100 bank in = 415.40
-    const f = dayFigures("d", { ...blank, opening: 200, cash: 265.4, cash_in: 100, cash_out: 40, paid_out: 10, bank_in: 100, closing: 415.4 }, 0.2, 0.0169);
-    expect(f.expected).toBe(415.4);
+  it("till money in and out move the expected cash; cash taken to the Safe is after the count (136)", () => {
+    // 200 + 265.40 cash + 100 in − 40 link out − 10 till cash out = 515.40 (the £100 to the Safe leaves after counting)
+    const f = dayFigures("d", { ...blank, opening: 200, cash: 265.4, cash_in: 100, cash_out: 40, paid_out: 10, bank_in: 100, closing: 515.4 }, 0.2, 0.0169);
+    expect(f.expected).toBe(515.4);
     expect(f.variance).toBe(0);
   });
 

@@ -6,7 +6,7 @@ export const DAILY_FIELDS = [
   { key: "card", label: "Card", auto: true, hint: "Card taken on the till" },
   { key: "cash", label: "Cash", auto: true, hint: "Cash taken on the till" },
   { key: "tips", label: "Tips", auto: true, hint: "Card and cash tips on the till: staff's money, not sales" },
-  { key: "bank_in", label: "Bank in", auto: false, hint: "Cash taken out of the drawer: deposited or given to the owner" },
+  { key: "bank_in", label: "Cash taken to Safe", auto: false, hint: "Cash taken out of the till after counting it, into the Safe (the float stays in the till)" },
   { key: "commission", label: "Commission & card fees", auto: false, hint: "Worked out: the platform commissions below + the card fee" },
   { key: "pending", label: "Pending", auto: true, hint: "Bills still owed to us" },
   { key: "takeaway", label: "Takeaway", auto: true, hint: "Takeaway sales on the till" },
@@ -50,16 +50,17 @@ export const HIDDEN_FIELDS: DailyFieldKey[] = ["takeaway"];
 export const SHEET_FIELDS = DAILY_FIELDS.filter((f) => !COMMISSION_KEYS.includes(f.key) && !HIDDEN_FIELDS.includes(f.key));
 
 /**
- * The cash drawer check (agreed 2026-10-11), used by the day form, month
- * sheet, Excel, dashboard and morning email alike:
- *   Expected = Opening + Cash sales + Money in − Money out − Bank in
+ * The till drawer check (agreed 2026-10-11, Safe split 2026-10-14), used by the
+ * day form, month sheet, Excel, dashboard and morning email alike:
+ *   Expected = Opening + Cash sales + Till money in − Till money out
  *   Variance = Counted (closing) − Expected   (minus = missing, plus = extra)
- * Money in / out = the staff link's Cash In / Out and the till's Cash Out.
- * No opening or no count → can't say (null).
+ * The till is counted first; "Cash taken to Safe" (bank_in) leaves it after
+ * the count, so it isn't in Expected. Only Money In / Out marked Till counts —
+ * Safe money never touches the drawer. No opening or no count → can't say.
  */
-export function cashCheck(i: { opening: number | null; cash: number; moneyIn: number; moneyOut: number; bankIn: number; counted: number | null }) {
+export function cashCheck(i: { opening: number | null; cash: number; moneyIn: number; moneyOut: number; bankIn?: number; counted: number | null }) {
   const r = (n: number) => Math.round(n * 100) / 100;
-  const expected = i.opening == null ? null : r(i.opening + i.cash + i.moneyIn - i.moneyOut - i.bankIn);
+  const expected = i.opening == null ? null : r(i.opening + i.cash + i.moneyIn - i.moneyOut);
   return { expected, variance: expected == null || i.counted == null ? null : r(i.counted - expected) };
 }
 

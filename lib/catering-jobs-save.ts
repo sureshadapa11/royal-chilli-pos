@@ -37,7 +37,7 @@ export function parseJob(body: unknown): { kind: JobKind; customer: string; phon
  */
 export async function addJobPayment(
   businessId: number, jobId: number, staffId: number,
-  p: { amount: unknown; method?: unknown; date?: unknown; note?: unknown },
+  p: { amount: unknown; method?: unknown; date?: unknown; note?: unknown; place?: unknown },
   source: "staff_hub" | "link",
 ): Promise<{ ok: true; id: number } | { error: string; status?: number }> {
   const job = await getJob(businessId, jobId);
@@ -53,6 +53,8 @@ export async function addJobPayment(
   const note = String(p.note ?? "").trim().slice(0, 200);
   const { data, error } = await bizDb(businessId).from("cash_movements").insert({
     movement_date: date, direction: "in", category: "job_payment", amount, method,
+    // Cash goes to the Safe (136); card / bank aren't in either cash book.
+    place: method === "cash" ? "safe" : "till",
     reason: [`${job.kind === "event" ? "Event" : "Catering"}: ${job.customer}`, note].filter(Boolean).join(" · "),
     paid_to: null, staff_id: staffId, source, job_id: job.id,
   }).select("id").single();

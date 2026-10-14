@@ -59,14 +59,19 @@ export function dayEndText(r: DayEndReport): string {
   if (d.cashSales) L.push(cashRow("+ Cash sales", gbp(d.cashSales)));
   if (d.moneyIn) L.push(cashRow("+ Money in", gbp(d.moneyIn)));
   if (d.moneyOut) L.push(cashRow("− Money out", gbp(d.moneyOut)));
-  if (d.bankIn) L.push(cashRow("− Bank in", gbp(d.bankIn)));
   L.push(cashRow("= Expected", gbp(d.expected)));
   L.push(cashRow("  Counted", gbp(d.counted)));
+  if (d.bankIn) L.push(cashRow("→ To Safe", gbp(d.bankIn)));
   L.push("```");
   if (d.variance == null) L.push("⚪ _Variance: not counted_");
   else if (Math.abs(d.variance) < 0.005) L.push("🟢 *Variance £0.00 (all correct)*");
   else if (d.variance > 0) L.push(`🟠 *Variance +${gbp(d.variance)} (extra)*`);
   else L.push(`🔴 *Variance −${gbp(Math.abs(d.variance))} (missing)*`);
+
+  // The Safe (136): its balance after this day, and the last count.
+  if (r.safe) {
+    L.push("", `🔒 *Safe  ${gbp(r.safe.balance)}*${r.safe.lastCount ? ` _(counted ${gbp(r.safe.lastCount.counted)} on ${r.safe.lastCount.date.slice(8)}/${r.safe.lastCount.date.slice(5, 7)}${Math.abs(r.safe.lastCount.difference) >= 0.005 ? `, ${r.safe.lastCount.difference > 0 ? "+" : "−"}${gbp(Math.abs(r.safe.lastCount.difference))}` : ", correct"})_` : ""}`);
+  }
 
   if (r.cash.length) {
     L.push("", LINE, "🔁 *MONEY IN / OUT*");
