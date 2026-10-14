@@ -378,7 +378,9 @@ export function CashForm({ token, business, today }: { token: string; business: 
   }
   const blank = { direction: "out" as "out" | "in", category: "", who: "", amount: "", reason: "", paidTo: "", date: today, method: "cash" as string,
     // "+ New catering / event" from the link (agreed 2026-10-14): the job and its first payment together.
-    jobKind: "catering" as "catering" | "event", jobName: "", jobDate: today, jobTotal: "" };
+    jobKind: "catering" as "catering" | "event", jobName: "", jobDate: today, jobTotal: "",
+    // "Does the receipt show VAT?" — always asked for an expense, never assumed (2026-10-14).
+    vat: "" as "" | "yes" | "no" };
   const [f, setF, clearDraft, savedAt] = useDraft(`cash:${token}`, blank);
   const [photos, setPhotos] = useState<Receipt[]>([]);
   const [busy, setBusy] = useState(false);
@@ -400,12 +402,14 @@ export function CashForm({ token, business, today }: { token: string; business: 
     }
     if (!(Number(f.amount) > 0)) return setErr("Enter the amount.");
     if (cat.reasonRequired && f.reason.trim().length < 3) return setErr("Write what it was for.");
+    if (cat.home === "expense" && !f.vat) return setErr("Does the receipt show VAT? Choose Yes or No.");
     if (cat.direction === "out" && cat.photo && photos.length === 0) return setErr("Add a photo of the receipt.");
     setBusy(true);
     const res = await fetch(`/api/links/${token}/cash`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         pin, category: cat.key, amount: f.amount, reason: f.reason, paid_to: f.paidTo, date: f.date, method: f.method, photo_ids: photos.map((p) => p.id),
+        vat: cat.home === "expense" ? f.vat === "yes" : undefined,
         staff_member_id: cat.pick === "staff" ? Number(f.who) : undefined,
         supplier_id: cat.pick === "supplier" ? Number(f.who) : undefined,
         job_id: cat.pick === "job" && f.who !== "new" ? Number(f.who) : undefined,
@@ -448,7 +452,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
         <div className={head}>What was it for?</div>
         <div className="grid grid-cols-2 gap-2">
           {CASH_CATEGORIES.filter((c) => c.direction === f.direction && !c.hidden).map((c) => (
-            <button key={c.key} onClick={() => { upd({ category: c.key, who: "", ...(c.safeOnly ? { method: "cash" } : {}) }); if (c.pick === "job") refreshPicks(); }}
+            <button key={c.key} onClick={() => { upd({ category: c.key, who: "", vat: "", ...(c.safeOnly ? { method: "cash" } : {}) }); if (c.pick === "job") refreshPicks(); }}
               className={`flex min-h-[56px] items-center gap-1.5 rounded-2xl border-2 px-2.5 py-2 text-left text-[14px] font-semibold leading-tight ${f.category === c.key ? "border-[#e4473a] bg-red-50" : "border-[#eadfcc] bg-white"}`}>
               <span>{c.icon}</span><span>{c.label}</span>
             </button>
@@ -497,6 +501,18 @@ export function CashForm({ token, business, today }: { token: string; business: 
                   <p className="text-[13px] text-[#7a6a60]">The amount below is saved as the first payment; what&apos;s still owed is worked out.</p>
                 </div>
               )}
+            </section>
+          )}
+          {cat.home === "expense" && (
+            <section className={card}>
+              <div className={head}>Does the receipt show VAT? *</div>
+              <div className="grid grid-cols-2 gap-2">
+                {([["yes", "Yes, VAT receipt"], ["no", "No VAT"]] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => upd({ vat: k })}
+                    className={`h-12 rounded-2xl border-2 text-[15px] font-semibold ${f.vat === k ? "border-[#e4473a] bg-red-50" : "border-[#eadfcc] bg-white"}`}>{l}</button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[13px] text-[#7a6a60]">Only Yes if the receipt or invoice shows a VAT amount or VAT number.</p>
             </section>
           )}
           <section className={card}>
