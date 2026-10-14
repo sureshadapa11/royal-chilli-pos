@@ -1098,3 +1098,22 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
     <tr><td style="padding:12px 28px 26px; font-family:${SANS}; font-size:12px; color:${C.muted};">Receipt photos and every entry are in the Staff Hub → Daily accounts.</td></tr>`;
   await sendBrevoEmail(to, `${d.business} Day End · ${day}${f ? "" : " · NOT ENTERED"}`, shell(body, brand), undefined, brand);
 }
+
+// "Day End not entered" reminder (agreed 2026-10-14): sent with the morning
+// report to the business's day_end_reminder_to addresses when yesterday's Day
+// End is missing, with a button straight to the Day End link (PIN on the phone).
+export async function sendDayEndReminderEmail(to: string, d: { businessId: number; business: string; date: string; linkUrl: string; missingDays: string[] }) {
+  const brand = await getEmailBrand(d.businessId);
+  const day = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+  const others = d.missingDays.filter((x) => x !== d.date);
+  const body = `
+    <tr><td align="center" style="padding:32px 32px 8px;">
+      <div style="font-family:${SANS}; font-size:11px; letter-spacing:2px; text-transform:uppercase; color:${C.gold}; font-weight:700; margin-bottom:14px;">Day End reminder</div>
+      <div style="font-family:${SERIF}; font-weight:700; font-size:24px; line-height:1.3; color:${C.ink}; margin:0 0 10px;">The Day End for ${esc(day(d.date))} hasn&apos;t been entered yet.</div>
+      <div style="font-family:${SANS}; color:${C.muted}; font-size:14px; max-width:420px; margin:0 auto; line-height:1.55;">Please enter the Z report, card, cash and the cash count for ${esc(d.business)}. It only takes a minute on your phone with your PIN.</div>
+    </td></tr>
+    <tr><td align="center" style="padding:22px 28px 6px;">${button(d.linkUrl, "Enter the Day End")}</td></tr>
+    ${others.length ? `<tr><td align="center" style="padding:14px 28px 0; font-family:${SANS}; font-size:13px; color:${C.muted};">Also still missing: ${others.map((x) => esc(day(x))).join(", ")}</td></tr>` : ""}
+    <tr><td style="padding:18px"></td></tr>`;
+  await sendBrevoEmail(to, `Reminder: ${d.business} Day End for ${day(d.date)} not entered`, shell(body, brand), undefined, brand);
+}
