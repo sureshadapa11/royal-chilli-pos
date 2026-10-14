@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "category, description and amount are required" }, { status: 400 });
     }
     if (!(Number(amount) > 0)) return NextResponse.json({ error: "Amount must be more than £0" }, { status: 400 });
+    // VAT is always answered, never assumed (2026-10-14).
+    if (vat_applicable !== 0 && vat_applicable !== 1 && vat_applicable !== true && vat_applicable !== false) {
+      return NextResponse.json({ error: "VAT receipt? Choose Yes or No." }, { status: 400 });
+    }
 
     // Every payment out needs photo proof (migration 110).
     const receipts = await checkReceiptsForSave(db, receipt_ids);

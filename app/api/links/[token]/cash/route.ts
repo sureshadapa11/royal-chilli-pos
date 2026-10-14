@@ -31,6 +31,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // Cash goes through the Safe (136): the till only holds the float and cash sales.
   const place = method === "cash" ? "safe" : "till";
   const paidTo = typeof body?.paid_to === "string" ? body.paid_to.trim().slice(0, 120) || null : null;
+  // VAT is always answered for an expense, never assumed (2026-10-14).
+  if (cat.home === "expense" && typeof body?.vat !== "boolean") return NextResponse.json({ error: "Does the receipt show VAT? Choose Yes or No.", field: "vat" }, { status: 400 });
   const today = tradingDayStr();
   // A catering / event payment goes to its job (133): sales by cash or bank,
   // owed worked out on the job.
@@ -107,7 +109,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     const { data: e, error } = await db.from("expenses").insert({
       category: cat.expenseCategory,
       description: [cat.label, reason, paidTo && `paid to ${paidTo}`].filter(Boolean).join(" · ").slice(0, 300),
-      amount, vat_applicable: cat.vat ? 1 : 0, expense_date: date,
+      amount, vat_applicable: body?.vat === true ? 1 : 0, expense_date: date,
       receipt_reference: `Paid by ${payMethodLabel(method).toLowerCase()} (staff link)`, recorded_by: who.staff.id,
     }).select("id").single();
     if (error || !e) return NextResponse.json({ error: "Couldn't save. Please try again." }, { status: 500 });

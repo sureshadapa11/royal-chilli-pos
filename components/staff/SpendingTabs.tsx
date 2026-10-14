@@ -22,7 +22,7 @@ function today() { return tradingDayStr(); }
 
 export function ExpensesTab() {
   const [expenses, setExpenses] = useState<{ id: number; category: string; description: string; amount: number; expense_date: string; vat_applicable: number }[]>([]);
-  const [form, setForm] = useState({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
+  const [form, setForm] = useState({ category: "other", description: "", amount: "", vat_applicable: null as boolean | null, expense_date: today() });
   const [error, setError] = useState("");
   const [dupe, setDupe] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -40,6 +40,7 @@ export function ExpensesTab() {
     setError("");
     if (!form.description.trim()) return setError("Add a description.");
     if (!(Number(form.amount) > 0)) return setError("Amount must be more than £0.");
+    if (form.vat_applicable === null) return setError("VAT receipt? Choose Yes or No.");
     if (receipts.length === 0) return setError("Add a photo of the receipt or invoice.");
     const res = await fetch("/api/expenses", {
       method: "POST", headers: { "Content-Type": "application/json" },
@@ -51,7 +52,7 @@ export function ExpensesTab() {
     const data = await res.json();
     if (!res.ok) { setError(data.error || "Couldn't save"); setDupe(!!data.duplicate); return; }
     setDupe(false); setReceipts([]);
-    setForm({ category: "other", description: "", amount: "", vat_applicable: true, expense_date: today() });
+    setForm({ category: "other", description: "", amount: "", vat_applicable: null as boolean | null, expense_date: today() });
     load();
   }
 
@@ -72,9 +73,13 @@ export function ExpensesTab() {
         <label className="flex items-center gap-2">
           Date <input type="date" value={form.expense_date} onChange={(e) => { setForm({ ...form, expense_date: e.target.value }); setDupe(false); }} className="bg-surface-hover border border-border rounded-lg px-2 py-1 text-foreground text-sm" />
         </label>
-        <label className="flex items-center gap-2">
-          <input type="checkbox" checked={form.vat_applicable} onChange={(e) => setForm({ ...form, vat_applicable: e.target.checked })} /> VAT applicable (amount includes VAT)
-        </label>
+        <span className="flex items-center gap-2">
+          VAT receipt? <span className="text-red-600">*</span>
+          {([[true, "Yes"], [false, "No"]] as const).map(([v, l]) => (
+            <button key={l} type="button" onClick={() => setForm({ ...form, vat_applicable: v })}
+              className={`rounded-lg border px-3 py-1 text-sm font-semibold ${form.vat_applicable === v ? "border-red-500 bg-red-50 text-red-700" : "border-border text-foreground"}`}>{l}</button>
+          ))}
+        </span>
       </div>
       {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Add anyway if it really is a second one."}</p>}
       <p className="mt-2 text-muted-foreground text-xs">
