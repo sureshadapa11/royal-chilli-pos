@@ -12,7 +12,6 @@ const shortDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("e
 const LINE = "━━━━━━━━━━━━━━━";
 /** "9h 49m" — the same hours format as everywhere else. */
 const hm = (seconds: number) => { const m = Math.round(seconds / 60); return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`; };
-const METHOD_ICON: Record<string, string> = { Cash: "💵", Card: "💳", "Bank transfer": "🏦" };
 
 /** One lined-up row of the monospace cash block: label left, amount right. */
 const cashRow = (label: string, amount: string) => `${label.padEnd(13)}${amount.padStart(11)}`;
@@ -66,15 +65,6 @@ export function dayEndText(r: DayEndReport): string {
   else if (Math.abs(d.variance) < 0.005) L.push("🟢 *Variance £0.00 (all correct)*");
   else if (d.variance > 0) L.push(`🟠 *Variance +${gbp(d.variance)} (extra)*`);
   else L.push(`🔴 *Variance −${gbp(Math.abs(d.variance))} (missing)*`);
-
-  if (r.cash.length) {
-    L.push("", LINE, "🔁 *MONEY IN / OUT*");
-    for (const c of r.cash) {
-      const note = [c.category, c.reason && c.reason !== c.category ? c.reason : null].filter(Boolean).join(" · ");
-      L.push(`${c.direction === "out" ? "🔴 −" : "🟢 +"}${gbp(c.amount)} · ${METHOD_ICON[c.method] ?? ""} ${c.method}`);
-      L.push(`     _${note}_ — ${c.by}`);
-    }
-  }
 
   const missing = r.missingDays.filter((x) => x !== r.date);
   if (missing.length || r.entered) L.push("");
