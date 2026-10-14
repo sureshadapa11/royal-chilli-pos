@@ -5,6 +5,8 @@ import { attachReceipts, checkReceiptsForSave } from "@/lib/receipts";
 import { DATE_RE, linkStaff, money } from "@/lib/staff-links";
 import { tradingDayStr } from "@/lib/london-date";
 import { addDays } from "@/lib/admin-dashboard";
+import { parseBill, addBillPayment } from "@/lib/pending-bills-save";
+import { getBill } from "@/lib/pending-bills";
 
 // POST — the Day End link. One per trading day: once a day is submitted
 // (here or in the Staff Hub) it's locked, and only a manager can change it in
@@ -37,6 +39,21 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   }
   if (values.z_report == null) return NextResponse.json({ error: "Enter the Z report total (0 if closed).", field: "z_report" }, { status: 400 });
   values.commission = platformCommission(values as Parameters<typeof platformCommission>[0]);
+
+  // Pending bills (134): new unpaid bills and old bills paid, checked before
+  // anything is saved. Tracking only — not sales, not the cash check.
+  const newBills = [];
+  for (const b of Array.isArray(body?.new_bills) ? body.new_bills.slice(0, 20) : []) {
+    const bill = parseBill(b, date);
+    if ("error" in bill) return NextResponse.json({ error: bill.error }, { status: 400 });
+    newBills.push({ ...bill, bill_date: date });
+  }
+  const paidBills: { bill_id: number; amount: unknown; method: unknown }[] = Array.isArray(body?.bills_paid) ? body.bills_paid.slice(0, 20) : [];
+  for (const p of paidBills) {
+    const bill = await getBill(who.businessId, Number(p.bill_id));
+    if (!bill || bill.cancelled) return NextResponse.json({ error: "One of the bills paid isn't on the list any more. Remove it and try again." }, { status: 400 });
+    if (!(Number(p.amount) > 0) || Number(p.amount) > bill.owed + 0.001) return NextResponse.json({ error: `Only £${bill.owed.toFixed(2)} is owed by ${bill.customer}.` }, { status: 400 });
+  }
 
   const db = bizDb(who.businessId);
   const { data: existing } = await db.from("daily_accounts").select("status").eq("trading_date", date).maybeSingle();
@@ -76,6 +93,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!saved) return NextResponse.json({ error: "This day has already been entered. Ask a manager if something needs changing." }, { status: 409 });
 
   if (photos?.ok) await attachReceipts(db, photos.ids, "daily_account", saved.id);
+  if (newBills.length) await db.from("pending_bills").insert(newBills.map((b) => ({ ...b, created_by: who.staff.id, source: "link" })));
+  for (const p of paidBills) await addBillPayment(who.businessId, Number(p.bill_id), who.staff.id, { amount: p.amount, method: p.method, date }, "link");
   await db.from("audit_logs").insert({
     staff_id: who.staff.id, action: "daily_accounts_submitted_link", entity_type: "daily_accounts", entity_id: saved.id,
     changes: { date, values, notes },

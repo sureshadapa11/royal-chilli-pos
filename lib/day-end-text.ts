@@ -37,6 +37,7 @@ export function dayEndText(r: DayEndReport): string {
     L.push(`🏛️ VAT to pay (today)  ${gbp(f.vat_to_pay)}${f.vat_claimed ? ` _(claimed back ${gbp(f.vat_claimed)})_` : ""}`);
     const owed = (f.jobs_owed ?? 0) + (f.catering_pending ?? 0);
     if (owed) L.push(`⏳ Catering & events still owed  ${gbp(owed)}`);
+    if (f.bills_owed) L.push(`🧾 Bills still owed  ${gbp(f.bills_owed)}`);
     if (r.notes) L.push(`📝 _${r.notes}_`);
     L.push("");
   }

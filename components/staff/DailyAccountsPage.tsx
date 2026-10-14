@@ -8,6 +8,7 @@ import CashMovementsMonth from "@/components/staff/CashMovementsMonth";
 import CashBookMonth from "@/components/staff/CashBookMonth";
 import SalaryMonth from "@/components/staff/SalaryMonth";
 import CateringJobsMonth from "@/components/staff/CateringJobsMonth";
+import PendingBillsMonth from "@/components/staff/PendingBillsMonth";
 
 // Staff Hub → Daily accounts: Day (fill in the day-end sheet), Month (the
 // whole month like the paper report), Money in/out, Cash book and Salary.
@@ -19,8 +20,8 @@ import CateringJobsMonth from "@/components/staff/CateringJobsMonth";
 const heading = { fontFamily: "var(--font-space-grotesk)" };
 
 type View = AccountsTab;
-const LABELS: Record<View, string> = { day: "Day", month: "Month", jobs: "Catering & events", cash: "Money in/out", book: "Cash book", salary: "Salary" };
-const ORDER: View[] = ["day", "month", "jobs", "cash", "book", "salary"];
+const LABELS: Record<View, string> = { day: "Day", month: "Month", jobs: "Catering & events", bills: "Pending bills", cash: "Money in/out", book: "Cash book", salary: "Salary" };
+const ORDER: View[] = ["day", "month", "jobs", "bills", "cash", "book", "salary"];
 
 const shiftMonth = (m: string, by: number) => {
   const [y, mo] = m.split("-").map(Number);
@@ -83,6 +84,7 @@ export default function DailyAccountsPage({ today, start, startMonth, startView,
           {view === "day"
             ? <DailyAccountsView key={day} today={today} start={day} seeFigures={access.seeFigures} />
             : view === "jobs" ? <CateringJobsMonth month={month} today={today} canEnter={access.canEnter} canCorrect={access.canCorrect} canDelete={access.canDelete} />
+            : view === "bills" ? <PendingBillsMonth month={month} today={today} canEnter={access.canEnter} canCorrect={access.canCorrect} canDelete={access.canDelete} />
             : view === "cash" ? <CashMovementsMonth startMonth={month} sharedMonth={month} canDelete={access.canDelete} />
             : view === "book" ? <CashBookMonth startMonth={month} sharedMonth={month} />
             : view === "salary" && tabs.includes("salary") ? <SalaryMonth startMonth={month} sharedMonth={month} />
