@@ -6,11 +6,14 @@ import type { MenuCategory, MenuItem } from "@/lib/menu";
 import { makeLineId, type SelectedOption } from "@/lib/cart";
 import ModifierPickerModal from "./ModifierPickerModal";
 import { CategoryHeading, CategoryNavBar, slugify, useCategoryNav } from "./CategoryNav";
+import AllergyQuestion from "@/components/site/AllergyQuestion";
+import LineNote from "@/components/site/LineNote";
+import { NO_ANSWER, allergyPayload, allergyProblem, type AllergyAnswer } from "@/lib/allergy";
 
 type OrderItemModifier = { option_name: string; price_delta: number };
 type OrderItem = { id: number; item_name: string; item_price: number; quantity: number; status: string; modifiers?: OrderItemModifier[] };
 type OrderSummary = { id: number; order_number: string; status: string; total: number } | null;
-type PendingLine = { lineId: string; menu_item_id: number; name: string; unitPrice: number; quantity: number; selectedOptions: SelectedOption[] };
+type PendingLine = { lineId: string; menu_item_id: number; name: string; unitPrice: number; quantity: number; selectedOptions: SelectedOption[]; notes?: string };
 
 const statusLabel: Record<string, string> = {
   pending: "Pending",
@@ -37,6 +40,10 @@ export default function DineInOrder({
 }) {
   const bq = businessParam ? `?b=${encodeURIComponent(businessParam)}` : "";
   const [pending, setPending] = useState<PendingLine[]>([]);
+  // "Send to Kitchen" opens a review: notes per item, then "Any food allergies
+  // at this table?" (agreed 2026-10-14). The answer is kept for later rounds.
+  const [reviewing, setReviewing] = useState(false);
+  const [allergy, setAllergy] = useState<AllergyAnswer>(NO_ANSWER);
   const [pickerFor, setPickerFor] = useState<MenuItem | null>(null);
   const [order, setOrder] = useState<OrderSummary>(null);
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -154,7 +161,8 @@ export default function DineInOrder({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: pending.map((l) => ({ menu_item_id: l.menu_item_id, quantity: l.quantity, selected_options: l.selectedOptions.map((o) => o.id) })),
+          items: pending.map((l) => ({ menu_item_id: l.menu_item_id, quantity: l.quantity, selected_options: l.selectedOptions.map((o) => o.id), notes: l.notes })),
+          allergy: allergyPayload(allergy),
           customer_phone: loyaltyPhone.trim() || undefined,
           customer_name: loyaltyName.trim() || undefined,
           customer_email: loyaltyEmail.trim() || undefined,
@@ -166,6 +174,7 @@ export default function DineInOrder({
       setOrder(data.order);
       setItems(data.items || []);
       setPending([]);
+      setReviewing(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
     } finally {
@@ -380,14 +389,42 @@ export default function DineInOrder({
               {pendingCount} item{pendingCount > 1 ? "s" : ""} · {formatCurrency(pendingTotal)}
             </span>
             <button
-              onClick={sendToKitchen}
+              onClick={() => { setError(""); setReviewing(true); }}
               disabled={sending}
               className="bg-primary px-6 py-2.5 text-xs uppercase tracking-[0.15em] text-primary-foreground hover:opacity-90 disabled:opacity-50"
             >
-              {sending ? "Sending…" : "Send to Kitchen"}
+              Send to Kitchen
             </button>
           </div>
           {error && <p className="pb-2 text-center text-sm text-red-500">{error}</p>}
+        </div>
+      )}
+
+      {reviewing && pendingCount > 0 && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center" onClick={() => !sending && setReviewing(false)}>
+          <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto bg-card p-5 sm:rounded-lg" onClick={(e) => e.stopPropagation()}>
+            <h2 className="font-[family-name:var(--font-playfair)] text-lg text-primary">Your order</h2>
+            <div className="mt-3 space-y-3 border-b border-border pb-4">
+              {pending.map((l) => (
+                <div key={l.lineId} className="text-sm">
+                  <div className="flex justify-between gap-2"><span className="font-medium">{l.quantity}× {l.name}</span><span className="text-muted-foreground">{formatCurrency(l.unitPrice * l.quantity)}</span></div>
+                  {l.selectedOptions.length > 0 && <p className="text-xs text-muted-foreground">{l.selectedOptions.map((o) => o.name).join(", ")}</p>}
+                  <LineNote small note={l.notes} onSave={(n) => setPending((prev) => prev.map((x) => (x.lineId === l.lineId
+                    ? { ...x, notes: n || undefined, lineId: makeLineId(x.menu_item_id, x.selectedOptions.map((o) => o.id), n) } : x)))} />
+                </div>
+              ))}
+            </div>
+            <div className="mt-4">
+              <AllergyQuestion value={allergy} onChange={(v) => { setAllergy(v); setError(""); }} who="at this table" />
+              {allergy.answer === "yes" && <p className="mt-2 text-xs text-muted-foreground">A member of staff will come to your table to check with you before it&apos;s cooked.</p>}
+            </div>
+            {error && <p className="mt-3 text-sm text-red-500">{error}</p>}
+            <div className="mt-5 flex gap-3">
+              <button onClick={() => setReviewing(false)} disabled={sending} className="flex-1 border border-border px-4 py-2.5 text-xs uppercase tracking-[0.1em]">Back</button>
+              <button onClick={() => { const p = allergyProblem(allergy); if (p) return setError(p); sendToKitchen(); }} disabled={sending}
+                className="flex-1 bg-primary px-4 py-2.5 text-xs uppercase tracking-[0.1em] text-primary-foreground disabled:opacity-50">{sending ? "Sending…" : `Send · ${formatCurrency(pendingTotal)}`}</button>
+            </div>
+          </div>
         </div>
       )}
 

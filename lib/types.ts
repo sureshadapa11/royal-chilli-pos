@@ -194,6 +194,9 @@ export interface WorkPeriod {
 export interface Order {
   id: number;
   order_number: string;
+  /** The customer's allergy (135): ticked allergens + description. */
+  allergy_allergens?: string[] | null;
+  allergy_notes?: string | null;
   order_type: "dine_in" | "takeaway" | "delivery";
   table_id: number | null;
   customer_name: string | null;

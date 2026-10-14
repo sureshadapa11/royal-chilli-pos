@@ -1,3 +1,4 @@
+import { parseAllergy } from "@/lib/allergy";
 import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import supabase from "@/lib/supabase";
@@ -15,6 +16,9 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { customer_name, customer_phone, customer_email, party_size, reservation_date, reservation_time, notes, join_waitlist } = body;
+    // "Any food allergies in your party?" (135, agreed 2026-10-14).
+    const allergy = parseAllergy(body.allergy, true);
+    if ("error" in allergy) return NextResponse.json({ error: allergy.error }, { status: 400 });
 
     if (!customer_name || !customer_phone || !customer_email || !reservation_date || !reservation_time) {
       return NextResponse.json(
@@ -62,6 +66,7 @@ export async function POST(req: NextRequest) {
         reservation_date,
         reservation_time,
         notes: notes || null,
+        ...allergy,
         source: "website",
         status: isFull ? "waitlisted" : "pending",
         deposit_amount: depositAmount,

@@ -1,5 +1,6 @@
 "use client";
 
+import { hasAllergy, allergyText } from "@/lib/allergy";
 import { useState, useEffect, useCallback } from "react";
 import { formatCurrency } from "@/lib/utils";
 import PaymentModal from "@/components/pos/PaymentModal";
@@ -15,6 +16,8 @@ interface OnlineOrderItem {
 }
 
 interface OnlineOrder {
+  allergy_allergens?: string[] | null;
+  allergy_notes?: string | null;
   id: number;
   order_number: string;
   order_type: string;
@@ -222,6 +225,9 @@ export default function OnlineOrdersPanel() {
                     </div>
                   )}
 
+                  {hasAllergy(order) && (
+                    <div className="text-xs font-bold text-red-800 bg-red-50 border-2 border-red-500 rounded-lg px-2.5 py-2">⚠️ ALLERGY: {allergyText(order)}</div>
+                  )}
                   {order.notes && (
                     <div className="text-[11px] text-amber-700 bg-amber-100 border border-amber-800/40 rounded-lg px-2.5 py-2">
                       📝 {order.notes}

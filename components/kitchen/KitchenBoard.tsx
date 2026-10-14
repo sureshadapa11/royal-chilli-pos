@@ -1,5 +1,6 @@
 "use client";
 
+import { hasAllergy, allergyText } from "@/lib/allergy";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Link from "next/link";
 import type { Order, OrderItem } from "@/lib/types";
@@ -176,6 +177,7 @@ function RoundSection({
           ⏰ For {new Date(order.scheduled_for).toLocaleString("en-GB", { timeZone: "Europe/London", weekday: "short", hour: "numeric", minute: "2-digit" })}
         </div>
       )}
+      {hasAllergy(order) && <div className="mb-1.5 rounded-lg border-2 border-red-500 bg-red-50 px-2 py-1.5 text-xs font-bold text-red-800">⚠️ ALLERGY: {allergyText(order)}</div>}
       <div>
         {order.items.map((item) => (
           <ItemRow key={item.id} item={item} orderId={order.id} canBump={canBump} onBumpItem={onBumpItem} />

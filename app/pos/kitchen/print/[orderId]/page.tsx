@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/auth";
 import { getOrderForPrint } from "@/lib/kot";
+import { hasAllergy, allergyText } from "@/lib/allergy";
 import { getBrand } from "@/lib/brand";
 import AutoPrint from "./AutoPrint";
 import PrintNav from "./PrintNav";
@@ -33,6 +34,11 @@ export default async function KotPrintPage({
         <p>Order: {order.order_number}</p>
         <p>{new Date(order.created_at).toLocaleString("en-GB")}</p>
         {order.customer_name && <p>Customer: {order.customer_name}</p>}
+        {hasAllergy(order) && (<>
+          <div className="divider" />
+          <p className="center bold big">!! ALLERGY !!</p>
+          <p className="center bold">{allergyText(order).toUpperCase()}</p>
+        </>)}
         <div className="divider" />
         {items.map((item) => (
           <div key={item.id} className="item">

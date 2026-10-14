@@ -1,3 +1,4 @@
+import { hasAllergy, allergyText } from "@/lib/allergy";
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { waitUntil } from "@vercel/functions";
@@ -45,7 +46,7 @@ export async function POST(req: NextRequest) {
         // skips every follow-up below (points, stock, ticket, email).
         const { data: order } = await supabase
           .from("orders")
-          .select("business_id, order_number, order_type, subtotal, total, amount_paid, scheduled_for, customer_id, customer_name, customer_email, customer_address, customer_postcode")
+          .select("business_id, order_number, order_type, subtotal, total, amount_paid, scheduled_for, customer_id, customer_name, customer_email, customer_address, customer_postcode, allergy_allergens, allergy_notes")
           .eq("id", order_id).single();
         let recorded = false;
         const amount = (session.amount_total || 0) / 100;
@@ -100,6 +101,7 @@ export async function POST(req: NextRequest) {
             paymentMethod: "Card, paid online",
             paymentStatus: "paid",
             items: (orderItems || []).map((i) => ({ name: i.item_name, quantity: i.quantity, unitPrice: i.item_price, notes: i.notes })),
+            allergy: hasAllergy(order) ? allergyText(order) : null,
           }));
         }
       } else if (type === "reservation" && reservation_id) {

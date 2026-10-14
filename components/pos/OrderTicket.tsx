@@ -1,5 +1,6 @@
 "use client";
 
+import { ALLERGENS } from "@/lib/allergens";
 import { useState } from "react";
 import Image from "next/image";
 import { formatCurrency } from "@/lib/utils";
@@ -10,6 +11,9 @@ interface Props {
   onUpdateQty: (idx: number, qty: number) => void;
   onRemove: (idx: number) => void;
   onVoid: (idx: number, newQty: number) => void;
+  onNote?: (idx: number, note: string) => void;
+  allergy?: TillAllergy;
+  onAllergy?: (v: TillAllergy) => void;
 }
 
 function VoidPanel({ item, idx, onVoid, onClose }: {
@@ -70,7 +74,59 @@ function VoidPanel({ item, idx, onVoid, onClose }: {
   );
 }
 
-export default function OrderTicket({ items, onUpdateQty, onRemove, onVoid }: Props) {
+// "+ Add note" under a line not yet sent (agreed 2026-10-14): hidden until tapped.
+function TicketNote({ note, onSave }: { note?: string; onSave: (n: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState(note ?? "");
+  if (!open) {
+    return note
+      ? <button onClick={() => { setText(note); setOpen(true); }} className="block text-left text-[11px] font-semibold text-amber-700">📝 {note} <span className="underline">edit</span></button>
+      : <button onClick={() => { setText(""); setOpen(true); }} className="block text-[11px] font-semibold text-red-600 underline">+ Add note</button>;
+  }
+  const save = () => { onSave(text.trim().slice(0, 200)); setOpen(false); };
+  return (
+    <div className="mt-1 flex gap-1">
+      <input autoFocus value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === "Enter" && save()} maxLength={200}
+        placeholder="e.g. no onion" className="h-8 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-xs" />
+      <button onClick={save} className="h-8 rounded-md bg-red-600 px-2.5 text-xs font-semibold text-white">Save</button>
+    </div>
+  );
+}
+
+export type TillAllergy = { allergens: string[]; notes: string };
+
+// The order's allergy (agreed 2026-10-14): tick + note, shown on the kitchen ticket.
+function AllergyBar({ value, onChange, locked }: { value: TillAllergy; onChange: (v: TillAllergy) => void; locked: boolean }) {
+  const [open, setOpen] = useState(false);
+  const has = value.allergens.length > 0 || value.notes.trim().length > 0;
+  const text = [value.allergens.map((a) => a.charAt(0).toUpperCase() + a.slice(1)).join(", "), value.notes.trim()].filter(Boolean).join(" — ");
+  return (
+    <div className="mb-1.5">
+      <button onClick={() => !locked && setOpen(!open)}
+        className={`w-full rounded-xl px-3 py-2 text-left text-xs font-bold ${has ? "border-2 border-red-500 bg-red-50 text-red-800" : "border border-dashed border-border text-muted-foreground"}`}>
+        {has ? `⚠️ ALLERGY: ${text}` : "⚠️ Allergy? Tap to add"}{!locked && has ? " · edit" : ""}
+      </button>
+      {open && (
+        <div className="mt-1 rounded-xl border border-border bg-surface p-2.5">
+          <div className="flex flex-wrap gap-1">
+            {ALLERGENS.map((a) => {
+              const on = value.allergens.includes(a);
+              return (
+                <button key={a} onClick={() => onChange({ ...value, allergens: on ? value.allergens.filter((x) => x !== a) : [...value.allergens, a] })}
+                  className={`rounded-full border px-2 py-1 text-[11px] capitalize ${on ? "border-red-500 bg-red-100 font-bold text-red-800" : "border-border text-muted-foreground"}`}>{a}</button>
+              );
+            })}
+          </div>
+          <input value={value.notes} onChange={(e) => onChange({ ...value, notes: e.target.value })} maxLength={300} placeholder="Details, e.g. severe, no nuts at all"
+            className="mt-2 h-9 w-full rounded-lg border border-border bg-background px-2 text-xs" />
+          <button onClick={() => setOpen(false)} className="mt-2 w-full rounded-lg bg-red-600 py-1.5 text-xs font-semibold text-white">Done</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default function OrderTicket({ items, onUpdateQty, onRemove, onVoid, onNote, allergy, onAllergy }: Props) {
   const [voidOpenIdx, setVoidOpenIdx] = useState<number | null>(null);
 
   if (items.length === 0) {
@@ -85,6 +141,7 @@ export default function OrderTicket({ items, onUpdateQty, onRemove, onVoid }: Pr
 
   return (
     <div className="h-full overflow-y-auto space-y-1 pr-0.5">
+      {allergy && onAllergy && <AllergyBar value={allergy} onChange={onAllergy} locked={false} />}
       {items.map((item, idx) => (
         <div key={idx}>
           <div className={`flex items-center gap-2 rounded-xl px-3 py-2.5 transition-colors ${
@@ -115,6 +172,9 @@ export default function OrderTicket({ items, onUpdateQty, onRemove, onVoid }: Pr
                 </div>
               )}
               <span className="text-muted-foreground text-xs">{formatCurrency(item.item_price)} ea</span>
+              {!item.sent && !item.voided && onNote
+                ? <TicketNote note={item.notes} onSave={(n) => onNote(idx, n)} />
+                : item.notes ? <div className="text-[11px] font-semibold text-amber-700">📝 {item.notes}</div> : null}
             </div>
 
             {/* Qty */}

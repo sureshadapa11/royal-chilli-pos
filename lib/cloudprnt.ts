@@ -1,3 +1,4 @@
+import { hasAllergy, allergyText } from "@/lib/allergy";
 import { getOrderForPrint } from "@/lib/kot";
 import { getBrand } from "@/lib/brand";
 import { DEFAULT_BUSINESS_ID } from "@/lib/business-id";
@@ -186,6 +187,12 @@ async function buildKitchenTicket(job: PrintJob, orderId: number, width: number)
     t.push({ text: order.table_number ? `TABLE ${plainTableLabel(order.table_number)}` : "DINE-IN", align: "center", bold: true, size: "big" });
   } else {
     t.push({ text: order.order_type === "delivery" ? "DELIVERY" : "COLLECTION", align: "center", bold: true, size: "big" });
+  }
+  // The customer's allergy (135): right under the order type, impossible to miss.
+  if (hasAllergy(order)) {
+    t.push({ text: "!! ALLERGY !!", align: "center", bold: true, size: "big" });
+    for (const line of wrapWords(allergyText(order).toUpperCase(), 32)) t.push({ text: line, align: "center", bold: true, size: "tall" });
+    t.push({ text: DIVIDER });
   }
   if (isAddOn) t.push({ text: "+ ADDITIONAL ITEMS +", align: "center", bold: true, size: "tall" });
   // A table's 2nd, 3rd… till round: same table, only the new items (the

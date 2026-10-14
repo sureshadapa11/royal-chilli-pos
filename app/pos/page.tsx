@@ -8,7 +8,7 @@ import { formatCurrency, isHappyHour, isBreakfastTime } from "@/lib/utils";
 import OrderTypeSelector from "@/components/pos/OrderTypeSelector";
 import TableGrid from "@/components/pos/TableGrid";
 import MenuPanel from "@/components/pos/MenuPanel";
-import OrderTicket from "@/components/pos/OrderTicket";
+import OrderTicket, { type TillAllergy } from "@/components/pos/OrderTicket";
 import PaymentModal from "@/components/pos/PaymentModal";
 import OnlineOrdersPanel from "@/components/pos/OnlineOrdersPanel";
 import OpenOrdersPanel from "@/components/pos/OpenOrdersPanel";
@@ -63,6 +63,8 @@ export default function POSPage() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [marketingConsent, setMarketingConsent] = useState(false);
   const [notes, setNotes] = useState("");
+  // The order's allergy (agreed 2026-10-14): ticked on the ticket, saved with each send.
+  const [allergy, setAllergy] = useState<TillAllergy>({ allergens: [], notes: "" });
 
   // Dine-in: must pick a table before adding items. Takeaway/delivery: items
   // come first, customer details are asked for when sending/paying.
@@ -344,7 +346,7 @@ export default function POSPage() {
   const handleAddItem = (item: CartItem) => {
     setCartItems((prev) => {
       const existing = prev.findIndex(
-        (i) => i.menu_item_id === item.menu_item_id && !i.sent && modifierKey(i.selected_modifiers) === modifierKey(item.selected_modifiers)
+        (i) => i.menu_item_id === item.menu_item_id && !i.sent && modifierKey(i.selected_modifiers) === modifierKey(item.selected_modifiers) && (i.notes || "") === (item.notes || "")
       );
       if (existing >= 0) {
         const updated = [...prev];
@@ -426,7 +428,7 @@ export default function POSPage() {
     try {
       const res = await fetch(`/api/orders?table_id=${tableId}&status=open`);
       const data = await res.json();
-      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null; customer_id: number | null; amount_paid: number; total?: number }[] = data.orders || [];
+      const orders: { id: number; order_number: string; discount: number; discount_reason: string | null; customer_id: number | null; amount_paid: number; total?: number; allergy_allergens?: string[] | null; allergy_notes?: string | null }[] = data.orders || [];
       if (orders.length === 0) return false;
       const ordersOldFirst = [...orders].reverse();
       const allItems: CartItem[] = [];
@@ -448,6 +450,11 @@ export default function POSPage() {
         allItems.push(...items);
       }
       const firstOrder = ordersOldFirst[0];
+      // The table's allergy, from any round that recorded one.
+      setAllergy({
+        allergens: [...new Set(ordersOldFirst.flatMap((o) => o.allergy_allergens ?? []))],
+        notes: [...new Set(ordersOldFirst.map((o) => o.allergy_notes).filter(Boolean))].join(" · "),
+      });
       setCartItems(allItems);
       setCurrentOrderId(firstOrder.id);
       setCurrentOrderNumber(firstOrder.order_number);
@@ -486,6 +493,7 @@ export default function POSPage() {
           customer_address: customerAddress || null,
           items: newItems,
           notes,
+          allergy: allergy.allergens.length || allergy.notes.trim() ? { has: true, allergens: allergy.allergens, notes: allergy.notes } : undefined,
           discount: currentOrderId ? 0 : discount,
           discount_reason: currentOrderId ? null : discountReason,
         }),
@@ -660,6 +668,7 @@ export default function POSPage() {
     setCustomerEmail("");
     setMarketingConsent(false);
     setNotes("");
+    setAllergy({ allergens: [], notes: "" });
     setCurrentOrderId(null);
     setCurrentOrderNumber("");
     setAllOrderIds([]);
@@ -1161,6 +1170,9 @@ export default function POSPage() {
                   onUpdateQty={handleUpdateQty}
                   onRemove={handleRemoveItem}
                   onVoid={handleVoidItem}
+                  onNote={(idx, n) => setCartItems((prev) => prev.map((it, i) => (i === idx ? { ...it, notes: n || undefined } : it)))}
+                  allergy={allergy}
+                  onAllergy={setAllergy}
                 />
               </div>
             </div>
@@ -1361,6 +1373,9 @@ export default function POSPage() {
                   onUpdateQty={handleUpdateQty}
                   onRemove={handleRemoveItem}
                   onVoid={handleVoidItem}
+                  onNote={(idx, n) => setCartItems((prev) => prev.map((it, i) => (i === idx ? { ...it, notes: n || undefined } : it)))}
+                  allergy={allergy}
+                  onAllergy={setAllergy}
                 />
               </div>
               {/* Discount controls — manager only (mobile) */}

@@ -5,10 +5,11 @@ import { useRouter } from "next/navigation";
 import { formatCurrency } from "@/lib/utils";
 import { siteContent } from "@/lib/site-content";
 import type { MenuCategory, MenuItem } from "@/lib/menu";
-import { readCart, writeCart, makeLineId, readOrderType, writeOrderType, cartTotal, lineUnitPrice, type CartLine, type OrderType } from "@/lib/cart";
+import { readCart, writeCart, makeLineId, withNote, readOrderType, writeOrderType, cartTotal, lineUnitPrice, type CartLine, type OrderType } from "@/lib/cart";
 import { isRestaurantOpen, nextValidScheduleSlot } from "@/lib/hours";
 import type { BusyState } from "@/lib/busy-mode";
 import ModifierPickerModal from "./ModifierPickerModal";
+import LineNote from "./LineNote";
 import ParticleButton from "@/components/kokonutui/particle-button";
 import { CategoryHeading, CategoryNavBar, CategoryRail, slugify, useCategoryNav, useIsNarrow } from "./CategoryNav";
 import { useWeekHours } from "@/components/site/HoursProvider";
@@ -325,11 +326,10 @@ export default function OrderMenu({ categories, delivery }: {
                         <span className="font-medium">{l.name}</span>
                         <span className="text-muted-foreground">{formatCurrency(lineUnitPrice(l, orderType) * l.quantity)}</span>
                       </div>
-                      {(l.selectedOptions.length > 0 || l.notes) && (
-                        <p className="text-xs text-muted-foreground">
-                          {[l.selectedOptions.map((o) => o.name).join(", "), l.notes].filter(Boolean).join(" · ")}
-                        </p>
+                      {l.selectedOptions.length > 0 && (
+                        <p className="text-xs text-muted-foreground">{l.selectedOptions.map((o) => o.name).join(", ")}</p>
                       )}
+                      <LineNote small note={l.notes} onSave={(n) => setCart((prev) => { const next = withNote(prev, l.lineId, n); writeCart(next); return next; })} />
                       <div className="mt-1 flex items-center gap-2">
                         <button onClick={() => bumpLine(l.lineId, -1)} className="h-7 w-7 rounded-full border border-border text-sm leading-none hover:border-primary">−</button>
                         <span className="w-4 text-center text-xs">{l.quantity}</span>

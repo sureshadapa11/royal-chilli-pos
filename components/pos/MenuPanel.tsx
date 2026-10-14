@@ -110,7 +110,7 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
     });
   };
 
-  const handleConfirmModifiers = (selected: ModifierOption[], unitPrice: number) => {
+  const handleConfirmModifiers = (selected: ModifierOption[], unitPrice: number, notes: string) => {
     if (!pickerItem) return;
     onAddItem({
       menu_item_id: pickerItem.id,
@@ -119,6 +119,7 @@ export default function MenuPanel({ categories, items, onAddItem, layout = "vert
       quantity: 1,
       is_veg: pickerItem.is_veg,
       selected_modifiers: selected,
+      ...(notes ? { notes } : {}),
     });
     setPickerItem(null);
   };

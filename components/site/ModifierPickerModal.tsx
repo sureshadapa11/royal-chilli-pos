@@ -18,6 +18,7 @@ export default function ModifierPickerModal({
   const [selectedByGroup, setSelectedByGroup] = useState<Record<number, number[]>>({});
   const [quantity, setQuantity] = useState(1);
   const [notes, setNotes] = useState("");
+  const [showNotes, setShowNotes] = useState(false);
 
   function toggle(groupId: number, optionId: number, single: boolean, max: number | null) {
     setSelectedByGroup((prev) => {
@@ -83,15 +84,21 @@ export default function ModifierPickerModal({
 
         {withQuantityAndNotes && (
           <>
+            {/* Hidden until tapped (agreed 2026-10-14). */}
             <div className="mt-4">
-              <p className="text-sm font-semibold">Special instructions</p>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="e.g. no onion, extra spicy"
-                rows={2}
-                className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
-              />
+              {!showNotes && !notes ? (
+                <button type="button" onClick={() => setShowNotes(true)} className="text-sm text-primary underline">+ Add note</button>
+              ) : (<>
+                <p className="text-sm font-semibold">Note</p>
+                <textarea
+                  autoFocus
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. no onion, extra gravy"
+                  rows={2}
+                  className="mt-2 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:border-primary"
+                />
+              </>)}
             </div>
             <div className="mt-4">
               <p className="text-sm font-semibold">Quantity</p>

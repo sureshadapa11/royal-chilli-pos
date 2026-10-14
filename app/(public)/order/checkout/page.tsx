@@ -10,6 +10,8 @@ import type { BusyState } from "@/lib/busy-mode";
 import { MAX_ADVANCE_DAYS } from "@/lib/scheduling";
 import { computeDeliveryFee, FREE_DELIVERY_THRESHOLD, MIN_DELIVERY_ORDER } from "@/lib/delivery-fees";
 import { useWeekHours } from "@/components/site/HoursProvider";
+import AllergyQuestion from "@/components/site/AllergyQuestion";
+import { NO_ANSWER, allergyPayload, allergyProblem, type AllergyAnswer } from "@/lib/allergy";
 
 type ZoneCheck = { deliverable: boolean };
 
@@ -47,6 +49,8 @@ export default function CheckoutPage() {
   const [zoneCheck, setZoneCheck] = useState<ZoneCheck | null>(null);
   const [checkingZone, setCheckingZone] = useState(false);
   const [notes, setNotes] = useState("");
+  // Asked before payment (agreed 2026-10-14): No → pay; Yes → tick + describe, then pay.
+  const [allergy, setAllergy] = useState<AllergyAnswer>(NO_ANSWER);
   const [openNow, setOpenNow] = useState(true);
   // Busy mode set at the till (lib/busy-mode.ts): ASAP paused, or extra prep time.
   const [busy, setBusy] = useState<BusyState | null>(null);
@@ -187,6 +191,9 @@ export default function CheckoutPage() {
       }
     }
 
+    const allergyIssue = allergyProblem(allergy);
+    if (allergyIssue) return setError(allergyIssue);
+
     setSubmitting(true);
     try {
       const res = await fetch("/api/public/orders", {
@@ -201,6 +208,7 @@ export default function CheckoutPage() {
           customer_address: orderType === "delivery" ? address.trim() : undefined,
           customer_postcode: orderType === "delivery" ? postcode.trim() : undefined,
           notes: notes.trim() || undefined,
+          allergy: allergyPayload(allergy),
           scheduled_for: scheduledFor,
           pay_online: payOnline && STRIPE_ENABLED,
           items: cart.map((c) => ({ menu_item_id: c.menu_item_id, quantity: c.quantity, selected_options: c.selectedOptions.map((o) => o.id), notes: c.notes })),
@@ -433,6 +441,13 @@ export default function CheckoutPage() {
         />
       </div>
 
+      <div className="mt-6">
+        <AllergyQuestion value={allergy} onChange={(v) => { setAllergy(v); setError(""); }} />
+      </div>
+
+      {allergyProblem(allergy) ? (
+        <p className="mt-4 text-center text-sm text-muted-foreground">Answer the allergy question to see payment options.</p>
+      ) : (<>
       {STRIPE_ENABLED && (
         <div className="mt-6 flex gap-3">
           {([false, true] as const).map((online) => (
@@ -482,6 +497,7 @@ export default function CheckoutPage() {
       {!payOnline && (
         <p className="mt-3 text-center text-xs text-muted-foreground">Pay by cash or card on {orderType === "delivery" ? "delivery" : "collection"}.</p>
       )}
+      </>)}
     </div>
   );
 }
