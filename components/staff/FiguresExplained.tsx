@@ -17,7 +17,7 @@ const SECTIONS: { title: string; lines: string[] }[] = [
     title: "Money out",
     lines: [
       "Expenses have the VAT you claim back taken off.",
-      "Staff wages are clocked-out hours × pay rate, so they show £0 for anyone without a pay rate.",
+      "Staff wages are clocked-out hours × pay rate. For anyone without a pay rate, the wages actually paid to them (Money OUT → Staff wages paid) count instead, on the day paid.",
       "Supplier payments aren't counted again: the stock is counted when its delivery is received.",
     ],
   },

@@ -149,7 +149,7 @@ export async function getIngredientPurchases(businessId: number, from: string, t
   return r2((data || []).reduce((s, po) => s + Number(po.total_cost), 0));
 }
 
-// Hours worked x current pay rate, computed live from clocked-out attendance —
+// Hours worked x current pay rate (or, with no rate, the wages paid), computed live from clocked-out attendance —
 // not a lookup into payroll_entries, which only has rows once a pay period has
 // actually been run and would silently understate this (overstating profit)
 // until then. Per work date, so the dashboard's daily bars and the P&L total
@@ -159,7 +159,14 @@ export async function labourCostByDay(businessId: number, from: string, to: stri
   const rows = await allRows<{ staff_id: number; work_date: string; net_work_seconds: number | null }>((a, b) =>
     bizDb(businessId).from("attendance").select("staff_id, work_date, net_work_seconds")
       .gte("work_date", from).lte("work_date", to).not("clock_out", "is", null).order("id").range(a, b));
-  const ids = [...new Set(rows.map((r) => r.staff_id))];
+  // Until someone has a pay rate, the wages actually paid to them (Money OUT →
+  // "Staff wages paid") are their cost, on the day paid (owner, 2026-10-15) —
+  // so profit isn't overstated while pay rates are missing. With a rate, the
+  // hours × rate above is the cost and the payment isn't counted again.
+  const paid = await allRows<{ staff_member_id: number | null; movement_date: string; amount: number }>((a, b) =>
+    bizDb(businessId).from("cash_movements").select("staff_member_id, movement_date, amount").eq("category", "wages").eq("direction", "out")
+      .gte("movement_date", from).lte("movement_date", to).order("id").range(a, b));
+  const ids = [...new Set([...rows.map((r) => r.staff_id), ...paid.map((p) => p.staff_member_id).filter((x): x is number => x != null)])];
   const { data: staff, error } = ids.length ? await supabase.from("staff").select("id, pay_rate").in("id", ids) : { data: [], error: null };
   if (error) throw error;
   const rate = new Map((staff ?? []).map((s) => [s.id, Number(s.pay_rate ?? 0)]));
@@ -167,6 +174,10 @@ export async function labourCostByDay(businessId: number, from: string, to: stri
   for (const r of rows) {
     const cost = (Number(r.net_work_seconds ?? 0) / 3600) * (rate.get(r.staff_id) ?? 0);
     byDay.set(r.work_date, (byDay.get(r.work_date) ?? 0) + cost);
+  }
+  for (const p of paid) {
+    if (p.staff_member_id != null && (rate.get(p.staff_member_id) ?? 0) > 0) continue;
+    byDay.set(p.movement_date, (byDay.get(p.movement_date) ?? 0) + Number(p.amount));
   }
   return byDay;
 }
