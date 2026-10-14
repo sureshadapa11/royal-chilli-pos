@@ -3,7 +3,7 @@ import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { attachReceipts, checkReceiptsForSave, type ReceiptEntity } from "@/lib/receipts";
 import { DATE_RE, linkStaff, money, payableStaff } from "@/lib/staff-links";
-import { addJobPayment } from "@/lib/catering-jobs-save";
+import { addJobPayment, parseJob } from "@/lib/catering-jobs-save";
 import { cashCategory, payMethodLabel } from "@/lib/cash-categories";
 import { tradingDayStr, londonDayRangeUtc } from "@/lib/london-date";
 import { addDays } from "@/lib/admin-dashboard";
@@ -33,8 +33,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // owed worked out on the job.
   if (cat.home === "job") {
     const date = DATE_RE.test(String(body?.date ?? "")) ? String(body.date) : today;
-    const res = await addJobPayment(who.businessId, Number(body?.job_id), who.staff.id, { amount, method, date, note: reason }, "link");
-    if ("error" in res) return NextResponse.json({ error: res.error, field: "job_id" }, { status: res.status ?? 400 });
+    let jobId = Number(body?.job_id);
+    // "+ New catering / event" on the link: create the job, then this is its first payment.
+    if (body?.new_job) {
+      const job = parseJob(body.new_job);
+      if ("error" in job) return NextResponse.json({ error: job.error, field: "new_job" }, { status: 400 });
+      if (amount > job.total) return NextResponse.json({ error: "The amount paid can't be more than the job's total.", field: "amount" }, { status: 400 });
+      const { data: created, error } = await bizDb(who.businessId).from("catering_jobs").insert({ ...job, created_by: who.staff.id }).select("id").single();
+      if (error || !created) return NextResponse.json({ error: "Couldn't save the job. Please try again." }, { status: 500 });
+      jobId = created.id;
+    }
+    const res = await addJobPayment(who.businessId, jobId, who.staff.id, { amount, method, date, note: reason }, "link");
+    if ("error" in res) {
+      // A job made just now for this payment goes too, so nothing is left half-saved.
+      if (body?.new_job) await bizDb(who.businessId).from("catering_jobs").delete().eq("id", jobId);
+      return NextResponse.json({ error: res.error, field: "job_id" }, { status: res.status ?? 400 });
+    }
     return NextResponse.json({ ok: true });
   }
   const date = DATE_RE.test(String(body?.date ?? "")) ? String(body.date) : today;
