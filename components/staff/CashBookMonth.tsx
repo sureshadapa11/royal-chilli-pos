@@ -6,7 +6,8 @@ import type { BookDay, SafeBook } from "@/lib/cash-book";
 // Staff Hub → Daily accounts → Cash book: two books (136) — 🧾 Till (the
 // drawer, day by day) and 🔒 Safe (cash that doesn't go through the till) —
 // line by line with running balances (lib/cash-book.ts).
-const gbp = (n: number | null | undefined) => (n == null ? "—" : `£${n.toFixed(2)}`);
+// Minus before the £ ("−£75.00"), like the rest of the app.
+const gbp = (n: number | null | undefined) => (n == null ? "—" : `${n < 0 ? "−" : ""}£${Math.abs(n).toFixed(2)}`);
 const dayName = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
 export default function CashBookMonth({ startMonth, businessId, month: fixedMonth, sharedMonth }: { startMonth: string; businessId?: number; month?: string; sharedMonth?: string }) {
@@ -135,7 +136,7 @@ function DayRows({ d }: { d: BookDay }) {
           <td className={`px-3 py-1.5 ${l.kind === "opening" ? "font-semibold" : ""}`}>
             {l.label}
             {l.kind === "opening" && d.openingDiff != null && (
-              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">⚠ {d.openingDiff > 0 ? "+" : ""}£{d.openingDiff.toFixed(2)} vs last count</span>
+              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">⚠ {d.openingDiff > 0 ? "+" : ""}{gbp(d.openingDiff)} vs last count</span>
             )}
           </td>
           <td className="px-3 py-1.5 text-muted-foreground">{l.by ?? ""}</td>
