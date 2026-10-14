@@ -3,6 +3,16 @@ import { bizDb } from "@/lib/business-db";
 import { allRows } from "@/lib/finance";
 import { londonDateStr, tradingRangeUtc } from "@/lib/london-date";
 import { cashCategoryLabel } from "@/lib/cash-categories";
+import { getBusinessSetting } from "@/lib/business-settings";
+
+/**
+ * The day both cash books start from: the business setting cash_book_start
+ * (Royal Chilli: 2026-10-01 — September was testing), otherwise the beginning.
+ */
+async function bookStart(businessId: number): Promise<string> {
+  const v = String((await getBusinessSetting(businessId, "cash_book_start")) ?? "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : "2000-01-01";
+}
 
 // The Cash Books (Staff Hub → Daily accounts → Cash book, agreed 2026-10-12,
 // like the INSOMNIA sheet; split into Till and Safe 2026-10-14):
@@ -99,8 +109,9 @@ export function buildCashBook(days: DayInput[], carryIn: number | null): BookDay
 /** The book for `from`..`to` (whole trading days), from the business's first Day End with an opening. */
 export async function cashBook(businessId: number, from: string, to: string): Promise<{ start: string | null; days: BookDay[] }> {
   const db = bizDb(businessId);
+  const startFrom = await bookStart(businessId);
   const { data: first } = await db.from("daily_accounts").select("trading_date")
-    .not("opening_balance", "is", null).order("trading_date").limit(1).maybeSingle();
+    .not("opening_balance", "is", null).gte("trading_date", startFrom).order("trading_date").limit(1).maybeSingle();
   const start = (first?.trading_date as string | undefined) ?? null;
   if (!start || start > to) return { start, days: [] };
   const today = londonDateStr();
@@ -205,9 +216,10 @@ export function buildSafeBook(
 /** The Safe for `from`..`to`: lines in the period, carried from the start. */
 export async function safeBook(businessId: number, from: string, to: string): Promise<SafeBook> {
   const db = bizDb(businessId);
+  const startFrom = await bookStart(businessId);
   const { data: first } = await db.from("daily_accounts").select("trading_date")
-    .not("opening_balance", "is", null).order("trading_date").limit(1).maybeSingle();
-  const { data: firstMove } = await db.from("cash_movements").select("movement_date").eq("method", "cash").eq("place", "safe").order("movement_date").limit(1).maybeSingle();
+    .not("opening_balance", "is", null).gte("trading_date", startFrom).order("trading_date").limit(1).maybeSingle();
+  const { data: firstMove } = await db.from("cash_movements").select("movement_date").eq("method", "cash").eq("place", "safe").gte("movement_date", startFrom).order("movement_date").limit(1).maybeSingle();
   const start = [first?.trading_date, firstMove?.movement_date].filter(Boolean).sort()[0] as string | undefined;
   const empty = { start: start ?? null, opening: 0, lines: [], totalIn: 0, totalOut: 0, balance: 0, lastCount: null };
   if (!start || start > to) return empty;
@@ -218,7 +230,7 @@ export async function safeBook(businessId: number, from: string, to: string): Pr
       db.from("cash_movements").select("movement_date, direction, category, amount, reason, paid_to, staff_id").eq("method", "cash").eq("place", "safe")
         .gte("movement_date", start).lte("movement_date", to).order("id").range(a, b)),
     allRows<{ count_date: string; amount: number; note: string | null; counted_by: number | null }>((a, b) =>
-      db.from("safe_counts").select("count_date, amount, note, counted_by").lte("count_date", to).order("count_date").order("id").range(a, b)),
+      db.from("safe_counts").select("count_date, amount, note, counted_by").gte("count_date", start).lte("count_date", to).order("count_date").order("id").range(a, b)),
   ]);
   const ids = [...new Set([...rows.flatMap((r) => [r.submitted_by, r.updated_by]), ...moves.map((m) => m.staff_id), ...counts.map((c) => c.counted_by)].filter((x): x is number => !!x))];
   const { data: staff } = ids.length ? await supabase.from("staff").select("id, name").in("id", ids) : { data: [] as { id: number; name: string }[] };
