@@ -36,8 +36,9 @@ describe("WhatsApp day report (style A)", () => {
     expect(t).toContain("− Money out".padEnd(13) + "£45.00".padStart(11));
     expect(t).toContain("= Expected".padEnd(13) + "£90.89".padStart(11));
     expect(t).toContain("🟠 *Variance +£29.11 (extra)*");
-    expect(t).toContain("🔴 −£45.00 · 💵 Cash");
-    expect(t).toContain("_Ingredients / stock (cash buy) · Veg_ — Ramesh");
+    // No Money in / out lines in the daily report (owner, 2026-10-14).
+    expect(t).not.toContain("MONEY IN / OUT");
+    expect(t).not.toContain("£45.00 · 💵 Cash");
     expect(t).toContain("⚠️ *Day End missing:* Fri 9 Oct");
     expect(t).toContain("✍️ Entered by Anusha");
     expect(t).toContain("👥 *STAFF ON SHIFT  (2 · 18h 19m)*");
