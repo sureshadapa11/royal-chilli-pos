@@ -235,9 +235,6 @@ export function PlatformsCard({ p }: { p: P }) {
           </tfoot>
         </table>
       </div>
-      <p className="mt-2 text-[12px] text-muted-foreground">
-        Platforms are {pct1(sales, allSales)}% of sales this period. The highest commission % is the platform that costs most per £1 of sales.
-      </p>
     </Card>
   );
 }
@@ -267,7 +264,6 @@ export function MoneyOutCard({ p }: { p: P }) {
           </div>
         ))}
       </div>
-      <p className="mt-3 rounded-xl bg-[#FBF8F1] px-3 py-2 text-[12px] text-muted-foreground">Expenses have the VAT you claim back taken off. Staff wages are hours × pay rate, so they show £0 for anyone without a pay rate.</p>
     </Card>
   );
 }
@@ -335,7 +331,6 @@ export function StaffCard({ p }: { p: P }) {
           </BarChart>
         </ResponsiveContainer>
       </div>
-      {!wages && hours > 0 && <p className="mt-2 text-[12px] text-muted-foreground">No pay rates yet, so this shows hours. Wages and labour % appear once rates are added in Staff Hub → Staff.</p>}
     </Card>
   );
 }
