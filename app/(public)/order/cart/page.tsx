@@ -5,7 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronLeft, X } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { readCart, writeCart, readOrderType, writeOrderType, cartTotal, lineUnitPrice, type CartLine, type OrderType } from "@/lib/cart";
+import LineNote from "@/components/site/LineNote";
+import { withNote, readCart, writeCart, readOrderType, writeOrderType, cartTotal, lineUnitPrice, type CartLine, type OrderType } from "@/lib/cart";
 import { siteContent } from "@/lib/site-content";
 
 export default function CartPage() {
@@ -90,11 +91,10 @@ export default function CartPage() {
               <div key={l.lineId} className="flex items-start gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="font-medium">{l.name}</p>
-                  {(l.selectedOptions.length > 0 || l.notes) && (
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {[l.selectedOptions.map((o) => o.name).join(", "), l.notes].filter(Boolean).join(" · ")}
-                    </p>
+                  {l.selectedOptions.length > 0 && (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{l.selectedOptions.map((o) => o.name).join(", ")}</p>
                   )}
+                  <LineNote small note={l.notes} onSave={(n) => setCart((prev) => { const next = withNote(prev, l.lineId, n); writeCart(next); return next; })} />
                   <button onClick={() => removeLine(l.lineId)} className="mt-1 text-xs text-muted-foreground underline hover:text-red-500">
                     Remove
                   </button>

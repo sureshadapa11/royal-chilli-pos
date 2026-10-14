@@ -1,3 +1,4 @@
+import { parseAllergy, hasAllergy, allergyText } from "@/lib/allergy";
 import { NextRequest, NextResponse } from "next/server";
 import { waitUntil } from "@vercel/functions";
 import { generateOrderNumber } from "@/lib/orders";
@@ -35,6 +36,9 @@ export async function POST(req: NextRequest) {
       pay_online, // customer picked "Pay Online Now" — a checkout session follows this call
       items, // [{ menu_item_id, quantity, notes, selected_options }]
     } = body;
+    // "Any food allergies?" is required on the website (135, agreed 2026-10-14).
+    const allergy = parseAllergy(body.allergy, true);
+    if ("error" in allergy) return NextResponse.json({ error: allergy.error }, { status: 400 });
 
     // Operations → Website "Online ordering" switch (modules.online_ordering):
     // off means the website takes no orders at all, whatever the page shows.
@@ -148,6 +152,7 @@ export async function POST(req: NextRequest) {
         // Kept off the kitchen board until the payment lands (GET /api/kitchen).
         pay_online: pay_online === true,
         scheduled_for: scheduled_for || null,
+        ...allergy,
         work_period_id: workPeriod?.id || null,
         subtotal: Math.round(subtotal * 100) / 100,
         discount: 0,
@@ -198,6 +203,7 @@ export async function POST(req: NextRequest) {
         paymentMethod: order_type === "delivery" ? "Cash or card on delivery" : "Cash or card on collection",
         paymentStatus: "due",
         items: orderItems.map((i) => ({ name: i.item_name, quantity: i.quantity, unitPrice: i.item_price, notes: i.notes })),
+        allergy: hasAllergy(allergy) ? allergyText(allergy) : null,
       }));
     }
 

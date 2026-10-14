@@ -7,6 +7,8 @@ import Reveal from "@/components/site/Reveal";
 import { getScheduleSlotOptions, toDateInputValue } from "@/lib/hours";
 import { isValidEmail, isValidUkMobile } from "@/lib/utils";
 import { useWeekHours } from "@/components/site/HoursProvider";
+import AllergyQuestion from "@/components/site/AllergyQuestion";
+import { NO_ANSWER, allergyPayload, allergyProblem, type AllergyAnswer } from "@/lib/allergy";
 
 type Result = { status: "full" | "waitlisted" | "booked" };
 
@@ -31,6 +33,8 @@ function ReservationsForm() {
   const [time, setTime] = useState("");
   const [guests, setGuests] = useState(2);
   const [notes, setNotes] = useState("");
+  // "Does anyone in your party have a food allergy?" (agreed 2026-10-14).
+  const [allergy, setAllergy] = useState<AllergyAnswer>(NO_ANSWER);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
@@ -76,6 +80,11 @@ function ReservationsForm() {
       setError("Please enter a valid email address.");
       return;
     }
+    const allergyIssue = allergyProblem(allergy);
+    if (allergyIssue) {
+      setError(allergyIssue);
+      return;
+    }
 
     setSubmitting(true);
     // `time` is a full local "YYYY-MM-DDTHH:MM" — split rather than reusing
@@ -94,6 +103,7 @@ function ReservationsForm() {
           reservation_date: reservationDate,
           reservation_time: reservationTime,
           notes: notes.trim() || undefined,
+          allergy: allergyPayload(allergy),
           join_waitlist: joinWaitlist,
         }),
       });
@@ -277,6 +287,7 @@ function ReservationsForm() {
             <button onClick={() => setGuests((g) => g + 1)} className="h-9 w-9 border border-border">+</button>
           </div>
         </div>
+        <AllergyQuestion value={allergy} onChange={(v) => { setAllergy(v); setError(""); }} who="in your party" />
         <textarea
           value={notes}
           onChange={(e) => setNotes(e.target.value)}

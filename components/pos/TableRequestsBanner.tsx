@@ -5,7 +5,7 @@ import { playBuzzer } from "@/lib/buzzer";
 
 interface TableRequest {
   id: number;
-  type: "waiter" | "bill";
+  type: "waiter" | "bill" | "allergy";
   table_number: string | null;
   created_at: string;
 }
@@ -53,7 +53,8 @@ export default function TableRequestsBanner() {
       {requests.map((r) => (
         <div key={r.id} className="flex items-center justify-between gap-3 max-w-2xl mx-auto">
           <span className="text-amber-800 text-sm font-medium">
-            {r.type === "waiter" ? "🙋" : "🧾"} Table {r.table_number} {r.type === "waiter" ? "wants a waiter" : "requested the bill"}
+            {r.type === "allergy" ? <b className="text-red-700">⚠️ Table {r.table_number} has a food allergy: please go to the table before it&apos;s cooked</b>
+              : <>{r.type === "waiter" ? "🙋" : "🧾"} Table {r.table_number} {r.type === "waiter" ? "wants a waiter" : "requested the bill"}</>}
           </span>
           <button
             onClick={() => resolve(r.id)}

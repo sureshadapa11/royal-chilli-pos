@@ -28,6 +28,13 @@ export function makeLineId(menuItemId: number, optionIds: number[], notes?: stri
   return `${menuItemId}:${[...optionIds].sort((a, b) => a - b).join(",")}:${(notes || "").trim()}`;
 }
 
+/** A basket line with a new note (its id follows, so it stays its own line). */
+export function withNote(lines: CartLine[], lineId: string, note: string): CartLine[] {
+  return lines.map((l) => (l.lineId === lineId
+    ? { ...l, notes: note || undefined, lineId: makeLineId(l.menu_item_id, l.selectedOptions.map((o) => o.id), note) }
+    : l));
+}
+
 export type OrderType = "takeaway" | "delivery";
 
 // One unit of this line at the selected order type's prices. Display only —

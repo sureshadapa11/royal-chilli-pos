@@ -1,5 +1,6 @@
 "use client";
 
+import { hasAllergy, allergyText } from "@/lib/allergy";
 import { useState, useEffect, useCallback } from "react";
 import { formatCurrency } from "@/lib/utils";
 import PaymentModal from "@/components/pos/PaymentModal";
@@ -15,6 +16,8 @@ interface OpenOrderItem {
 }
 
 interface OpenOrder {
+  allergy_allergens?: string[] | null;
+  allergy_notes?: string | null;
   id: number;
   order_number: string;
   customer_name: string | null;
@@ -198,6 +201,9 @@ export default function OpenOrdersPanel({ orderType }: Props) {
                     <div className="text-[11px] text-muted-foreground bg-surface-hover/60 rounded-lg px-2.5 py-2">
                       📍 {order.customer_address}
                     </div>
+                  )}
+                  {hasAllergy(order) && (
+                    <div className="text-xs font-bold text-red-800 bg-red-50 border-2 border-red-500 rounded-lg px-2.5 py-2">⚠️ ALLERGY: {allergyText(order)}</div>
                   )}
                   {order.notes && (
                     <div className="text-[11px] text-amber-700 bg-amber-100 border border-amber-800/40 rounded-lg px-2.5 py-2">

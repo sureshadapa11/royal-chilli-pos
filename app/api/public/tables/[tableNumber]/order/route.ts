@@ -1,3 +1,6 @@
+import { parseAllergy, hasAllergy, mergeAllergy } from "@/lib/allergy";
+import { bizDb } from "@/lib/business-db";
+import supabase from "@/lib/supabase";
 import { NextRequest, NextResponse } from "next/server";
 import { getCustomerSessionFromRequest } from "@/lib/customer-auth";
 import { getTableByNumber, addItemsToTable, getOpenOrderForTable, getOrderItems } from "@/lib/dine-in";
@@ -25,10 +28,14 @@ export async function POST(
       );
     }
 
-    const { items, customer_phone, customer_name, customer_email, marketing_consent } = await req.json();
+    const body = await req.json();
+    const { items, customer_phone, customer_name, customer_email, marketing_consent } = body;
     if (!Array.isArray(items) || items.length === 0) {
       return NextResponse.json({ error: "No items provided" }, { status: 400 });
     }
+    // "Any food allergies at this table?" (135, agreed 2026-10-14).
+    const allergy = parseAllergy(body.allergy, true);
+    if ("error" in allergy) return NextResponse.json({ error: allergy.error }, { status: 400 });
 
     const account = await getCustomerSessionFromRequest(req);
     const { orderId, itemIds } = await addItemsToTable(table.business_id, table.id, items, {
@@ -38,6 +45,18 @@ export async function POST(
       email: customer_email,
       marketingConsent: marketing_consent === true,
     });
+    // The allergy goes on the table's order (later rounds add to it), and a
+    // member of staff is called to the table — before the ticket prints.
+    if (hasAllergy(allergy)) {
+      const db = bizDb(table.business_id);
+      const { data: cur } = await db.from("orders").select("allergy_allergens, allergy_notes").eq("id", orderId).maybeSingle();
+      await db.from("orders").update(mergeAllergy(cur ?? {}, allergy)).eq("id", orderId);
+      await supabase.from("table_requests").insert({ table_id: table.id, type: "allergy", status: "pending", business_id: table.business_id });
+    } else {
+      const db = bizDb(table.business_id);
+      const { data: cur } = await db.from("orders").select("allergy_allergens").eq("id", orderId).maybeSingle();
+      if (cur && cur.allergy_allergens == null) await db.from("orders").update({ allergy_allergens: [] }).eq("id", orderId);
+    }
     // A later round joins the table's existing order — the ticket lists only
     // this round's items.
     await queueKitchenTicketSafely(orderId, "qr", { itemIds });

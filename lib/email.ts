@@ -173,6 +173,8 @@ export async function sendOrderConfirmationEmail(
     paymentStatus: "paid" | "due";
     items: { name: string; quantity: number; unitPrice: number; notes?: string | null }[];
     businessId?: number;
+    /** The allergy the customer told us about (135), echoed back so they can check it. */
+    allergy?: string | null;
   }
 ) {
   if (!to) return;
@@ -234,6 +236,14 @@ export async function sendOrderConfirmationEmail(
       </table>
     </td></tr>
 
+    ${data.allergy ? `<tr><td style="padding:22px 24px 0;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#FFF7E6; border:1px solid #F5C77A; border-radius:12px;">
+        <tr><td style="padding:14px 18px; font-family:${SANS}; font-size:13.5px; color:#7A4E12; line-height:1.55;">
+          <b>⚠️ Allergy noted:</b> ${data.allergy.replace(/</g, "&lt;")}<br>
+          <span style="font-size:12px;">Our kitchen handles all 14 allergens, so we can't guarantee any dish is completely free from them. If anything's wrong, call us straight away.</span>
+        </td></tr>
+      </table>
+    </td></tr>` : ""}
     <tr><td style="padding:26px 24px 0;">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card}; border:1px solid ${C.rule}; border-radius:12px;">
         <tr><td style="padding:18px 22px 4px;">${cardLabel("Order Details")}</td></tr>

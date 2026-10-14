@@ -1,5 +1,6 @@
 "use client";
 
+import { hasAllergy, allergyText } from "@/lib/allergy";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useBrand } from "@/components/pos/useBrand";
 import Link from "next/link";
@@ -35,6 +36,8 @@ interface Reservation {
   table_number?: string;
   table_id?: number;
   notes?: string;
+  allergy_allergens?: string[] | null;
+  allergy_notes?: string | null;
   status: string;
   source?: string;
 }
@@ -442,6 +445,11 @@ export default function ReservationsPage() {
                                 </>
                               )}
                             </div>
+                            {hasAllergy(r) && (
+                              <div className="mt-2 text-xs font-bold text-red-800 bg-red-50 border border-red-300 rounded-lg px-2.5 py-1.5">
+                                ⚠️ ALLERGY: {allergyText(r)}
+                              </div>
+                            )}
                             {r.notes && (
                               <div className="mt-2 text-xs text-amber-700 bg-amber-100 border border-amber-300 rounded-lg px-2.5 py-1.5">
                                 📝 {r.notes}

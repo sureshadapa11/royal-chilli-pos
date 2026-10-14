@@ -1,3 +1,4 @@
+import { parseAllergy } from "@/lib/allergy";
 import { NextRequest, NextResponse } from "next/server";
 import { londonDayRangeUtc } from "@/lib/london-date";
 import { allOwned, bizDb } from "@/lib/business-db";
@@ -160,6 +161,10 @@ export async function POST(req: NextRequest) {
       discount_reason,
     } = body;
 
+    // Allergy ticked on the till (135) — optional here, staff ask in person.
+    const allergy = parseAllergy(body.allergy, false);
+    if ("error" in allergy) return NextResponse.json({ error: allergy.error }, { status: 400 });
+
     if (!order_type || !items || items.length === 0) {
       return NextResponse.json(
         { error: "Order type and items required" },
@@ -279,6 +284,7 @@ export async function POST(req: NextRequest) {
           tax,
           total,
           notes: notes || null,
+          ...allergy,
           status: "open",
         })
         .select()
