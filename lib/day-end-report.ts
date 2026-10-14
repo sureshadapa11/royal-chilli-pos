@@ -6,7 +6,9 @@ import { accountsByDay } from "@/lib/daily-figures";
 import { addDays } from "@/lib/admin-dashboard";
 import { tradingDayStr } from "@/lib/london-date";
 import { r2, extractVat, getVatRate } from "@/lib/finance";
-import { sendDayEndReportEmail } from "@/lib/email";
+import { sendDayEndReportEmail, sendDayEndReminderEmail } from "@/lib/email";
+import { staffLinkToken } from "@/lib/staff-links";
+import { staffLinkUrl } from "@/lib/staff-link-url";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 import { cashCheck } from "@/lib/daily-accounts-fields";
 import { listJobs } from "@/lib/catering-jobs";
@@ -126,19 +128,31 @@ export async function buildDayEndReport(businessId: number, business: string, da
   };
 }
 
-/** Yesterday's report to each business that has a "day_end_report_to" address. */
-export async function sendDayEndReports(): Promise<{ business: string; to: string[] }[]> {
+const emails = (raw: unknown) => String(raw ?? "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
+
+/**
+ * Each morning: yesterday's report to each business's "day_end_report_to"
+ * addresses, and — when yesterday's Day End wasn't entered — a reminder to its
+ * "day_end_reminder_to" addresses (agreed 2026-10-14) with the Day End link.
+ */
+export async function sendDayEndReports(): Promise<{ business: string; to: string[]; reminded?: string[] }[]> {
   const date = addDays(tradingDayStr(), -1);
-  const out: { business: string; to: string[] }[] = [];
+  const out: { business: string; to: string[]; reminded?: string[] }[] = [];
   for (const b of await listBusinesses()) {
     if (!b.active) continue;
-    const raw = await getBusinessSetting<string>(b.id, "day_end_report_to");
-    const to = String(raw ?? "").split(/[,;\s]+/).map((e) => e.trim().toLowerCase()).filter((e) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e));
-    if (!to.length) continue;
+    const to = emails(await getBusinessSetting<string>(b.id, "day_end_report_to"));
+    const remind = emails(await getBusinessSetting<string>(b.id, "day_end_reminder_to"));
+    if (!to.length && !remind.length) continue;
     try {
       const report = await buildDayEndReport(b.id, b.name, date);
       for (const addr of to) await sendDayEndReportEmail(addr, report);
-      out.push({ business: b.name, to });
+      let reminded: string[] | undefined;
+      if (!report.entered && remind.length) {
+        const linkUrl = staffLinkUrl(await staffLinkToken(b.id), b.domain, "https://staff.theroyalchilli.com");
+        for (const addr of remind) await sendDayEndReminderEmail(addr, { businessId: b.id, business: b.name, date, linkUrl: `${linkUrl}/day-end`, missingDays: report.missingDays });
+        reminded = remind;
+      }
+      out.push({ business: b.name, to, reminded });
     } catch (err) {
       console.error(`Day End report failed for ${b.name}:`, err);
     }
