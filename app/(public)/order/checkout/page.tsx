@@ -393,6 +393,8 @@ export default function CheckoutPage() {
           <input type="checkbox" checked={marketingConsent} onChange={(e) => setMarketingConsent(e.target.checked)} className="mt-0.5" />
           <span>Email me offers, rewards updates and news from The Royal Chilli</span>
         </label>
+        {/* No code box here on purpose: rewards and vouchers are redeemed at the till (customer test 2026-10-14). */}
+        <p className="mt-2 text-xs text-muted-foreground">🎁 Rewards and vouchers are used in the restaurant, at the till — not on online orders.</p>
         {orderType === "delivery" && (
           <>
             <textarea
