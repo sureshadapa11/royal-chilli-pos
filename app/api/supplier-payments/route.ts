@@ -32,7 +32,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
     const db = bizDb(session.businessId);
-    const { supplier_id, purchase_order_id, amount, method, notes, allow_duplicate, receipt_ids } = await req.json();
+    const { supplier_id, purchase_order_id, amount, method, notes, allow_duplicate, receipt_ids, vat_applicable } = await req.json();
+    // VAT is always answered, never assumed (2026-10-14) — the payment is a stock cost (2026-10-15).
+    if (vat_applicable !== 0 && vat_applicable !== 1 && vat_applicable !== true && vat_applicable !== false) {
+      return NextResponse.json({ error: "VAT receipt? Choose Yes or No." }, { status: 400 });
+    }
     if (!supplier_id || !amount) return NextResponse.json({ error: "supplier_id and amount are required" }, { status: 400 });
     if (!(await allOwned(db, "suppliers", [supplier_id]))) return NextResponse.json({ error: "That supplier isn't this business's" }, { status: 400 });
     if (!(Number(amount) > 0)) return NextResponse.json({ error: "Amount must be more than £0" }, { status: 400 });
@@ -56,7 +60,7 @@ export async function POST(req: NextRequest) {
 
     const { data, error } = await db
       .from("supplier_payments")
-      .insert({ supplier_id, purchase_order_id: purchase_order_id || null, amount: Math.round(Number(amount) * 100) / 100, method: method || null, notes: notes || null, recorded_by: session.id })
+      .insert({ supplier_id, purchase_order_id: purchase_order_id || null, amount: Math.round(Number(amount) * 100) / 100, method: method || null, notes: notes || null, recorded_by: session.id, vat_applicable: vat_applicable ? 1 : 0 })
       .select()
       .single();
     if (error) throw error;

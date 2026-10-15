@@ -1,6 +1,6 @@
 import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
-import { tradingRangeUtc } from "@/lib/london-date";
+import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import type { PlatformKey } from "@/lib/platforms";
 import { loadRecipeBook, recipeUsage } from "@/lib/recipes";
 import { EXPENSE_CATEGORIES } from "@/lib/expense-categories";
@@ -138,6 +138,29 @@ export async function getPlatformSales(businessId: number, from: string, to: str
 }
 
 // ── Costs ────────────────────────────────────────────────────────────────────
+
+/**
+ * Supplier payments as stock costs (agreed 2026-10-15; purchase orders aren't
+ * used): every payment NOT linked to a purchase order counts on the trading day
+ * it was paid — a payment for a received purchase order is already counted at
+ * delivery. `cost` is ex reclaimable VAT; `vatGross` is the VAT-receipt amount.
+ */
+export async function supplierPaymentsByDay(businessId: number, from: string, to: string, vatRate: number): Promise<{ cost: Map<string, number>; vatGross: Map<string, number> }> {
+  const { start, end } = tradingRangeUtc(from, to);
+  const rows = await allRows<{ amount: number; paid_at: string; vat_applicable: number | null }>((a, b) =>
+    bizDb(businessId).from("supplier_payments").select("amount, paid_at, vat_applicable").is("purchase_order_id", null)
+      .gte("paid_at", start).lte("paid_at", end).order("id").range(a, b));
+  const cost = new Map<string, number>();
+  const vatGross = new Map<string, number>();
+  for (const p of rows) {
+    const d = tradingDayStr(new Date(p.paid_at));
+    if (d < from || d > to) continue;
+    const amount = Number(p.amount);
+    cost.set(d, r2((cost.get(d) ?? 0) + (p.vat_applicable ? amount - extractVat(amount, vatRate) : amount)));
+    if (p.vat_applicable) vatGross.set(d, r2((vatGross.get(d) ?? 0) + amount));
+  }
+  return { cost, vatGross };
+}
 export async function getIngredientPurchases(businessId: number, from: string, to: string): Promise<number> {
   const { data, error } = await bizDb(businessId)
     .from("purchase_orders")
@@ -256,6 +279,8 @@ export type PnlInputs = {
   figures: FiguresTotal;
   expenses: ExpenseTotals & { byCategory?: Record<string, ExpenseTotals> };
   recipe: { cogs: number; coveragePct: number };
+  /** Supplier payments with a VAT receipt (2026-10-15), gross. */
+  stockVatGross?: number;
 };
 
 // Each expense category ex reclaimable VAT, the same way as the total. Pennies
@@ -280,7 +305,8 @@ function expenseLines(i: PnlInputs, expensesExVat: number): Pnl["costs"]["expens
 export function buildPnl(i: PnlInputs): Pnl {
   const f = i.figures;
   const outputVat = r2(f.total_sales - f.ex_vat);
-  const inputVat = extractVat(i.expenses.vatApplicableTotal, i.vatRate);
+  const vatGross = r2(i.expenses.vatApplicableTotal + (i.stockVatGross ?? 0));
+  const inputVat = extractVat(vatGross, i.vatRate);
   return {
     from: i.from,
     to: i.to,
@@ -292,7 +318,7 @@ export function buildPnl(i: PnlInputs): Pnl {
       card_fees: f.out.card_fee, paid_out: f.out.paid_out, total: f.money_out,
     },
     profit: f.net_total,
-    vat: { output: outputVat, vat_applicable_expenses: r2(i.expenses.vatApplicableTotal), input: inputVat, net_due: r2(outputVat - inputVat) },
+    vat: { output: outputVat, vat_applicable_expenses: vatGross, input: inputVat, net_due: r2(outputVat - inputVat) },
     // Same bottom line, with recipe cost of what was sold in place of what was bought.
     recipe: { cogs: i.recipe.cogs, coverage_pct: i.recipe.coveragePct, profit: r2(f.net_total + f.out.stock - i.recipe.cogs) },
   };
@@ -305,5 +331,7 @@ export async function getPnl(businessId: number, from: string, to: string): Prom
     getSalesData(businessId, from, to),
   ]);
   const recipe = await getRecipeCogs(businessId, sales.orders.map((o) => o.id));
-  return buildPnl({ from, to, vatRate, figures: totalFigures(days), expenses, recipe });
+  const supplier = await supplierPaymentsByDay(businessId, from, to, vatRate);
+  const stockVatGross = r2([...supplier.vatGross.values()].reduce((s, n) => s + n, 0));
+  return buildPnl({ from, to, vatRate, figures: totalFigures(days), expenses, recipe, stockVatGross });
 }

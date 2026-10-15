@@ -101,7 +101,7 @@ export function ExpensesTab() {
 export function SupplierPaymentsTab() {
   const [payments, setPayments] = useState<{ id: number; supplier_name: string; amount: number; method: string | null; paid_at: string }[]>([]);
   const [suppliers, setSuppliers] = useState<{ id: number; name: string }[]>([]);
-  const [form, setForm] = useState({ supplier_id: "", amount: "", method: "bank_transfer" });
+  const [form, setForm] = useState({ supplier_id: "", amount: "", method: "bank_transfer", vat: null as boolean | null });
   const [error, setError] = useState("");
   const [dupe, setDupe] = useState(false);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
@@ -123,18 +123,19 @@ export function SupplierPaymentsTab() {
     setError("");
     if (!form.supplier_id) return setError("Pick a supplier.");
     if (!(Number(form.amount) > 0)) return setError("Amount must be more than £0.");
+    if (form.vat === null) return setError("VAT receipt? Choose Yes or No.");
     if (receipts.length === 0) return setError("Add a photo of the invoice or the payment confirmation.");
     const res = await fetch("/api/supplier-payments", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        supplier_id: Number(form.supplier_id), amount: Number(form.amount), method: form.method, allow_duplicate: dupe,
+        supplier_id: Number(form.supplier_id), amount: Number(form.amount), method: form.method, allow_duplicate: dupe, vat_applicable: form.vat ? 1 : 0,
         receipt_ids: receipts.map((r) => r.id),
       }),
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error || "Couldn't record payment"); setDupe(!!data.duplicate); return; }
     setDupe(false); setReceipts([]);
-    setForm({ supplier_id: "", amount: "", method: "bank_transfer" });
+    setForm({ supplier_id: "", amount: "", method: "bank_transfer", vat: null });
     load();
   }
 
@@ -151,9 +152,16 @@ export function SupplierPaymentsTab() {
       <div className="mt-2">
         <ReceiptPhotos entity="supplier_payment" label="Invoice / payment confirmation photo" value={receipts} onChange={setReceipts} />
       </div>
+      <div className="mt-2 flex items-center gap-2 text-sm text-muted-foreground">
+        VAT receipt? <span className="text-red-600">*</span>
+        {([[true, "Yes"], [false, "No"]] as const).map(([v, l]) => (
+          <button key={l} type="button" onClick={() => setForm({ ...form, vat: v })}
+            className={`rounded-lg border px-3 py-1 text-sm font-semibold ${form.vat === v ? "border-red-500 bg-red-50 text-red-700" : "border-border text-foreground"}`}>{l}</button>
+        ))}
+      </div>
       {error && <p className="mt-2 text-red-600 text-xs">{error}{dupe && " — press Record anyway if it really is a second payment."}</p>}
       <p className="mt-2 text-muted-foreground text-xs">
-        A record of money paid to suppliers — it isn&apos;t a cost in Profit &amp; Loss (the cost is counted once, when the purchase order is received). Suppliers are added in the Suppliers tab.
+        Money paid to suppliers counts as stock in Money out on the day it&apos;s paid (ex VAT with a VAT receipt). Suppliers are added in the Suppliers tab.
       </p>
       <div className="mt-4 space-y-1.5">
         {payments.map((p) => (

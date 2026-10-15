@@ -57,6 +57,15 @@ describe("buildPnl", () => {
     expect(p.vat).toEqual({ output: 150, vat_applicable_expenses: 24, input: 4, net_due: 146 });
   });
 
+  it("supplier payments with a VAT receipt are claimed back too (2026-10-15)", () => {
+    // £120 paid to a supplier with a VAT receipt: £20 VAT claimed back, on top of the expenses' £4.
+    const q = buildPnl({
+      from: "2026-09-01", to: "2026-09-30", vatRate: 0.2, figures,
+      expenses: { total: 36, vatApplicableTotal: 24 }, recipe: { cogs: 30, coveragePct: 75 }, stockVatGross: 120,
+    });
+    expect(q.vat).toEqual({ output: 150, vat_applicable_expenses: 144, input: 24, net_due: 126 });
+  });
+
   it("recipe basis swaps purchases for recipe cost", () => {
     expect(p.recipe).toEqual({ cogs: 30, coverage_pct: 75, profit: 576.31 });
   });

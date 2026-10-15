@@ -5,7 +5,7 @@ import { listBusinesses } from "@/lib/business";
 import { accountsByDay } from "@/lib/daily-figures";
 import { addDays } from "@/lib/admin-dashboard";
 import { tradingDayStr } from "@/lib/london-date";
-import { r2, extractVat, getVatRate } from "@/lib/finance";
+import { r2, extractVat, getVatRate, supplierPaymentsByDay } from "@/lib/finance";
 import { sendDayEndReportEmail, sendDayEndReminderEmail } from "@/lib/email";
 import { staffLinkToken } from "@/lib/staff-links";
 import { staffLinkUrl } from "@/lib/staff-link-url";
@@ -66,7 +66,8 @@ export async function buildDayEndReport(businessId: number, business: string, da
     db.from("expenses").select("amount").eq("expense_date", date).eq("vat_applicable", 1),
     getVatRate(businessId),
   ]);
-  const vatClaimed = r2((vatExpenses ?? []).reduce((s, e) => s + extractVat(Number(e.amount), vatRate), 0));
+  const supplierVat = (await supplierPaymentsByDay(businessId, date, date, vatRate)).vatGross.get(date) ?? 0;
+  const vatClaimed = r2((vatExpenses ?? []).reduce((s, e) => s + extractVat(Number(e.amount), vatRate), 0) + extractVat(supplierVat, vatRate));
   const staffIds = [...new Set([row?.submitted_by, ...(moves ?? []).map((m) => m.staff_id), ...(attendance ?? []).map((a) => a.staff_id)].filter((x): x is number => !!x))];
   const { data: staff } = staffIds.length ? await supabase.from("staff").select("id, name").in("id", staffIds) : { data: [] as { id: number; name: string }[] };
   const nameOf = (id: number | null | undefined) => (staff ?? []).find((s) => s.id === id)?.name ?? "—";

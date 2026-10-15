@@ -402,14 +402,14 @@ export function CashForm({ token, business, today }: { token: string; business: 
     }
     if (!(Number(f.amount) > 0)) return setErr("Enter the amount.");
     if (cat.reasonRequired && f.reason.trim().length < 3) return setErr("Write what it was for.");
-    if (cat.home === "expense" && !f.vat) return setErr("Does the receipt show VAT? Choose Yes or No.");
+    if ((cat.home === "expense" || cat.home === "supplier") && !f.vat) return setErr("Does the receipt show VAT? Choose Yes or No.");
     if (cat.direction === "out" && cat.photo && photos.length === 0) return setErr("Add a photo of the receipt.");
     setBusy(true);
     const res = await fetch(`/api/links/${token}/cash`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         pin, category: cat.key, amount: f.amount, reason: f.reason, paid_to: f.paidTo, date: f.date, method: f.method, photo_ids: photos.map((p) => p.id),
-        vat: cat.home === "expense" ? f.vat === "yes" : undefined,
+        vat: (cat.home === "expense" || cat.home === "supplier") ? f.vat === "yes" : undefined,
         staff_member_id: cat.pick === "staff" ? Number(f.who) : undefined,
         supplier_id: cat.pick === "supplier" ? Number(f.who) : undefined,
         job_id: cat.pick === "job" && f.who !== "new" ? Number(f.who) : undefined,
@@ -503,7 +503,7 @@ export function CashForm({ token, business, today }: { token: string; business: 
               )}
             </section>
           )}
-          {cat.home === "expense" && (
+          {(cat.home === "expense" || cat.home === "supplier") && (
             <section className={card}>
               <div className={head}>Does the receipt show VAT? *</div>
               <div className="grid grid-cols-2 gap-2">
