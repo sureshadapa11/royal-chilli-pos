@@ -49,10 +49,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     newBills.push({ ...bill, bill_date: date });
   }
   const paidBills: { bill_id: number; amount: unknown; method: unknown }[] = Array.isArray(body?.bills_paid) ? body.bills_paid.slice(0, 20) : [];
+  const paidPerBill = new Map<number, number>();
   for (const p of paidBills) {
     const bill = await getBill(who.businessId, Number(p.bill_id));
     if (!bill || bill.cancelled) return NextResponse.json({ error: "One of the bills paid isn't on the list any more. Remove it and try again." }, { status: 400 });
-    if (!(Number(p.amount) > 0) || Number(p.amount) > bill.owed + 0.001) return NextResponse.json({ error: `Only £${bill.owed.toFixed(2)} is owed by ${bill.customer}.` }, { status: 400 });
+    // Two lines for the same bill can't add up to more than it owes.
+    const sum = (paidPerBill.get(bill.id) ?? 0) + Number(p.amount);
+    paidPerBill.set(bill.id, sum);
+    if (!(Number(p.amount) > 0) || sum > bill.owed + 0.001) return NextResponse.json({ error: `Only £${bill.owed.toFixed(2)} is owed by ${bill.customer}.` }, { status: 400 });
   }
 
   const db = bizDb(who.businessId);
@@ -64,8 +68,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const photos = Array.isArray(body?.photo_ids) && body.photo_ids.length ? await checkReceiptsForSave(db, body.photo_ids) : null;
   if (photos && !photos.ok) return NextResponse.json({ error: photos.error }, { status: photos.status });
 
-  // Opening cash = the last entered day's closing cash before this one.
-  const { data: before } = await db.from("daily_accounts").select("closing_balance")
+  // Opening cash, if left blank = what the last entered day left in the till:
+  // counted − cash taken to the Safe (136), i.e. the float.
+  const { data: before } = await db.from("daily_accounts").select("closing_balance, bank_in")
     .lt("trading_date", date).not("closing_balance", "is", null).order("trading_date", { ascending: false }).limit(1).maybeSingle();
 
   const now = new Date().toISOString();
@@ -75,7 +80,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // so two people sending the same day at once can't both get through.
   const row = {
     trading_date: date, ...values,
-    opening_balance: values.opening_balance ?? before?.closing_balance ?? null,
+    opening_balance: values.opening_balance ?? (before ? Math.round((Number(before.closing_balance) - Number(before.bank_in ?? 0)) * 100) / 100 : null),
     notes, status: "submitted", submitted_by: who.staff.id, submitted_at: now, submitted_via: "link",
     updated_by: who.staff.id, updated_at: now,
   };
@@ -93,11 +98,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   if (!saved) return NextResponse.json({ error: "This day has already been entered. Ask a manager if something needs changing." }, { status: 409 });
 
   if (photos?.ok) await attachReceipts(db, photos.ids, "daily_account", saved.id);
-  if (newBills.length) await db.from("pending_bills").insert(newBills.map((b) => ({ ...b, created_by: who.staff.id, source: "link" })));
-  for (const p of paidBills) await addBillPayment(who.businessId, Number(p.bill_id), who.staff.id, { amount: p.amount, method: p.method, date }, "link");
+  // The day is saved; a bill that didn't save is reported so it can be added in Pending bills.
+  const failed: string[] = [];
+  if (newBills.length) {
+    const { error } = await db.from("pending_bills").insert(newBills.map((b) => ({ ...b, created_by: who.staff.id, source: "link" })));
+    if (error) failed.push("the unpaid bills");
+  }
+  for (const p of paidBills) {
+    const res = await addBillPayment(who.businessId, Number(p.bill_id), who.staff.id, { amount: p.amount, method: p.method, date }, "link");
+    if ("error" in res) failed.push("a bill payment");
+  }
   await db.from("audit_logs").insert({
     staff_id: who.staff.id, action: "daily_accounts_submitted_link", entity_type: "daily_accounts", entity_id: saved.id,
-    changes: { date, values, notes },
+    changes: { date, values, notes, ...(failed.length ? { failed } : {}) },
   });
+  if (failed.length) return NextResponse.json({ error: `The Day End is saved, but ${[...new Set(failed)].join(" and ")} didn't save. Ask a manager to add them in Daily accounts → Pending bills.` }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

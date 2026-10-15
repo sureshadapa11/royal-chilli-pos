@@ -3,8 +3,9 @@
 //   home "expense"  → creates the expense (counted in Money out → Expenses)
 //   home "supplier" → creates a supplier payment (not counted: the stock is
 //                     counted when its delivery is received)
-//   home "wages"    → taken off that person's payslip (wages are already
-//                     counted as hours × pay rate)
+//   home "wages"    → taken off that person's payslip; the cost is hours ×
+//                     pay rate, or (no pay rate yet) this payment itself
+//                     (lib/finance.ts labourCostByDay, agreed 2026-10-15)
 //   home "advance"  → staff advances (a loan, not a cost)
 //   home "book"     → the cash book only
 //   home "job"      → a payment towards a catering / event job (133): sales
