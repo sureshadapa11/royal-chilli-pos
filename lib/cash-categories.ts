@@ -1,8 +1,9 @@
 // Cash In / Out categories (staff links, migration 130). Each has ONE home,
 // so the same money is never entered or counted twice. Safe in the browser.
 //   home "expense"  → creates the expense (counted in Money out → Expenses)
-//   home "supplier" → creates a supplier payment (not counted: the stock is
-//                     counted when its delivery is received)
+//   home "supplier" → creates a supplier payment: counted as stock in Money
+//                     out on the day paid (2026-10-15; lib/finance.ts
+//                     supplierPaymentsByDay), VAT as answered
 //   home "wages"    → taken off that person's payslip; the cost is hours ×
 //                     pay rate, or (no pay rate yet) this payment itself
 //                     (lib/finance.ts labourCostByDay, agreed 2026-10-15)

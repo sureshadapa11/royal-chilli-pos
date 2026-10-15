@@ -1,7 +1,7 @@
 import supabase from "@/lib/supabase";
 import { cashCheck } from "@/lib/daily-accounts-fields";
 import { bizDb } from "@/lib/business-db";
-import { allRows, extractVat, getVatRate, labourCostByDay, r2 } from "@/lib/finance";
+import { allRows, extractVat, getVatRate, labourCostByDay, r2, supplierPaymentsByDay } from "@/lib/finance";
 import { tradingDayStr, tradingRangeUtc } from "@/lib/london-date";
 import { savedDays, type DailyRow } from "@/lib/daily-accounts";
 import { jobSalesByDay, jobsOwedByDay } from "@/lib/catering-jobs";
@@ -171,6 +171,9 @@ async function costsByDay(businessId: number, from: string, to: string, vatRate:
   const spent = new Map<string, number>();
   const paidOut = new Map<string, number>();
   for (const po of pos) add(stock, po.received_date, Number(po.total_cost));
+  // Supplier payments not for a purchase order (2026-10-15), ex reclaimable VAT.
+  const supplier = await supplierPaymentsByDay(businessId, from, to, vatRate);
+  for (const [d, v] of supplier.cost) add(stock, d, v);
   for (const e of expenses) {
     const amount = Number(e.amount);
     add(spent, e.expense_date, e.vat_applicable ? amount - extractVat(amount, vatRate) : amount);

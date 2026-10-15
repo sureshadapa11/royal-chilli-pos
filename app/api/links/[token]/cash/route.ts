@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const place = method === "cash" ? "safe" : "till";
   const paidTo = typeof body?.paid_to === "string" ? body.paid_to.trim().slice(0, 120) || null : null;
   // VAT is always answered for an expense, never assumed (2026-10-14).
-  if (cat.home === "expense" && typeof body?.vat !== "boolean") return NextResponse.json({ error: "Does the receipt show VAT? Choose Yes or No.", field: "vat" }, { status: 400 });
+  if ((cat.home === "expense" || cat.home === "supplier") && typeof body?.vat !== "boolean") return NextResponse.json({ error: "Does the receipt show VAT? Choose Yes or No.", field: "vat" }, { status: 400 });
   const today = tradingDayStr();
   // A catering / event payment goes to its job (133): sales by cash or bank,
   // owed worked out on the job.
@@ -118,6 +118,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   } else if (cat.home === "supplier") {
     const { data: p, error } = await db.from("supplier_payments").insert({
       supplier_id: supplierId, amount, method: method === "bank" ? "bank_transfer" : method, recorded_by: who.staff.id,
+      vat_applicable: body?.vat === true ? 1 : 0,
       paid_at: date === today ? new Date().toISOString() : `${date}T12:00:00Z`,
       notes: [`Paid by ${payMethodLabel(method).toLowerCase()} (staff link)`, reason].filter(Boolean).join(" · "),
     }).select("id").single();
