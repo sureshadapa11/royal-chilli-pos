@@ -54,7 +54,7 @@ const SECTIONS: { title: string; lines: string[] }[] = [
     title: "Catering, events and pending bills",
     lines: [
       "Catering and events paid by cash or bank transfer count as sales on the day received; card on our machine is already in the Z report.",
-      "Pending bills are tracking only: they don't change sales or the cash check. The month's Pending shows the latest amount owed, not a sum.",
+      "Pending bills don't change sales (the bill is already in the Z report total) or the till's cash check. When a bill is paid in cash, the cash goes straight into the Safe. The month's Pending shows the latest amount owed, not a sum.",
     ],
   },
 ];

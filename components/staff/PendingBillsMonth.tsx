@@ -5,9 +5,9 @@ import { useToast } from "@/hooks/use-toast";
 import type { Bill } from "@/lib/pending-bills";
 
 // Daily accounts → Pending bills (134): each unpaid bill once; payments (part
-// payments too) recorded against it, so what's owed is worked out. Tracking
-// only — the sale is in that day's Z report and the payment is taken at the
-// till, so nothing here changes sales or the cash check.
+// payments too) recorded against it, so what's owed is worked out. Not sales —
+// the bill is in that day's Z report total. A cash payment goes straight into
+// the Safe (owner, 2026-10-15), never the till, so the cash check is untouched.
 
 const gbp = (n: number) => `£${n.toFixed(2)}`;
 const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
@@ -187,6 +187,7 @@ function PayForm({ bill, today, onClose, onSave }: { bill: Bill; today: string; 
           ))}
         </div>
       </div>
+      {method === "cash" && <p className="text-[12.5px] text-muted-foreground">🔒 Cash goes straight into the Safe, not the till.</p>}
       <Buttons onClose={onClose} busy={busy} text="Record payment" onSave={async () => { setBusy(true); await onSave({ amount, method, date }); setBusy(false); }} />
     </Modal>
   );

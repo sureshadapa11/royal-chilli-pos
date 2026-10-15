@@ -6,8 +6,9 @@ import { addDays } from "@/lib/admin-dashboard";
 
 // Pending bills (migration 134, agreed 2026-10-14): a bill left unpaid is
 // entered once; payments (part payments too) are recorded against it, so
-// what's owed is worked out. TRACKING ONLY — the sale is in that day's Z
-// report and the payment is taken at the till, so neither changes sales or
+// what's owed is worked out. Not sales — the bill is in that day's Z report
+// total. A cash payment goes straight into the Safe (owner, 2026-10-15; see
+// safeBook in lib/cash-book.ts), never the till, so neither changes sales or
 // the cash check. The month sheet's Pending column comes from here.
 
 export type BillPayment = { id: number; date: string; amount: number; method: string; by: string | null };
