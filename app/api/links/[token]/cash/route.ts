@@ -137,10 +137,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: "Couldn't save. Please try again." }, { status: 500 });
   }
   if (cat.home === "advance") {
-    await db.from("staff_advances").insert({
+    const { error: advErr } = await db.from("staff_advances").insert({
       staff_id: staffMemberId, kind: cat.direction === "out" ? "advance" : "repaid", amount, advance_date: date,
       cash_movement_id: saved.id, note: reason || null, created_by: who.staff.id,
     });
+    // Not saved as an advance → take the Money OUT back out, so nothing is half-saved.
+    if (advErr) {
+      await db.from("cash_movements").delete().eq("id", saved.id);
+      return NextResponse.json({ error: "Couldn't save. Please try again." }, { status: 500 });
+    }
   }
   if (photos?.ok) await attachReceipts(db, photos.ids, photoEntity, expenseId ?? supplierPaymentId ?? saved.id);
   return NextResponse.json({ ok: true });
