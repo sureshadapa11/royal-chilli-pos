@@ -11,9 +11,7 @@ import { staffLinkToken } from "@/lib/staff-links";
 import { staffLinkUrl } from "@/lib/staff-link-url";
 import { cashCategoryLabel, payMethodLabel } from "@/lib/cash-categories";
 import { cashCheck } from "@/lib/daily-accounts-fields";
-import { listJobs } from "@/lib/catering-jobs";
 import { safeBook } from "@/lib/cash-book";
-import { listBills } from "@/lib/pending-bills";
 
 // Every morning: yesterday's Day End and Cash In / Out (from the staff links,
 // lib/staff-links.ts), emailed to whoever is set in the business's
@@ -99,9 +97,10 @@ export async function buildDayEndReport(businessId: number, business: string, da
   const shifts = [...byPerson.entries()].map(([id, p]) => ({ name: nameOf(id), ...p }))
     .sort((a, b) => b.seconds - a.seconds || a.name.localeCompare(b.name));
 
-  // What open catering / event jobs still owe, as of now (133).
-  const jobsOwed = r2((await listJobs(businessId, date.slice(0, 7))).owed.reduce((s, j) => s + j.owed, 0));
-  const billsOwed = r2((await listBills(businessId, date.slice(0, 7))).owed.reduce((s, b) => s + b.owed, 0));
+  // What catering / event jobs and pending bills still owed at the end of this
+  // day — the month sheet's Catering / Events unpaid and Pending bills.
+  const jobsOwed = r2((day?.catering_owed ?? 0) + (day?.events_owed ?? 0));
+  const billsOwed = r2(day?.pending_owed ?? 0);
 
   // The Safe as it stood at the end of this day (136).
   const safe = await safeBook(businessId, date, date);

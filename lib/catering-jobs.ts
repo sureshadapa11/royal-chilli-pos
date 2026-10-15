@@ -1,6 +1,7 @@
 import supabase from "@/lib/supabase";
 import { bizDb } from "@/lib/business-db";
 import { r2 } from "@/lib/finance";
+import { addDays } from "@/lib/admin-dashboard";
 
 // Catering & events jobs (migration 133, agreed 2026-10-13). A job is entered
 // once with its total; each payment (part payments too) is a Money In entry
@@ -86,6 +87,34 @@ export async function payableJobs(businessId: number): Promise<{ id: number; lab
   const { owed } = await listJobs(businessId, new Date().toISOString().slice(0, 7));
   const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
   return owed.map((j) => ({ id: j.id, label: `${j.kind === "event" ? "🎉" : "🍱"} ${j.customer} · ${day(j.date)} · £${j.owed.toFixed(2)} owed`, owed: j.owed }));
+}
+
+/**
+ * What catering and event jobs still owed at the end of each day from..to
+ * (agreed 2026-10-15): a job counts from its event date; every payment made by
+ * that day (any method — card too, it's paid even though it's in the Z) comes
+ * off; cancelled jobs owe nothing. Never sales — a payment is sales when made.
+ */
+export async function jobsOwedByDay(businessId: number, from: string, to: string): Promise<{ catering: Map<string, number>; events: Map<string, number> }> {
+  const db = bizDb(businessId);
+  const { data: jobs } = await db.from("catering_jobs").select("id, kind, job_date, total").eq("cancelled", false).lte("job_date", to);
+  const { data: pays } = (jobs ?? []).length
+    ? await db.from("cash_movements").select("job_id, movement_date, amount").in("job_id", (jobs ?? []).map((j) => j.id)).lte("movement_date", to)
+    : { data: [] as { job_id: number; movement_date: string; amount: number }[] };
+  const catering = new Map<string, number>();
+  const events = new Map<string, number>();
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    let c = 0, e = 0;
+    for (const j of jobs ?? []) {
+      if (j.job_date > d) continue;
+      const paid = (pays ?? []).filter((p) => p.job_id === j.id && p.movement_date <= d).reduce((s, p) => s + Number(p.amount), 0);
+      const owed = Math.max(0, Number(j.total) - paid);
+      if (j.kind === "event") e += owed; else c += owed;
+    }
+    catering.set(d, r2(c));
+    events.set(d, r2(e));
+  }
+  return { catering, events };
 }
 
 /** Per day, the job payments that count as sales: catering and events. */
