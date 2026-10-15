@@ -344,7 +344,7 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
               </div>
             ))}
             <button type="button" onClick={() => setPaid([...paid, { bill: "", amount: "", method: "cash" }])} className="h-12 w-full rounded-xl border-[1.5px] border-dashed border-[#eadfcc] text-[15px] font-semibold">+ A bill was paid</button>
-            <p className="mt-1.5 text-[13px] text-[#7a6a60]">Taken at the till as usual — this just marks the bill as paid.</p>
+            <p className="mt-1.5 text-[13px] text-[#7a6a60]">This marks the bill as paid. 🔒 Cash goes straight into the Safe, not the till.</p>
           </>
         )}
       </section>

@@ -223,7 +223,7 @@ export async function safeBook(businessId: number, from: string, to: string): Pr
   const start = [first?.trading_date, firstMove?.movement_date].filter(Boolean).sort()[0] as string | undefined;
   const empty = { start: start ?? null, opening: 0, lines: [], totalIn: 0, totalOut: 0, balance: 0, lastCount: null };
   if (!start || start > to) return empty;
-  const [rows, moves, counts] = await Promise.all([
+  const [rows, moves, counts, billPays] = await Promise.all([
     allRows<{ trading_date: string; bank_in: number | null; submitted_by: number | null; updated_by: number | null }>((a, b) =>
       db.from("daily_accounts").select("trading_date, bank_in, submitted_by, updated_by").gte("trading_date", start).lte("trading_date", to).order("trading_date").range(a, b)),
     allRows<{ movement_date: string; direction: string; category: string; amount: number; reason: string; paid_to: string | null; staff_id: number | null }>((a, b) =>
@@ -231,8 +231,16 @@ export async function safeBook(businessId: number, from: string, to: string): Pr
         .gte("movement_date", start).lte("movement_date", to).order("id").range(a, b)),
     allRows<{ count_date: string; amount: number; note: string | null; counted_by: number | null }>((a, b) =>
       db.from("safe_counts").select("count_date, amount, note, counted_by").gte("count_date", start).lte("count_date", to).order("count_date").order("id").range(a, b)),
+    // Pending bills paid in cash go straight into the Safe (owner, 2026-10-15).
+    // Not sales: SumUp's Z report already had the bill in its total.
+    allRows<{ paid_date: string; amount: number; staff_id: number | null; bill_id: number }>((a, b) =>
+      db.from("pending_bill_payments").select("paid_date, amount, staff_id, bill_id").eq("method", "cash")
+        .gte("paid_date", start).lte("paid_date", to).order("id").range(a, b)),
   ]);
-  const ids = [...new Set([...rows.flatMap((r) => [r.submitted_by, r.updated_by]), ...moves.map((m) => m.staff_id), ...counts.map((c) => c.counted_by)].filter((x): x is number => !!x))];
+  const billIds = [...new Set(billPays.map((p) => p.bill_id))];
+  const { data: bills } = billIds.length ? await db.from("pending_bills").select("id, customer").in("id", billIds) : { data: [] as { id: number; customer: string }[] };
+  const customerOf = (id: number) => (bills ?? []).find((b) => b.id === id)?.customer ?? null;
+  const ids = [...new Set([...rows.flatMap((r) => [r.submitted_by, r.updated_by]), ...moves.map((m) => m.staff_id), ...counts.map((c) => c.counted_by), ...billPays.map((p) => p.staff_id)].filter((x): x is number => !!x))];
   const { data: staff } = ids.length ? await supabase.from("staff").select("id, name").in("id", ids) : { data: [] as { id: number; name: string }[] };
   const nameOf = (id: number | null) => (id ? (staff ?? []).find((s) => s.id === id)?.name ?? null : null);
   const entries = [
@@ -241,6 +249,7 @@ export async function safeBook(businessId: number, from: string, to: string): Pr
       date: m.movement_date, kind: (m.direction === "in" ? "in" : "out") as "in" | "out", by: nameOf(m.staff_id), amount: Number(m.amount),
       label: [cashCategoryLabel(m.category), m.reason && m.reason !== cashCategoryLabel(m.category) ? m.reason : null, m.paid_to].filter(Boolean).join(" · "),
     })),
+    ...billPays.map((p) => ({ date: p.paid_date, kind: "in" as const, by: nameOf(p.staff_id), amount: Number(p.amount), label: ["Pending bill paid", customerOf(p.bill_id)].filter(Boolean).join(" · ") })),
   ];
   const book = buildSafeBook(entries, counts.map((c) => ({ date: c.count_date, amount: Number(c.amount), by: nameOf(c.counted_by), note: c.note })), from);
   return { start, ...book };
