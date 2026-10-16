@@ -5,7 +5,8 @@ import { tradingRangeUtc } from "@/lib/london-date";
 import { getSessionFromRequest } from "@/lib/auth";
 import { bizDb } from "@/lib/business-db";
 import { tillFigures } from "@/lib/daily-accounts";
-import { DAILY_KEYS, isComputedField, platformCommission } from "@/lib/daily-accounts-fields";
+import { DAILY_KEYS, cashToSafe, isComputedField, platformCommission } from "@/lib/daily-accounts-fields";
+import { lastFloat } from "@/lib/till-float";
 import { getCardFeeRate } from "@/lib/daily-figures";
 
 // The manager's day-end accounts sheet (Staff Hub → Daily accounts), one per
@@ -28,12 +29,13 @@ export async function GET(req: NextRequest) {
   if (!DATE.test(date)) return NextResponse.json({ error: "Pick a date" }, { status: 400 });
 
   const db = bizDb(session.businessId);
-  const [{ data: saved, error }, till, cardFeeRate, { data: moves }, tillOut] = await Promise.all([
+  const [{ data: saved, error }, till, cardFeeRate, { data: moves }, tillOut, floatBefore] = await Promise.all([
     db.from("daily_accounts").select(COLUMNS).eq("trading_date", date).maybeSingle(),
     tillFigures(session.businessId, date),
     getCardFeeRate(session.businessId),
     db.from("cash_movements").select("direction, amount").eq("movement_date", date).eq("method", "cash").eq("place", "till"),
     tillPaidOutOn(session.businessId, date),
+    lastFloat(db, date),
   ]);
   // Catering & events payments received that day (133) — shown on the day, read-only.
   const { data: dayMoves } = await db.from("cash_movements").select("amount, method, job_id").eq("movement_date", date);
@@ -52,6 +54,9 @@ export async function GET(req: NextRequest) {
     date, saved, till, cardFeeRate, jobPayments,
     // Pending bills still owed at the end of the day (134), shown read-only.
     billsOwed: (await billsOwedByDay(session.businessId, date, date)).get(date) ?? 0,
+    // The float the day before left in the till (2026-10-16): this day's opening,
+    // and the float to leave again unless it's changed.
+    lastFloat: floatBefore?.amount ?? null,
     // The cash check is for those who see figures (not Managers).
     cashMoves: access.seeFigures ? cashMoves : null,
     locked: !access.canEnter || (submitted && !canUnlock(session)), canUnlock: canUnlock(session),
@@ -83,6 +88,14 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Amounts must be zero or more", field: k }, { status: 400 });
     }
     values[k] = Math.round(n * 100) / 100;
+  }
+  // Cash taken to the Safe is worked out (2026-10-16): the count − the float
+  // left in the till for tomorrow. Without a float it stays as saved.
+  const floatRaw = body?.float_left;
+  if (floatRaw !== undefined && floatRaw !== null && floatRaw !== "") {
+    const float = Number(floatRaw);
+    if (!Number.isFinite(float) || float < 0 || float > 10_000_000) return NextResponse.json({ error: "Amounts must be zero or more", field: "float_left" }, { status: 400 });
+    values.bank_in = cashToSafe(values.closing_balance, Math.round(float * 100) / 100).toSafe;
   }
   // Saved as the platforms' commission total; the card fee is added when shown.
   values.commission = platformCommission(values);

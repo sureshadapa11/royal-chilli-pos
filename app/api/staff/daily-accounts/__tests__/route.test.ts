@@ -10,7 +10,7 @@ jest.mock("@/lib/supabase", () => ({
   default: {
     from: (table: string) => {
       const q: Record<string, unknown> = {
-        select: () => q, eq: () => q, gte: () => q, lte: () => q, order: () => q,
+        select: () => q, eq: () => q, gte: () => q, lte: () => q, lt: () => q, not: () => q, order: () => q, limit: () => q,
         maybeSingle: () => Promise.resolve({ data: table === "daily_accounts" ? saved : null, error: null }),
         upsert: (r: Row) => { upserts.push(r); return Promise.resolve({ error: null }); },
         insert: (r: Row) => { audits.push(r); return Promise.resolve({ error: null }); },
@@ -49,6 +49,16 @@ describe("/api/staff/daily-accounts", () => {
     expect(res.status).toBe(200);
     expect(upserts[0]).toMatchObject({ trading_date: "2026-10-02", z_report: 480.5, bank_in: null, catering_paid: 50, notes: "all good", status: "draft" });
     expect(audits[0]).toMatchObject({ action: "daily_accounts_saved" });
+  });
+
+  it("works out the cash taken to the Safe from the float left in the till", async () => {
+    await put(manager, { date: "2026-10-14", values: { closing_balance: "113.80", bank_in: "5" }, float_left: "77", submit: false });
+    expect(upserts[0]).toMatchObject({ closing_balance: 113.8, bank_in: 36.8 });
+  });
+
+  it("sends nothing to the Safe when the till is below the float", async () => {
+    await put(manager, { date: "2026-10-14", values: { closing_balance: "60" }, float_left: "77", submit: false });
+    expect(upserts[0]).toMatchObject({ bank_in: 0 });
   });
 
   it("submits, recording who and when", async () => {

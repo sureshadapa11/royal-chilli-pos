@@ -1077,7 +1077,10 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
     row("Opening", gbp(dr.opening)), row("+ Cash sales", gbp(dr.cashSales)), row("+ Money in (cash)", gbp(dr.moneyIn)), row("− Money out (cash)", gbp(dr.moneyOut)),
     row("Expected at close", gbp(dr.expected), true), row("Counted", gbp(dr.counted), true),
     row("Variance (counted − expected)", dr.variance == null ? "—" : `<span style="color:${Math.abs(dr.variance) < 0.01 ? "#15803d" : "#b91c1c"};">${dr.variance > 0 ? "+" : ""}${gbp(dr.variance)}</span>`, true),
-  ].join(""));
+    // Everything above the float goes to the Safe (2026-10-16).
+    ...(dr.counted != null ? [row("Cash taken to Safe", gbp(dr.bankIn)), row("Float left in till", gbp(Math.round((dr.counted - dr.bankIn) * 100) / 100))] : []),
+  ].join("") + (dr.counted != null && dr.opening != null && dr.counted < dr.opening - 0.005
+    ? `<tr><td colspan="2">${warn(`The till was counted at ${gbp(dr.counted)}, below its ${gbp(dr.opening)} float. Nothing went to the Safe.`)}</td></tr>` : ""));
 
   // No Money in / out lines in the daily report (owner, 2026-10-14): they are in Daily accounts.
 

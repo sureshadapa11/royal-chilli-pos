@@ -6,7 +6,7 @@ export const DAILY_FIELDS = [
   { key: "card", label: "Card", auto: true, hint: "Card taken on the till" },
   { key: "cash", label: "Cash", auto: true, hint: "Cash taken on the till" },
   { key: "tips", label: "Tips", auto: true, hint: "Card and cash tips on the till: staff's money, not sales" },
-  { key: "bank_in", label: "Cash taken to Safe", auto: false, hint: "Cash taken out of the till after counting it, into the Safe (the float stays in the till)" },
+  { key: "bank_in", label: "Cash taken to Safe", auto: false, hint: "Worked out: cash counted − the float left in the till for tomorrow. Everything above the float goes to the Safe." },
   { key: "commission", label: "Commission & card fees", auto: false, hint: "Worked out: the platform commissions below + the card fee" },
   { key: "pending", label: "Pending", auto: true, hint: "Bills still owed to us" },
   { key: "takeaway", label: "Takeaway", auto: true, hint: "Takeaway sales on the till" },
@@ -62,6 +62,19 @@ export function cashCheck(i: { opening: number | null; cash: number; moneyIn: nu
   const r = (n: number) => Math.round(n * 100) / 100;
   const expected = i.opening == null ? null : r(i.opening + i.cash + i.moneyIn - i.moneyOut);
   return { expected, variance: expected == null || i.counted == null ? null : r(i.counted - expected) };
+}
+
+/**
+ * Cash taken to the Safe after the count (agreed 2026-10-16): the till keeps
+ * only the float left for tomorrow, everything above it goes to the Safe — it's
+ * worked out, never typed. A till counted below the float sends nothing and is
+ * `short` by the difference (a warning, nothing is topped up). No count or no
+ * float → can't say.
+ */
+export function cashToSafe(counted: number | null, float: number | null): { toSafe: number | null; short: number } {
+  if (counted == null || float == null) return { toSafe: null, short: 0 };
+  const diff = Math.round((counted - float) * 100) / 100;
+  return { toSafe: Math.max(0, diff), short: Math.max(0, -diff) };
 }
 
 /** The platform commissions' total, or null when none was entered. */
