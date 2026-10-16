@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReceiptPhotos, { type Receipt } from "@/components/staff/ReceiptPhotos";
 import { CASH_CATEGORIES, CATEGORY_HINT, PAY_METHODS, cashCategory } from "@/lib/cash-categories";
+import { cashToSafe } from "@/lib/daily-accounts-fields";
 
 // The staff links' forms (lib/staff-links.ts): Day End and Cash In / Out,
 // built for a phone held in one hand (agreed mock-up 2026-10-11): a big PIN
@@ -23,7 +24,7 @@ const card = "rounded-2xl border border-[#eadfcc] bg-white p-3.5 shadow-sm";
 const head = "mb-2 text-[11.5px] font-semibold uppercase tracking-[0.08em] text-[#7a6a60]";
 const bigBtn = "h-14 w-full rounded-2xl text-[17px] font-semibold disabled:opacity-60";
 
-type Picks = { staff: { id: number; name: string }[]; suppliers: { id: number; name: string }[]; jobs: { id: number; name: string }[]; bills: { id: number; name: string }[] };
+type Picks = { staff: { id: number; name: string }[]; suppliers: { id: number; name: string }[]; jobs: { id: number; name: string }[]; bills: { id: number; name: string }[]; float?: { date: string; amount: number } | null };
 
 /** What's typed, kept on this phone until it's sent (localStorage can be blocked: then just not kept). */
 function useDraft<T extends object>(key: string, initial: T): [T, (next: T | ((p: T) => T)) => void, () => void, string | null] {
@@ -122,7 +123,7 @@ function PinPad({ token, onOk }: { token: string; onOk: (pin: string, name: stri
     const res = await fetch(`/api/links/${token}/pin`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ pin: next }) }).catch(() => null);
     const d = await res?.json().catch(() => ({}));
     setBusy(false);
-    if (res?.ok && d?.name) { setName(d.name); onOk(next, d.name, { staff: d.staff ?? [], suppliers: d.suppliers ?? [], jobs: d.jobs ?? [], bills: d.bills ?? [] }); }
+    if (res?.ok && d?.name) { setName(d.name); onOk(next, d.name, { staff: d.staff ?? [], suppliers: d.suppliers ?? [], jobs: d.jobs ?? [], bills: d.bills ?? [], float: d.float ?? null }); }
     else { setErr(res ? d?.error ?? "Couldn't check the PIN." : "No connection. Try again."); setPin(""); }
   }
   if (name) {
@@ -192,6 +193,16 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [startDate]);
   const [owedBills, setOwedBills] = useState<{ id: number; name: string }[]>([]);
+  // The float the last Day End left in the till (2026-10-16): tonight's opening
+  // and the float to leave again, prefilled for a day after it.
+  const [lastFloat, setLastFloat] = useState<{ date: string; amount: number } | null>(null);
+  const floatFor = lastFloat && draft.date > lastFloat.date ? lastFloat.amount : null;
+  useEffect(() => {
+    if (floatFor == null) return;
+    const f = floatFor.toFixed(2);
+    setDraft((d) => ({ ...d, v: { ...d.v, opening_balance: d.v.opening_balance || f, float_left: d.v.float_left || f } }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floatFor, draft.date]);
   const bills = draft.bills ?? [];
   const paid = draft.paid ?? [];
   const setBills = (b: typeof bills) => setDraft((d) => ({ ...d, bills: b }));
@@ -203,11 +214,15 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
   const [done, setDone] = useState(false);
   const v = draft.v;
   const set = (k: string) => (val: string) => setDraft((d) => ({ ...d, v: { ...d.v, [k]: val } }));
+  const num = (k: string) => (v[k] === undefined || v[k] === "" ? null : Number(v[k]));
+  const safe = cashToSafe(num("closing_balance"), num("float_left"));
+  const openingOff = floatFor != null && num("opening_balance") != null && Math.abs(num("opening_balance")! - floatFor) >= 0.005;
 
   function toCheck() {
     setErr("");
     if (!pin) return setErr("Enter your PIN first.");
     if (!v.z_report) return setErr("Enter the Z report total (0 if closed).");
+    if (v.closing_balance && !v.float_left) return setErr("Enter the float left in the till for tomorrow.");
     const badBill = bills.find((b) => (b.customer.trim() || b.amount) && (!b.customer.trim() || !(Number(b.amount) > 0)));
     if (badBill) return setErr("Each unpaid bill needs a name and an amount (or remove it).");
     if (paid.some((p) => (p.bill || p.amount) && (!p.bill || !(Number(p.amount) > 0)))) return setErr("Each bill paid needs the bill and the amount (or remove it).");
@@ -255,8 +270,10 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
           {PLATFORMS.map((p) => (v[p.key] || v[`${p.key}_commission`]) ? <div key={p.key}>{line(p.label, `${gbp(v[p.key])} · comm ${gbp(v[`${p.key}_commission`])}`)}</div> : null)}
           {(v.catering_paid || v.catering_pending) && line("Catering paid / pending", `${gbp(v.catering_paid)} / ${gbp(v.catering_pending)}`)}
           {line("Opening cash", gbp(v.opening_balance))}
-          {line("Cash taken to Safe", gbp(v.bank_in))}
           {line("Cash counted", gbp(v.closing_balance))}
+          {line("Float left in till", gbp(v.float_left))}
+          {safe.toSafe != null && line("Cash to the Safe (worked out)", `£${safe.toSafe.toFixed(2)}`)}
+          {safe.short > 0 && <p className="py-2 text-[14px] font-medium text-orange-800">⚠️ The till is £{safe.short.toFixed(2)} short of the float. Nothing goes to the Safe.</p>}
           {bills.filter((b) => b.customer.trim()).map((b, i) => <div key={`b${i}`}>{line(`Unpaid bill · ${b.customer}`, gbp(b.amount))}</div>)}
           {paid.filter((p) => p.bill).map((p, i) => <div key={`p${i}`}>{line(`Bill paid · ${owedBills.find((x) => String(x.id) === p.bill)?.name.split(" · ")[0] ?? ""}`, gbp(p.amount))}</div>)}
           {photos.length > 0 && line("Z report photo", "✓ added")}
@@ -273,7 +290,7 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
       <button onClick={toCheck} className={`${bigBtn} bg-[#e4473a] text-white`}>Check my figures →</button>
     </>}>
       {savedAt && <span className="inline-block rounded-full bg-[#fdf0c9] px-2.5 py-1 text-[11.5px] font-semibold text-[#8a6400]">Kept on this phone · {savedAt}</span>}
-      <PinPad token={token} onOk={(p, n, pk) => { setPin(p); setName(n); setOwedBills(pk.bills); }} />
+      <PinPad token={token} onOk={(p, n, pk) => { setPin(p); setName(n); setOwedBills(pk.bills); setLastFloat(pk.float ?? null); }} />
       <section className={card}>
         <div className={head}>Trading day</div>
         <DateBox value={draft.date} max={today} onChange={(d) => setDraft((x) => ({ ...x, date: d }))} />
@@ -303,9 +320,15 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
       <section className={card}>
         <div className={head}>Cash drawer</div>
         <Row label="Opening cash"><Money value={v.opening_balance ?? ""} onChange={set("opening_balance")} /></Row>
+        {openingOff && <p className="mb-2 text-[13px] font-medium text-orange-800">⚠️ Last night left £{floatFor!.toFixed(2)} in the till. You&apos;ve typed £{num("opening_balance")!.toFixed(2)}.</p>}
         <Row label="Cash counted at close"><Money value={v.closing_balance ?? ""} onChange={set("closing_balance")} /></Row>
-        <Row label="Cash taken to Safe (after counting)"><Money value={v.bank_in ?? ""} onChange={set("bank_in")} /></Row>
-        <p className="mt-1 text-[13px] text-[#7a6a60]">Count the till first, then take the cash to the Safe, leaving tomorrow&apos;s float.</p>
+        <Row label="Float left in till for tomorrow"><Money value={v.float_left ?? ""} onChange={set("float_left")} /></Row>
+        {safe.short > 0 ? (
+          <p className="mt-1 rounded-xl bg-orange-50 px-3 py-2 text-[14px] font-medium text-orange-900">⚠️ The till is £{safe.short.toFixed(2)} short of the float. Nothing goes to the Safe. Tell a manager.</p>
+        ) : safe.toSafe != null ? (
+          <p className="mt-1 rounded-xl bg-emerald-50 px-3 py-2 text-[15px] font-semibold text-emerald-800">🔒 Put £{safe.toSafe.toFixed(2)} in the Safe</p>
+        ) : null}
+        <p className="mt-1 text-[13px] text-[#7a6a60]">Count the till, leave the float for tomorrow, and everything else goes in the Safe.</p>
       </section>
       <section className={card}>
         <div className={head}>Unpaid bills today</div>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import WhatsAppReportButton from "@/components/staff/WhatsAppReportButton";
 import { useToast } from "@/hooks/use-toast";
-import { DAILY_FIELDS, platformCommission, type DailyFieldKey, type DailyValues, cashCheck, PLATFORM_COMMISSION } from "@/lib/daily-accounts-fields";
+import { DAILY_FIELDS, platformCommission, type DailyFieldKey, type DailyValues, cashCheck, cashToSafe, PLATFORM_COMMISSION } from "@/lib/daily-accounts-fields";
 
 // Staff Hub → Daily accounts: the manager's day-end sheet (the paper "Daily
 // Accounts Report"). Till figures come pre-filled and stay editable; bank in,
@@ -29,7 +29,7 @@ const LABEL: Partial<Record<DailyFieldKey, string>> = { opening_balance: "Openin
 
 type Saved = (Partial<DailyValues> & { notes: string | null; status: "draft" | "submitted"; submitted_at: string | null }) | null;
 type JobPay = { kind: string; customer: string; amount: number; method: string };
-type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; jobPayments?: JobPay[]; billsOwed?: number; cashMoves?: { moneyIn: number; moneyOut: number } | null; locked: boolean; canUnlock: boolean; viewOnly?: boolean };
+type Day = { saved: Saved; till: DailyValues; cardFeeRate: number; jobPayments?: JobPay[]; billsOwed?: number; lastFloat?: number | null; cashMoves?: { moneyIn: number; moneyOut: number } | null; locked: boolean; canUnlock: boolean; viewOnly?: boolean };
 
 // seeFigures: Super admin / Supervisor see the cash check and WhatsApp; Managers only enter.
 export default function DailyAccountsView({ today, start, seeFigures = false }: { today: string; start: string; seeFigures?: boolean }) {
@@ -37,6 +37,8 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
   const [date, setDate] = useState(start);
   const [day, setDay] = useState<Day | null>(null);
   const [values, setValues] = useState<Record<DailyFieldKey, string>>({} as Record<DailyFieldKey, string>);
+  // The float left in the till for tomorrow (2026-10-16); "To Safe" is worked out from it.
+  const [floatLeft, setFloatLeft] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState<null | "save" | "submit">(null);
   const [help, setHelp] = useState<DailyFieldKey | null>(null);
@@ -50,6 +52,9 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
     // A saved sheet shows what was saved; a new day starts from the till's figures.
     setValues(Object.fromEntries(DAILY_FIELDS.map((f) => [f.key, toText(d.saved ? d.saved[f.key] : d.till[f.key])])) as Record<DailyFieldKey, string>);
     setNotes(d.saved?.notes ?? "");
+    // A counted day left count − to Safe; otherwise offer the float the day before left.
+    const s = d.saved;
+    setFloatLeft(s && s.closing_balance != null ?toText(Math.round((Number(s.closing_balance) - Number(s.bank_in ?? 0)) * 100) / 100) : toText(d.lastFloat ?? null));
   }, [date, toast]);
   useEffect(() => { load(); }, [load]);
 
@@ -66,7 +71,7 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
     setBusy(submit ? "submit" : "save");
     const res = await fetch("/api/staff/daily-accounts", {
       method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date, values, notes, submit }),
+      body: JSON.stringify({ date, values, notes, submit, float_left: floatLeft }),
     });
     setBusy(null);
     const d = await res.json().catch(() => ({}));
@@ -130,6 +135,26 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
                       </div>
                     );
                   }
+                  if (k === "bank_in") {
+                    // Never typed (2026-10-16): the count − the float left in the till.
+                    const counted = values.closing_balance === "" || values.closing_balance == null ? null : Number(values.closing_balance);
+                    const safe = cashToSafe(counted, floatLeft === "" ? null : Number(floatLeft));
+                    return (
+                      <div key={k} className="contents">
+                        <label className="block">
+                          <span className="text-[13.5px] font-semibold">Float left in till</span>
+                          <input className={`${input} mt-1`} inputMode="decimal" disabled={locked} placeholder="£0.00" value={floatLeft}
+                            onChange={(e) => setFloatLeft(e.target.value.replace(/[^0-9.]/g, ""))} />
+                        </label>
+                        <div>
+                          {head("Worked out")}
+                          <output className={`${input} mt-1 block bg-[#F6F1E6]`} aria-live="polite">{safe.toSafe == null ? "—" : gbp(safe.toSafe)}</output>
+                          {safe.short > 0 && <span className="mt-0.5 block text-[11.5px] font-medium text-red-700">⚠️ Till is {gbp(safe.short)} short of the float. Nothing goes to the Safe.</span>}
+                          {help === k && <span className="mt-0.5 block text-[11.5px] text-muted-foreground">{f.hint}</span>}
+                        </div>
+                      </div>
+                    );
+                  }
                   if (k === "commission") {
                     // Worked out from the platform commissions + the card fee, never typed.
                     const platforms = platformCommission(values) ?? 0;
@@ -172,6 +197,9 @@ export default function DailyAccountsView({ today, start, seeFigures = false }: 
                     {group("Takings", <div className={grid}>{TAKINGS.map(box)}</div>)}
                     {group("Cash drawer", <>
                       <div className={grid}>{DRAWER.map(box)}</div>
+                      {day.lastFloat != null && values.opening_balance !== "" && values.opening_balance != null && Math.abs(Number(values.opening_balance) - day.lastFloat) >= 0.005 && (
+                        <p className="mt-2 text-[12.5px] font-medium text-amber-800">⚠️ The day before left {gbp(day.lastFloat)} in the till; the opening here is {gbp(Number(values.opening_balance))}.</p>
+                      )}
                       {seeFigures && <CashCheckLine values={values} moves={day.cashMoves ?? undefined} />}
                     </>)}
                     {group("Delivery platforms", (
