@@ -6,6 +6,7 @@ import { initials } from "@/lib/brand-client";
 import type { LoginBrand } from "@/lib/login-brand";
 import { BUSINESS_COOKIE } from "@/lib/staff-business-code";
 import { freshStart } from "@/lib/auth-sync";
+import { PasswordInput } from "@/components/ui/password-input";
 
 const YEAR = 60 * 60 * 24 * 365;
 
@@ -161,7 +162,7 @@ function SignIn({ brand }: { brand: Extract<LoginBrand, { found: true }> }) {
             <label htmlFor="password" className="block text-sm font-semibold text-muted-foreground mb-1.5">
               Password
             </label>
-            <input id="password" name="password" type="password" autoComplete="current-password"
+            <PasswordInput id="password" name="password" autoComplete="current-password"
               value={password} onChange={(e) => setPassword(e.target.value)} className={field} />
           </div>
 

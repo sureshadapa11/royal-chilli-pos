@@ -10,6 +10,7 @@ import { DOC_TYPE_LABEL } from "@/lib/employee-documents";
 import EmployeePayslipsPanel from "@/components/staff/EmployeePayslipsPanel";
 import { londonDateStr } from "@/lib/london-date";
 import { confirmDelete } from "@/components/ui/confirm";
+import { PasswordInput } from "@/components/ui/password-input";
 
 type HrDetails = {
   preferred_name: string | null; job_title: string | null; department: string | null;
@@ -745,8 +746,8 @@ function NewEmployeeModal({ onClose, onCreated }: { onClose: () => void; onCreat
               className="sm:col-span-2 bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             <input autoComplete="off" name="new-staff-username" placeholder="Username" value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
-            <input autoComplete="new-password" name="new-staff-password" placeholder="Password (6+ characters)" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
-              className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
+            <PasswordInput autoComplete="new-password" name="new-staff-password" placeholder="Password (6+ characters)" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
+              className="w-full bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm" />
             <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
               className="bg-surface-hover border border-border rounded-lg px-3 py-2 text-foreground text-sm">
               {ROLES.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
