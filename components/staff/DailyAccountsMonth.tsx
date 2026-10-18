@@ -45,8 +45,10 @@ function daysOf(from: string, to: string): string[] {
 // catering / events from the Catering & events list).
 const cellOf = sheetCell;
 
-export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay, sharedMonth }: {
+export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay, sharedMonth, canExport = true }: {
   startMonth: string; businessName: string; onOpenDay: (date: string) => void; sharedMonth?: string;
+  /** Excel and Print / PDF — a Manager sees the sheet on screen only. */
+  canExport?: boolean;
 }) {
   const [ownMonth, setMonth] = useState(startMonth);
   const month = sharedMonth ?? ownMonth;
@@ -129,8 +131,10 @@ export default function DailyAccountsMonth({ startMonth, businessName, onOpenDay
         <div className="da-noprint ml-auto flex flex-wrap items-center gap-2">
           {!sharedMonth && <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)}
             className="rounded-lg border border-border bg-background px-2.5 py-1.5 text-[14px]" />}
-          <button onClick={downloadExcel} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">⬇ Excel</button>
-          <button onClick={printSheet} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">🖨 Print / PDF</button>
+          {canExport ? <>
+            <button onClick={downloadExcel} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">⬇ Excel</button>
+            <button onClick={printSheet} disabled={!data} className="rounded-lg border border-border px-3 py-1.5 text-[13px] font-semibold hover:bg-surface-hover disabled:opacity-60">🖨 Print / PDF</button>
+          </> : <span className="text-[12.5px] text-muted-foreground">View only</span>}
         </div>
       </div>
 

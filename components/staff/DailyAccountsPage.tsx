@@ -88,7 +88,7 @@ export default function DailyAccountsPage({ today, start, startMonth, startView,
             : view === "cash" ? <CashMovementsMonth startMonth={month} sharedMonth={month} canDelete={access.canDelete} />
             : view === "book" ? <CashBookMonth startMonth={month} sharedMonth={month} />
             : view === "salary" && tabs.includes("salary") ? <SalaryMonth startMonth={month} sharedMonth={month} />
-            : <DailyAccountsMonth startMonth={month} sharedMonth={month} businessName={businessName} onOpenDay={(d) => { setDay(d > today ? today : d); setView("day"); }} />}
+            : <DailyAccountsMonth startMonth={month} sharedMonth={month} businessName={businessName} canExport={access.canExport} onOpenDay={(d) => { setDay(d > today ? today : d); setView("day"); }} />}
         </div>
       </div>
     </div>
