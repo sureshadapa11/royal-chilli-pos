@@ -87,12 +87,13 @@ export default async function StaffHubLayout({
   const viewOnly = isDriver ? [] : PAGES.filter(([tab]) => levelOf(session.role, tab) === "view").flatMap(([, paths]) => paths);
   for (const g of nav) for (const item of g.items) if (viewOnly.includes(item.href)) item.note = item.note ? `${item.note} · View only` : "View only";
 
-  const notices = isDriver ? [] : await getHubNotifications(session.businessId, session.role).catch(() => []);
-  const brand = await getBrand(session.businessId);
-  // Only the group owner can step into other businesses.
-  const switcher = session.owner
-    ? (await listBusinesses()).map((b) => ({ id: b.id, name: b.name, active: b.active }))
-    : undefined;
+  const [notices, brand, businesses] = await Promise.all([
+    isDriver ? [] : getHubNotifications(session.businessId, session.role).catch(() => []),
+    getBrand(session.businessId),
+    // Only the group owner can step into other businesses.
+    session.owner ? listBusinesses() : null,
+  ]);
+  const switcher = businesses?.map((b) => ({ id: b.id, name: b.name, active: b.active }));
 
   // Owner chose "Working in: All businesses" (lib/owner-view).
   const allMode = !!session.owner && (await cookies()).get(ALL_BUSINESSES_COOKIE)?.value === "1";

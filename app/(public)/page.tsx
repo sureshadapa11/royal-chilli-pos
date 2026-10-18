@@ -25,10 +25,14 @@ export const metadata: Metadata = {
 
 export default async function HomePage() {
   const { differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
-  const about = await getAboutExcerpt(await pageBusinessId());
-  const hero = await getHeroContent(await pageBusinessId());
-  const heroImages = await getHeroImages(await pageBusinessId());
-  const featuredDishes = await getFeaturedDishes(await pageBusinessId());
+  // All at once, not one after another — each is its own database trip.
+  const businessId = await pageBusinessId();
+  const [about, hero, heroImages, featuredDishes] = await Promise.all([
+    getAboutExcerpt(businessId),
+    getHeroContent(businessId),
+    getHeroImages(businessId),
+    getFeaturedDishes(businessId),
+  ]);
 
   return (
     <div>
