@@ -79,7 +79,8 @@ const C = {
 };
 const SERIF = "Georgia, 'Times New Roman', serif";
 const SANS = "Arial, Helvetica, sans-serif";
-const money = (n: number) => `£${n.toFixed(2)}`;
+// "£2,039.48" and "−£2,120.98" (minus before the £), never "£-2120.98".
+const money = (n: number) => `${n < 0 ? "−" : ""}£${Math.abs(n).toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 // Names and codes come from customers — escape before they go into HTML.
 const esc = (v: string) => (v || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -120,7 +121,9 @@ async function sendBrevoEmail(to: string, subject: string, html: string, unsubsc
 
 // Shared card/section chrome so both templates below stay visually identical
 // without repeating the table boilerplate.
-function shell(bodyHtml: string, brand?: EmailBrand) {
+/** `internal`: a report for the owner / staff (Day End, reminder, weekly), not a customer email —
+ *  no "Thank you for choosing us" sign-off (2026-10-18). */
+function shell(bodyHtml: string, brand?: EmailBrand, opts: { internal?: boolean } = {}) {
   const bName = brand?.name ?? "The Royal Chilli";
   const bLogo = brand?.logoUrl ?? RESTAURANT.logoUrl;
   const bAccent = brand?.brandColour ?? C.chilli;
@@ -139,8 +142,10 @@ function shell(bodyHtml: string, brand?: EmailBrand) {
         <tr><td style="height:3px; background:${bAccent}; line-height:3px; font-size:0;">&nbsp;</td></tr>
         ${bodyHtml}
         <tr><td style="padding:34px 32px 26px; background:${C.rose}; text-align:center;">
-          <div style="font-family:${SERIF}; font-style:italic; font-size:16px; color:${C.ink}; margin:0 0 4px;">Thank you for choosing us.</div>
-          <div style="font-family:${SANS}; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:${C.chilliDark}; font-weight:700; margin-bottom:16px;">${esc(bName)} Team</div>
+          ${opts.internal
+            ? `<div style="font-family:${SANS}; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:${C.chilliDark}; font-weight:700; margin-bottom:16px;">Sent automatically by ${esc(bName)}&apos;s Staff Hub</div>`
+            : `<div style="font-family:${SERIF}; font-style:italic; font-size:16px; color:${C.ink}; margin:0 0 4px;">Thank you for choosing us.</div>
+          <div style="font-family:${SANS}; font-size:12px; letter-spacing:1.5px; text-transform:uppercase; color:${C.chilliDark}; font-weight:700; margin-bottom:16px;">${esc(bName)} Team</div>`}
           <div style="font-family:${SANS}; font-size:12.5px; color:${C.roseText}; line-height:2;">
             ${esc(bAddress)}<br />
             <a href="tel:${bPhone.replace(/\s/g, "")}" style="color:${C.roseText}; text-decoration:none;">${esc(bPhone)}</a>
@@ -925,7 +930,7 @@ export async function sendWeeklyReportEmail(to: string, d: WeeklyReportData) {
       ${button(d.dashboardUrl, "Open the dashboard")}
       <div style="margin-top:12px;"><a href="${esc(d.feedbackUrl)}" style="font-family:${SANS}; font-size:13px; color:${C.chilliDark};">See all feedback</a></div>
     </td></tr>`;
-  await sendBrevoEmail(to, `${brand?.name ?? "The Royal Chilli"}: your week ${d.weekLabel}`, shell(body, brand), undefined, brand);
+  await sendBrevoEmail(to, `${brand?.name ?? "The Royal Chilli"}: your week ${d.weekLabel}`, shell(body, brand, { internal: true }), undefined, brand);
 }
 
 // ---------- "Why did you stop coming?" (marketing: opted-in only) ----------
@@ -1037,7 +1042,7 @@ export async function sendApologyEmail(
 // `correction`: a note at the top and "Correction:" in the subject, for resending a report that went out wrong.
 export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end-report").DayEndReport, correction?: string) {
   const brand = await getEmailBrand(d.businessId);
-  const gbp = (v: number | null | undefined) => (v == null ? "—" : `£${v.toFixed(2)}`);
+  const gbp = (v: number | null | undefined) => (v == null ? "—" : money(v));
   const day = new Date(`${d.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
   const row = (label: string, value: string, strong = false) =>
     `<tr><td style="font-family:${SANS}; font-size:13.5px; color:${C.ink}; padding:4px 0;">${esc(label)}</td><td align="right" style="font-family:${SANS}; font-size:13.5px; color:${C.ink}; padding:4px 0;${strong ? " font-weight:700;" : ""}">${value}</td></tr>`;
@@ -1084,6 +1089,18 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
 
   // No Money in / out lines in the daily report (owner, 2026-10-14): they are in Daily accounts.
 
+  // The Safe after this day (136), and its last blind count (2026-10-18).
+  const sf = d.safe;
+  const safe = sf
+    ? section("🔒 Safe", [
+        row("Balance after this day", gbp(sf.balance), true),
+        sf.lastCount
+          ? row(`Last counted ${new Date(`${sf.lastCount.date}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}`,
+              `${gbp(sf.lastCount.counted)}${Math.abs(sf.lastCount.difference) >= 0.01 ? ` <span style="color:#b91c1c;">(${sf.lastCount.difference > 0 ? "+" : ""}${gbp(sf.lastCount.difference)})</span>` : ` <span style="color:#15803d;">✓</span>`}`)
+          : row("Last counted", "Not counted yet"),
+      ].join(""))
+    : "";
+
   const missing = d.missingDays.filter((x) => x !== d.date);
   const body = `
     <tr><td style="padding:26px 28px 6px;">
@@ -1094,10 +1111,11 @@ export async function sendDayEndReportEmail(to: string, d: import("@/lib/day-end
     ${dayEnd}
     ${staffOn}
     ${drawer}
+    ${safe}
     ${missing.length ? `<tr><td style="padding:10px 28px 0;">${warn(`Day End also missing for: ${missing.map((x) => new Date(`${x}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })).join(", ")}`)}</td></tr>` : ""}
     <tr><td align="center" style="padding:18px 28px 4px;">${button(whatsAppUrl(dayEndText(d), await getLoyaltySetting(d.businessId, "owner_whatsapp", 0).then((n) => (n ? String(n) : null)).catch(() => null)), "📲 Open in WhatsApp")}</td></tr>
     <tr><td style="padding:12px 28px 26px; font-family:${SANS}; font-size:12px; color:${C.muted};">Receipt photos and every entry are in the Staff Hub → Daily accounts.</td></tr>`;
-  await sendBrevoEmail(to, `${correction ? "Correction: " : ""}${d.business} Day End · ${day}${f ? "" : " · NOT ENTERED"}`, shell(body, brand), undefined, brand);
+  await sendBrevoEmail(to, `${correction ? "Correction: " : ""}${d.business} Day End · ${day}${f ? "" : " · NOT ENTERED"}`, shell(body, brand, { internal: true }), undefined, brand);
 }
 
 // "Day End not entered" reminder (agreed 2026-10-14): sent with the morning
@@ -1116,5 +1134,5 @@ export async function sendDayEndReminderEmail(to: string, d: { businessId: numbe
     <tr><td align="center" style="padding:22px 28px 6px;">${button(d.linkUrl, "Enter the Day End")}</td></tr>
     ${others.length ? `<tr><td align="center" style="padding:14px 28px 0; font-family:${SANS}; font-size:13px; color:${C.muted};">Also still missing: ${others.map((x) => esc(day(x))).join(", ")}</td></tr>` : ""}
     <tr><td style="padding:18px"></td></tr>`;
-  await sendBrevoEmail(to, `Reminder: ${d.business} Day End for ${day(d.date)} not entered`, shell(body, brand), undefined, brand);
+  await sendBrevoEmail(to, `Reminder: ${d.business} Day End for ${day(d.date)} not entered`, shell(body, brand, { internal: true }), undefined, brand);
 }
