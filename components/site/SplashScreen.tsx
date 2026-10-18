@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 
 const SPLASH_KEY = "rc_splash_shown";
-const DURATION_MS = 2500; // 2-3 seconds on screen
-const FADE_MS = 400; // tail end of DURATION_MS spent fading out
+const DURATION_MS = 1200; // brief — it covers the page, so longer feels like slow loading
+const FADE_MS = 300; // tail end of DURATION_MS spent fading out
 
 export default function SplashScreen() {
   const [visible, setVisible] = useState(false);
@@ -46,13 +46,13 @@ export default function SplashScreen() {
 
   return (
     <div
-      className={`fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#0d0d0d] transition-opacity duration-[400ms] ${
+      className={`fixed inset-0 z-[200] flex flex-col items-center justify-center bg-[#0d0d0d] transition-opacity duration-300 ${
         fading ? "opacity-0" : "opacity-100"
       }`}
     >
       <img src="/splash.webp" alt="The Royal Chilli" className="w-[85vw] max-w-sm sm:max-w-md md:max-w-lg lg:max-w-2xl" />
       <div className="mt-8 h-[3px] w-48 overflow-hidden rounded-full bg-white/10 sm:w-64 md:w-72">
-        <div className="h-full w-full origin-left scale-x-0 bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 motion-safe:animate-[splash-load_2.1s_ease-in-out_forwards] motion-reduce:scale-x-100" />
+        <div className="h-full w-full origin-left scale-x-0 bg-gradient-to-r from-amber-300 via-yellow-400 to-amber-300 motion-safe:animate-[splash-load_0.9s_ease-in-out_forwards] motion-reduce:scale-x-100" />
       </div>
     </div>
   );

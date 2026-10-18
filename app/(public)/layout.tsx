@@ -48,18 +48,20 @@ const jost = Jost({ subsets: ["latin"], weight: ["300", "400", "500", "600"], va
 
 export default async function PublicLayout({ children }: { children: React.ReactNode }) {
   const siteUrl = SITE_URL;
-  const openingHours = await getOpeningHours(await pageBusinessId());
+  const businessId = await pageBusinessId();
+  // Opening hours and this website's own business's banner, fetched together.
+  const [openingHours, { data: promo }] = await Promise.all([
+    getOpeningHours(businessId),
+    bizDb(businessId)
+      .from("promotions")
+      .select("title, description, link_url")
+      .eq("active", true)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
   const schema = buildRestaurantSchema(siteUrl, openingHours);
   const hoursSummary = summarizeOpeningHours(openingHours);
-
-  // This website's own business's banner.
-  const { data: promo } = await bizDb(await pageBusinessId())
-    .from("promotions")
-    .select("title, description, link_url")
-    .eq("active", true)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
 
   return (
     <div className={`${jost.variable} flex min-h-screen flex-col font-[family-name:var(--font-jost)]`}>

@@ -46,11 +46,15 @@ export default async function StaffHubPage() {
   if (role === "admin" || role === "supervisor" || role === "manager") {
     // Owner with "Working in: All businesses": every business's dashboard combined.
     const allMode = !!session!.owner && (await cookies()).get(ALL_BUSINESSES_COOKIE)?.value === "1";
-    const data = allMode
-      ? mergeDashboards(await Promise.all((await listBusinesses()).map(async (b) => ({ name: b.name, data: await getAdminDashboard(b.id, "this_week") }))))
-      : await getAdminDashboard(session!.businessId, "this_week");
-    // The group owner sees every business first, then the one they're working in.
-    const group = session!.owner ? await getGroupOverview("this_week") : null;
+    // Worked out side by side — each one is several database trips.
+    const [data, group, brand] = await Promise.all([
+      allMode
+        ? Promise.all((await listBusinesses()).map(async (b) => ({ name: b.name, data: await getAdminDashboard(b.id, "this_week") }))).then(mergeDashboards)
+        : getAdminDashboard(session!.businessId, "this_week"),
+      // The group owner sees every business first, then the one they're working in.
+      session!.owner ? getGroupOverview("this_week") : null,
+      getBrand(session!.businessId),
+    ]);
     return (
       <div className="px-4 pb-12 pt-6 md:px-6">
         <div className="mx-auto max-w-[1240px]">
@@ -61,7 +65,7 @@ export default async function StaffHubPage() {
               Showing <span className="text-[#C82D1D]">all businesses combined</span> · pick one under &ldquo;Working in&rdquo; to see just that business
             </p>
           )}
-          <AdminDashboard data={data} businessName={(await getBrand(session!.businessId)).name} />
+          <AdminDashboard data={data} businessName={brand.name} />
         </div>
       </div>
     );
