@@ -5,7 +5,8 @@ import { ReceiptLinks } from "@/components/staff/ReceiptPhotos";
 
 // Staff Hub → Daily accounts → Cash in/out: what staff entered through the
 // staff links this month (Cash In / Out entries and who sent each Day End).
-type Move = { id: number; movement_date: string; direction: "in" | "out"; categoryLabel: string; methodLabel: string; amount: number; reason: string; paid_to: string | null; by: string; created_at: string; photos: { id: number }[]; possibleDuplicate: string | null };
+// Pending bills paid are listed too (2026-10-18), read-only: they're changed in Pending bills.
+type Move = { id: number; movement_date: string; direction: "in" | "out"; categoryLabel: string; methodLabel: string; amount: number; reason: string; paid_to: string | null; by: string; created_at: string; photos: { id: number }[]; possibleDuplicate: string | null; readOnly?: boolean };
 type DayEnd = { date: string; by: string; via: string | null; photos: { id: number }[] };
 
 const gbp = (n: number) => `£${n.toFixed(2)}`;
@@ -14,7 +15,7 @@ const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB"
 export default function CashMovementsMonth({ startMonth, canDelete = false, sharedMonth }: { startMonth: string; canDelete?: boolean; sharedMonth?: string }) {
   const [ownMonth, setMonth] = useState(startMonth);
   const month = sharedMonth ?? ownMonth;
-  const [data, setData] = useState<{ movements: Move[]; dayEnds: DayEnd[] } | null>(null);
+  const [data, setData] = useState<{ movements: Move[]; billPayments?: Move[]; dayEnds: DayEnd[] } | null>(null);
   const load = () => fetch(`/api/staff/cash-movements?month=${month}`).then((r) => (r.ok ? r.json() : null)).then(setData).catch(() => {});
   useEffect(() => { setData(null); load(); }, [month]); // eslint-disable-line react-hooks/exhaustive-deps
   async function remove(m: Move) {
@@ -23,8 +24,9 @@ export default function CashMovementsMonth({ startMonth, canDelete = false, shar
     if (!res.ok) { window.alert((await res.json().catch(() => ({})))?.error ?? "Couldn't delete"); return; }
     load();
   }
-  const totalIn = data?.movements.filter((m) => m.direction === "in").reduce((s, m) => s + m.amount, 0) ?? 0;
-  const totalOut = data?.movements.filter((m) => m.direction === "out").reduce((s, m) => s + m.amount, 0) ?? 0;
+  const rows = data ? [...data.movements, ...(data.billPayments ?? [])].sort((a, b) => a.movement_date.localeCompare(b.movement_date) || a.created_at.localeCompare(b.created_at)) : [];
+  const totalIn = rows.filter((m) => m.direction === "in").reduce((s, m) => s + m.amount, 0);
+  const totalOut = rows.filter((m) => m.direction === "out").reduce((s, m) => s + m.amount, 0);
 
   return (
     <div className="space-y-4">
@@ -39,9 +41,9 @@ export default function CashMovementsMonth({ startMonth, canDelete = false, shar
           </thead>
           <tbody>
             {!data ? <tr><td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">Loading…</td></tr>
-              : data.movements.length === 0 ? <tr><td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">No money in / out entered this month.</td></tr>
-              : data.movements.map((m) => (
-                <tr key={m.id} className="border-t border-border">
+              : rows.length === 0 ? <tr><td colSpan={10} className="px-3 py-6 text-center text-muted-foreground">No money in / out entered this month.</td></tr>
+              : rows.map((m) => (
+                <tr key={`${m.readOnly ? "bill" : "move"}-${m.id}`} className="border-t border-border">
                   <td className="px-3 py-2 whitespace-nowrap">{day(m.movement_date)}</td>
                   <td className={`px-3 py-2 font-semibold ${m.direction === "out" ? "text-red-700" : "text-emerald-700"}`}>{m.direction === "out" ? "Out" : "In"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{gbp(m.amount)}</td>
@@ -55,7 +57,9 @@ export default function CashMovementsMonth({ startMonth, canDelete = false, shar
                   <td className="px-3 py-2">{m.paid_to ?? "—"}</td>
                   <td className="px-3 py-2">{m.by}</td>
                   <td className="px-3 py-2"><ReceiptLinks photos={m.photos} /></td>
-                  <td className="px-3 py-2 text-right">{canDelete && <button onClick={() => remove(m)} className="text-xs font-semibold text-red-600 hover:underline">Delete</button>}</td>
+                  <td className="px-3 py-2 text-right">{m.readOnly
+                    ? <span className="whitespace-nowrap text-[11px] text-muted-foreground" title="Saved in Pending bills: change it there">from Pending bills</span>
+                    : canDelete && <button onClick={() => remove(m)} className="text-xs font-semibold text-red-600 hover:underline">Delete</button>}</td>
                 </tr>
               ))}
           </tbody>

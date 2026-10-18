@@ -8,6 +8,7 @@ import { tradingDayStr } from "@/lib/london-date";
 import { addDays } from "@/lib/admin-dashboard";
 import { parseBill, addBillPayment } from "@/lib/pending-bills-save";
 import { getBill } from "@/lib/pending-bills";
+import { billDateProblem } from "@/lib/pending-bill-rules";
 
 // POST — the Day End link. One per trading day: once a day is submitted
 // (here or in the Staff Hub) it's locked, and only a manager can change it in
@@ -48,9 +49,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // anything is saved. Tracking only — not sales, not the cash check.
   const newBills = [];
   for (const b of Array.isArray(body?.new_bills) ? body.new_bills.slice(0, 20) : []) {
+    // Its own date (2026-10-18): an older bill can be added on a later Day End.
     const bill = parseBill(b, date);
     if ("error" in bill) return NextResponse.json({ error: bill.error }, { status: 400 });
-    newBills.push({ ...bill, bill_date: date });
+    const dateProblem = billDateProblem(bill.bill_date, date);
+    if (dateProblem) return NextResponse.json({ error: `${bill.customer}: ${dateProblem}` }, { status: 400 });
+    newBills.push(bill);
   }
   const paidBills: { bill_id: number; amount: unknown; method: unknown }[] = Array.isArray(body?.bills_paid) ? body.bills_paid.slice(0, 20) : [];
   const paidPerBill = new Map<number, number>();
