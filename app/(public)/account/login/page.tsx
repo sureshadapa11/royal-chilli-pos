@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { normalizeUkMobile } from "@/lib/phone";
 import { MONTHS } from "@/lib/birthday";
 import { freshStart } from "@/lib/auth-sync";
+import { PasswordInput } from "@/components/ui/password-input";
 
 function AuthForm() {
   const params = useSearchParams();
@@ -136,10 +137,10 @@ function AuthForm() {
           </div>
           <div className="mb-1">
             <label className="mb-1 block text-xs text-primary-foreground/70">Password</label>
-            <input
+            <PasswordInput
+              toggleClassName="text-white/60 hover:text-white"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              type="password"
               placeholder="••••••••"
               onKeyDown={(e) => e.key === "Enter" && submit()}
               className="w-full rounded-xl border border-amber-300/25 bg-white/5 px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/40 focus:border-amber-300"
