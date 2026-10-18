@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReceiptPhotos, { type Receipt } from "@/components/staff/ReceiptPhotos";
 import { CASH_CATEGORIES, CATEGORY_HINT, PAY_METHODS, cashCategory } from "@/lib/cash-categories";
 import { cashToSafe } from "@/lib/daily-accounts-fields";
+import { billDateProblem, earliestBillDate, zMissingBills } from "@/lib/pending-bill-rules";
 
 // The staff links' forms (lib/staff-links.ts): Day End and Cash In / Out,
 // built for a phone held in one hand (agreed mock-up 2026-10-11): a big PIN
@@ -92,12 +93,12 @@ function Money({ value, onChange, wide }: { value: string; onChange: (v: string)
  * shown as text ("Sat 11 Oct") with the real picker laid invisibly on top —
  * tapping anywhere on it opens the phone's date picker.
  */
-function DateBox({ value, max, onChange }: { value: string; max: string; onChange: (d: string) => void }) {
+function DateBox({ value, min, max, onChange }: { value: string; min?: string; max: string; onChange: (d: string) => void }) {
   return (
     <span className="relative flex h-12 w-full min-w-0 items-center justify-between overflow-hidden rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]">
       <span className="truncate">{niceDay(value)}</span>
       <span className="ml-2 shrink-0 text-[14px] font-semibold text-[#e4473a]">📅 Change</span>
-      <input type="date" value={value} max={max} aria-label="Date" onChange={(e) => e.target.value && onChange(e.target.value)}
+      <input type="date" value={value} min={min} max={max} aria-label="Date" onChange={(e) => e.target.value && onChange(e.target.value)}
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0 [appearance:none]" />
     </span>
   );
@@ -185,7 +186,8 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
   const [name, setName] = useState("");
   const [draft, setDraft, clearDraft, savedAt] = useDraft(`dayend:${token}`, {
     date: today, v: {} as Record<string, string>, notes: "",
-    bills: [] as { customer: string; amount: string }[], paid: [] as { bill: string; amount: string; method: string }[],
+    // A bill's own date; blank = the Day End's day (2026-10-18).
+    bills: [] as { customer: string; amount: string; date?: string }[], paid: [] as { bill: string; amount: string; method: string }[],
   });
   // Opened for a particular day (the reminder email): that day, over any saved draft's.
   useEffect(() => {
@@ -217,6 +219,11 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
   const num = (k: string) => (v[k] === undefined || v[k] === "" ? null : Number(v[k]));
   const safe = cashToSafe(num("closing_balance"), num("float_left"));
   const openingOff = floatFor != null && num("opening_balance") != null && Math.abs(num("opening_balance")! - floatFor) >= 0.005;
+  const billDay = (b: { date?: string }) => b.date || draft.date;
+  const enteredBills = bills.filter((b) => b.customer.trim() && Number(b.amount) > 0);
+  // An unpaid bill is in that day's SumUp Z, so tonight's Z should include tonight's bills.
+  const zShouldBe = zMissingBills(num("z_report") ?? 0, num("card") ?? 0, num("cash") ?? 0,
+    enteredBills.filter((b) => billDay(b) === draft.date).reduce((s, b) => s + Number(b.amount), 0));
 
   function toCheck() {
     setErr("");
@@ -225,6 +232,8 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
     if (v.closing_balance && !v.float_left) return setErr("Enter the float left in the till for tomorrow.");
     const badBill = bills.find((b) => (b.customer.trim() || b.amount) && (!b.customer.trim() || !(Number(b.amount) > 0)));
     if (badBill) return setErr("Each unpaid bill needs a name and an amount (or remove it).");
+    const lateBill = enteredBills.find((b) => billDateProblem(billDay(b), draft.date));
+    if (lateBill) return setErr(`${lateBill.customer}: ${billDateProblem(billDay(lateBill), draft.date)}`);
     if (paid.some((p) => (p.bill || p.amount) && (!p.bill || !(Number(p.amount) > 0)))) return setErr("Each bill paid needs the bill and the amount (or remove it).");
     setStep("check");
     window.scrollTo({ top: 0 });
@@ -237,7 +246,7 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         pin, date: draft.date, values: v, notes: draft.notes, photo_ids: photos.map((p) => p.id),
-        new_bills: bills.filter((b) => b.customer.trim() && Number(b.amount) > 0),
+        new_bills: enteredBills.map((b) => ({ customer: b.customer, amount: b.amount, date: billDay(b) })),
         bills_paid: paid.filter((p) => p.bill && Number(p.amount) > 0).map((p) => ({ bill_id: Number(p.bill), amount: p.amount, method: p.method })),
       }),
     }).catch(() => null);
@@ -274,7 +283,12 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
           {line("Float left in till", gbp(v.float_left))}
           {safe.toSafe != null && line("Cash to the Safe (worked out)", `£${safe.toSafe.toFixed(2)}`)}
           {safe.short > 0 && <p className="py-2 text-[14px] font-medium text-orange-800">⚠️ The till is £{safe.short.toFixed(2)} short of the float. Nothing goes to the Safe.</p>}
-          {bills.filter((b) => b.customer.trim()).map((b, i) => <div key={`b${i}`}>{line(`Unpaid bill · ${b.customer}`, gbp(b.amount))}</div>)}
+          {enteredBills.map((b, i) => <div key={`b${i}`}>{line(`Unpaid bill · ${b.customer}${billDay(b) !== draft.date ? ` (${niceDay(billDay(b))})` : ""}`, gbp(b.amount))}</div>)}
+          {zShouldBe != null && (
+            <p className="py-2 text-[14px] font-medium text-orange-800">
+              ⚠️ Check the Z: with tonight&apos;s unpaid bills it should be Card + Cash + bills = £{zShouldBe.toFixed(2)}. You typed {gbp(v.z_report)}. If the SumUp Z is right, send it anyway.
+            </p>
+          )}
           {paid.filter((p) => p.bill).map((p, i) => <div key={`p${i}`}>{line(`Bill paid · ${owedBills.find((x) => String(x.id) === p.bill)?.name.split(" · ")[0] ?? ""}`, gbp(p.amount))}</div>)}
           {photos.length > 0 && line("Z report photo", "✓ added")}
           {draft.notes && line("Notes", draft.notes)}
@@ -331,14 +345,18 @@ export function DayEndForm({ token, business, today, startDate }: { token: strin
         <p className="mt-1 text-[13px] text-[#7a6a60]">Count the till, leave the float for tomorrow, and everything else goes in the Safe.</p>
       </section>
       <section className={card}>
-        <div className={head}>Unpaid bills today</div>
-        <p className="mb-2 text-[13px] text-[#7a6a60]">A customer who didn&apos;t pay their bill today. Each one once: it stays on the list until it&apos;s paid.</p>
+        <div className={head}>Unpaid bills</div>
+        <p className="mb-2 text-[13px] text-[#7a6a60]">A customer who didn&apos;t pay their bill. Each one once: it stays on the list until it&apos;s paid. From an earlier day? Change its date.</p>
         {bills.map((b, i) => (
-          <div key={i} className="mb-2 flex items-center gap-2">
-            <input value={b.customer} onChange={(e) => setBills(bills.map((x, j) => (j === i ? { ...x, customer: e.target.value } : x)))} placeholder="Name / table"
-              className="h-12 min-w-0 flex-1 rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]" />
-            <Money value={b.amount} onChange={(val) => setBills(bills.map((x, j) => (j === i ? { ...x, amount: val } : x)))} />
-            <button type="button" onClick={() => setBills(bills.filter((_, j) => j !== i))} aria-label="Remove" className="h-12 w-10 rounded-xl text-[18px] text-[#7a6a60]">✕</button>
+          <div key={i} className="mb-3">
+            <div className="mb-1.5 flex items-center gap-2">
+              <input value={b.customer} onChange={(e) => setBills(bills.map((x, j) => (j === i ? { ...x, customer: e.target.value } : x)))} placeholder="Name / table"
+                className="h-12 min-w-0 flex-1 rounded-xl border-[1.5px] border-[#eadfcc] bg-[#fffdf8] px-3 text-[16px]" />
+              <Money value={b.amount} onChange={(val) => setBills(bills.map((x, j) => (j === i ? { ...x, amount: val } : x)))} />
+              <button type="button" onClick={() => setBills(bills.filter((_, j) => j !== i))} aria-label="Remove" className="h-12 w-10 rounded-xl text-[18px] text-[#7a6a60]">✕</button>
+            </div>
+            <DateBox value={billDay(b)} min={earliestBillDate(draft.date)} max={draft.date}
+              onChange={(d) => setBills(bills.map((x, j) => (j === i ? { ...x, date: d === draft.date ? "" : d } : x)))} />
           </div>
         ))}
         <button type="button" onClick={() => setBills([...bills, { customer: "", amount: "" }])} className="h-12 w-full rounded-xl border-[1.5px] border-dashed border-[#eadfcc] text-[15px] font-semibold">+ Add an unpaid bill</button>

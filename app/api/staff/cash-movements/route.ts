@@ -19,13 +19,20 @@ export async function GET(req: NextRequest) {
   const from = `${month}-01`;
   const to = `${month}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, "0")}`;
   const db = bizDb(session.businessId);
-  const [{ data: moves }, { data: days }] = await Promise.all([
+  const [{ data: moves }, { data: days }, { data: billPays }] = await Promise.all([
     db.from("cash_movements").select("id, movement_date, direction, category, method, place, amount, reason, paid_to, staff_id, created_at, expense_id, supplier_payment_id")
       .gte("movement_date", from).lte("movement_date", to).order("movement_date").order("id"),
     db.from("daily_accounts").select("id, trading_date, submitted_by, submitted_via").eq("status", "submitted")
       .gte("trading_date", from).lte("trading_date", to).order("trading_date"),
+    // Pending bills paid (134): shown here too so all money in is in one list
+    // (2026-10-18). Read-only — saved and changed in Pending bills; cash ones
+    // are in the Safe book already, and none of it is sales.
+    db.from("pending_bill_payments").select("id, bill_id, paid_date, amount, method, staff_id, created_at")
+      .gte("paid_date", from).lte("paid_date", to).order("paid_date").order("id"),
   ]);
-  const ids = [...new Set([...(moves ?? []).map((x) => x.staff_id), ...(days ?? []).map((x) => x.submitted_by)].filter((x): x is number => !!x))];
+  const billIds = [...new Set((billPays ?? []).map((p) => p.bill_id))];
+  const { data: bills } = billIds.length ? await db.from("pending_bills").select("id, customer, bill_date").in("id", billIds) : { data: [] as { id: number; customer: string; bill_date: string }[] };
+  const ids = [...new Set([...(moves ?? []).map((x) => x.staff_id), ...(days ?? []).map((x) => x.submitted_by), ...(billPays ?? []).map((x) => x.staff_id)].filter((x): x is number => !!x))];
   const { data: staff } = ids.length ? await supabase.from("staff").select("id, name").in("id", ids) : { data: [] as { id: number; name: string }[] };
   const nameOf = (id: number | null) => (staff ?? []).find((s) => s.id === id)?.name ?? "—";
   const list = moves ?? [];
@@ -47,6 +54,15 @@ export async function GET(req: NextRequest) {
       photos: (x.expense_id ? expPhotos.get(x.expense_id) : x.supplier_payment_id ? payPhotos.get(x.supplier_payment_id) : movePhotos.get(x.id)) ?? [],
       possibleDuplicate: x.direction === "out" ? others.get(dayAmountKey(x.movement_date, x.amount)) ?? null : null,
     })),
+    billPayments: (billPays ?? []).map((p) => {
+      const bill = (bills ?? []).find((b) => b.id === p.bill_id);
+      return {
+        id: p.id, movement_date: p.paid_date, direction: "in" as const, amount: Number(p.amount),
+        categoryLabel: "Pending bill paid", methodLabel: payMethodLabel(p.method) + (p.method === "cash" ? " · 🔒 Safe" : ""),
+        reason: bill ? `Bill of ${bill.bill_date}` : "", paid_to: bill?.customer ?? null, by: nameOf(p.staff_id), created_at: p.created_at,
+        photos: [], possibleDuplicate: null, readOnly: true,
+      };
+    }),
     dayEnds: (days ?? []).map((x) => ({ date: x.trading_date, by: nameOf(x.submitted_by), via: x.submitted_via, photos: dayPhotos.get(x.id) ?? [] })),
   });
 }
