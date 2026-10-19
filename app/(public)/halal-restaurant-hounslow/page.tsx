@@ -23,7 +23,7 @@ export default async function HalalPage() {
         "The Royal Chilli is fully halal. From Hyderabadi dum biryani and tandoori grills to lamb chops and curries, you can order anything on the menu with confidence.",
         "We're on Kingsley Road with our own free car park, and open late every night, so it's an easy choice for family meals and get-togethers.",
       ]}
-      points={["Fully halal", "Free on-site parking", "Open till midnight", "3 min from Hounslow East"]}
+      points={["Fully halal", "Free on-site parking", "Open till 1am", "3 min from Hounslow East"]}
       sections={[
         { heading: "Grills", dishes: pick(/grill/i) },
         { heading: "Non-Vegetarian Starters", dishes: pick(/^non-?veg.*starter/i) },

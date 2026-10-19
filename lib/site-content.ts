@@ -118,7 +118,7 @@ export const siteContent = {
       { day: "Saturday – Sunday", time: "8:00 AM – 12:00 AM" },
     ],
     social: {
-      instagram: "https://www.instagram.com/the_royal_chilli?igsh=MW12MTVzY2p0ZmUycw==",
+      instagram: "https://www.instagram.com/the_royal_chilli",
     },
   },
   testimonials: [
