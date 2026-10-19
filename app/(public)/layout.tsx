@@ -14,6 +14,8 @@ import { ogImageUrl } from "@/lib/app-hosts";
 import { SITE_URL } from "@/lib/site-url";
 import { HoursProvider } from "@/components/site/HoursProvider";
 import PageViewTracker from "@/components/site/PageViewTracker";
+import { getWebsiteConfig, socialLinksFor } from "@/lib/website-config-server";
+import { normaliseWebsiteConfig } from "@/lib/website-config";
 
 // Every page under this layout reads staff-editable content (opening hours,
 // hero text, promotions, etc.) straight from Supabase with no revalidate
@@ -24,15 +26,17 @@ export const dynamic = "force-dynamic";
 
 // This business's name for any page that doesn't set its own title (the root
 // layout's defaults are neutral, shared by every business).
+// Staff Hub → Website → SEO & social media wins when it's filled in.
 export async function generateMetadata(): Promise<Metadata> {
   const b = await getBusiness(await pageBusinessId()).catch(() => null);
   if (!b) return {};
+  const config = await getWebsiteConfig(b.id).catch(() => null);
   // Shared links show The Royal Chilli's restaurant photo (a .jpg — WhatsApp
   // often skips .webp previews); another business shows its logo card.
-  const image = b.id === DEFAULT_BUSINESS_ID ? "/splash.jpg" : ogImageUrl((await headers()).get("host"));
+  const image = config?.og_image_url || (b.id === DEFAULT_BUSINESS_ID ? "/splash.jpg" : ogImageUrl((await headers()).get("host")));
   return {
-    title: b.name,
-    description: `${b.name} — order online, book a table.`,
+    title: config?.seo_title || b.name,
+    description: config?.seo_description || `${b.name} — order online, book a table.`,
     openGraph: { siteName: b.name, ...(image ? { images: [{ url: image }] } : {}) },
     twitter: { card: "summary_large_image" },
   };
@@ -50,7 +54,7 @@ export default async function PublicLayout({ children }: { children: React.React
   const siteUrl = SITE_URL;
   const businessId = await pageBusinessId();
   // Opening hours and this website's own business's banner, fetched together.
-  const [openingHours, { data: promo }] = await Promise.all([
+  const [openingHours, { data: promo }, config] = await Promise.all([
     getOpeningHours(businessId),
     bizDb(businessId)
       .from("promotions")
@@ -59,8 +63,10 @@ export default async function PublicLayout({ children }: { children: React.React
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    getWebsiteConfig(businessId).catch(() => null),
   ]);
-  const schema = buildRestaurantSchema(siteUrl, openingHours);
+  const social = socialLinksFor(businessId, config ?? normaliseWebsiteConfig(null));
+  const schema = buildRestaurantSchema(siteUrl, openingHours, [social.instagram, social.facebook].filter(Boolean));
   const hoursSummary = summarizeOpeningHours(openingHours);
 
   return (
@@ -74,7 +80,7 @@ export default async function PublicLayout({ children }: { children: React.React
           button and its full-screen overlay — so there's no header height
           left to clear here. */}
       <main className="flex-1"><HoursProvider hours={openingHours}>{children}</HoursProvider></main>
-      <SiteFooter hours={hoursSummary} />
+      <SiteFooter hours={hoursSummary} social={social} />
       <CookieConsent />
       <PageViewTracker />
     </div>
