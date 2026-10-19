@@ -5,7 +5,7 @@ import LocalPage, { type LocalSection } from "@/components/site/LocalPage";
 // often nearby (Google suggestions, October 2026). Breakfast isn't on the
 // till's menu, so the dishes are copied from the breakfast menu poster
 // (public/menu-posters/breakfast.jpeg, the October 2026 menu the owner put on
-// Google). Breakfast hours aren't on it, so they're left out until confirmed.
+// Google). Owner: don't state breakfast times anywhere (October 2026).
 export const metadata: Metadata = {
   title: "South Indian Breakfast in Hounslow | The Royal Chilli",
   description: "South Indian breakfast in Hounslow: dosas from £4.95, idli, vada, pongal, poori and parotta at The Royal Chilli, near Hounslow East station.",
@@ -29,7 +29,7 @@ const SECTIONS: LocalSection[] = [
       { name: "Chocolate Dosa", price: 5.95, note: "Filled with melted chocolate." },
       { name: "Pizza Uttapam", price: 7.95, note: "Topped with pizza sauce, cheese, onions, peppers and herbs." },
       { name: "Plain Uttapam", price: 7.95 },
-      { name: "Kal Dosa", price: 5.95 },
+      { name: "Kai Dosa", price: 5.95 },
       { name: "Rava Dosa", price: 5.95 },
       { name: "Onion Rava Dosa", price: 6.49 },
     ],
@@ -88,7 +88,7 @@ export default function BreakfastPage() {
         "Start the day with a proper South Indian breakfast: soft idli, crispy vada, dosas straight off the tawa, pongal, poori and Malabar parotta.",
         "Choose from 17 dosas and uttapams, from a classic Plain Dosa at £4.95 to our Royal Chilli Special Rameshwaram Masala Dosa.",
       ]}
-      points={["Halal", "Breakfast every morning", "3 min from Hounslow East"]}
+      points={["Halal", "Fresh South Indian breakfast", "3 min from Hounslow East"]}
       sections={SECTIONS}
     />
   );
