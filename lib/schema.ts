@@ -12,7 +12,7 @@ function toIntlPhone(localNumber: string): string {
 // No aggregateRating: that needs real numbers from a live Google Places
 // pull (see the reviews-are-hardcoded gap), and a fabricated rating is a
 // Google Search Console penalty risk, not a quick win.
-export function buildRestaurantSchema(siteUrl: string, hours: DayHours[]) {
+export function buildRestaurantSchema(siteUrl: string, hours: DayHours[], sameAs: string[] = [siteContent.contact.social.instagram]) {
   const { contact } = siteContent;
 
   // Group days that share identical open/close into one spec entry each,
@@ -51,6 +51,6 @@ export function buildRestaurantSchema(siteUrl: string, hours: DayHours[]) {
     acceptsReservations: true,
     menu: `${siteUrl}/menu`,
     openingHoursSpecification,
-    sameAs: [contact.social.instagram],
+    sameAs,
   };
 }

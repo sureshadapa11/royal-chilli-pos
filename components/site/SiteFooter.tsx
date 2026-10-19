@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { siteContent } from "@/lib/site-content";
+import type { SocialLinks } from "@/lib/website-config";
 
 // Editorial single-column footer, styled after tamarindrestaurant.com's flat
 // pastel block with centered serif text and thin dividers — recolored to
@@ -58,7 +59,9 @@ function NewsletterForm() {
   );
 }
 
-export default function SiteFooter({ hours }: { hours: { day: string; time: string }[] }) {
+// social: Staff Hub → Website → SEO & social media (only the ones filled in).
+// WhatsApp already has its own line in the contact details above.
+export default function SiteFooter({ hours, social }: { hours: { day: string; time: string }[]; social: SocialLinks }) {
   const pathname = usePathname();
   const { contact, footer } = siteContent;
   // The account section is its own self-contained app shell (bottom tab
@@ -112,14 +115,17 @@ export default function SiteFooter({ hours }: { hours: { day: string; time: stri
         <Divider />
 
         <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm">
-          <a
-            href={contact.social.instagram}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]"
-          >
-            Instagram
-          </a>
+          {([["instagram", "Instagram"], ["facebook", "Facebook"]] as const).map(([k, label]) => social[k] && (
+            <a
+              key={k}
+              href={social[k]}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]"
+            >
+              {label}
+            </a>
+          ))}
           <Link href="/about" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             About
           </Link>

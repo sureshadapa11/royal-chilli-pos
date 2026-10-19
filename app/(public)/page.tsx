@@ -7,21 +7,35 @@ import { getAboutExcerpt } from "@/lib/our-story";
 import { getHeroContent, getHeroImages } from "@/lib/hero-content";
 import { getFeaturedDishes } from "@/lib/featured-dishes";
 import { pageBusinessId } from "@/lib/business";
+import { getWebsiteConfig } from "@/lib/website-config-server";
 import { formatCurrency } from "@/lib/utils";
 import HeroBackground from "@/components/site/HeroBackground";
 import Reveal from "@/components/site/Reveal";
 import ShimmerHeadline from "@/components/site/ShimmerHeadline";
 import TodayHours from "@/components/site/TodayHours";
 
-export const metadata: Metadata = {
-  title: "The Royal Chilli — Authentic Indian Cuisine in Hounslow, London",
-  description: "Authentic North and South Indian cuisine in the heart of Hounslow, London. Order online for collection or delivery, book a table, or scan the QR code at your table.",
-  openGraph: {
-    title: "The Royal Chilli — Authentic Indian Cuisine in Hounslow, London",
-    description: "Authentic North and South Indian cuisine in the heart of Hounslow, London.",
-    images: [{ url: "/splash.jpg", width: 1200, height: 459, alt: "The Royal Chilli" }],
-  },
-};
+// Staff Hub → Website → SEO & social media wins when it's filled in; until
+// then, the wording below.
+const DEFAULT_TITLE = "The Royal Chilli — Authentic Indian Cuisine in Hounslow, London";
+const DEFAULT_DESCRIPTION = "Authentic North and South Indian cuisine in the heart of Hounslow, London. Order online for collection or delivery, book a table, or scan the QR code at your table.";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getWebsiteConfig(await pageBusinessId()).catch(() => null);
+  const title = config?.seo_title || DEFAULT_TITLE;
+  const description = config?.seo_description || DEFAULT_DESCRIPTION;
+  return {
+    // absolute: the homepage's own title, not run through any page template.
+    title: { absolute: title },
+    description,
+    openGraph: {
+      title,
+      description,
+      images: [config?.og_image_url
+        ? { url: config.og_image_url, alt: "The Royal Chilli" }
+        : { url: "/splash.jpg", width: 1200, height: 459, alt: "The Royal Chilli" }],
+    },
+  };
+}
 
 export default async function HomePage() {
   const { differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
