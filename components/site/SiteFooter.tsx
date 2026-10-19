@@ -90,6 +90,7 @@ export default function SiteFooter({ hours, social }: { hours: { day: string; ti
         >
           {contact.address}
         </a>
+        <p className="mt-1 text-xs text-[#3a0f0c]/70">{contact.nearby}</p>
         <a href={`tel:${contact.phone.replace(/\s/g, "")}`} className="mt-1 block text-sm hover:underline">
           {contact.phone}
         </a>
@@ -137,6 +138,15 @@ export default function SiteFooter({ hours, social }: { hours: { day: string; ti
           </Link>
           <Link href="/catering" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             Catering &amp; Events
+          </Link>
+          <Link href="/hyderabadi-biryani-hounslow" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            Hyderabadi Biryani
+          </Link>
+          <Link href="/indian-breakfast-hounslow" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            Breakfast
+          </Link>
+          <Link href="/halal-restaurant-hounslow" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            Halal
           </Link>
           <Link href="/careers" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             Careers

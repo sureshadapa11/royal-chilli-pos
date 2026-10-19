@@ -78,6 +78,12 @@ export default async function HomePage() {
             <ShimmerHeadline text={hero.headlineGold} className="italic" />
           </h1>
           <p className="mt-6 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
+          {/* What people nearby search for: halal, parking, the station. */}
+          <ul className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.15em] text-white/85">
+            {["Halal", "Free parking", "3 min from Hounslow East"].map((p) => (
+              <li key={p} className="rounded-full border border-white/30 px-3 py-1">{p}</li>
+            ))}
+          </ul>
 
           <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
             <Link

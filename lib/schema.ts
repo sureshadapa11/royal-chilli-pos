@@ -32,6 +32,7 @@ export function buildRestaurantSchema(siteUrl: string, hours: DayHours[], sameAs
     "@type": "Restaurant",
     "@id": `${siteUrl}/#restaurant`,
     name: "The Royal Chilli",
+    description: `Halal Indian restaurant in Hounslow serving Hyderabadi, South Indian and North Indian food: dum biryani, dosas, tandoori grills and breakfast. ${contact.nearby}, with free on-site parking.`,
     image: [`${siteUrl}/splash.jpg`, `${siteUrl}/gallery/Royal_Mixed_Platter.webp`],
     url: siteUrl,
     telephone: toIntlPhone(contact.phone),

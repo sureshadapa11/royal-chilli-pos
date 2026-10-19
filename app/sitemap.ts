@@ -7,7 +7,11 @@ const BASE_URL = SITE_URL;
 // and everything under /pos, /staff, /login are transactional or private —
 // deliberately excluded (and already noindexed where relevant).
 export default function sitemap(): MetadataRoute.Sitemap {
-  const staticRoutes = ["", "/menu", "/order", "/reservations", "/gallery", "/careers", "/reviews", "/about", "/catering", "/faq"];
+  const staticRoutes = [
+    "", "/menu", "/order", "/reservations", "/gallery", "/careers", "/reviews", "/about", "/catering", "/faq",
+    // What people nearby search for (October 2026).
+    "/hyderabadi-biryani-hounslow", "/indian-breakfast-hounslow", "/halal-restaurant-hounslow",
+  ];
 
   return staticRoutes.map((route) => ({
     url: `${BASE_URL}${route}`,

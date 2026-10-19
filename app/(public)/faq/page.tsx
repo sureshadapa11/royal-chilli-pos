@@ -24,6 +24,10 @@ function buildFaqs(hoursText: string, rewardMin: number) {
     { q: "Do you have vegan options?", a: "Yes — we have vegan dishes as well as a wide vegetarian menu. Just ask our team when you order and they'll point them out." },
     { q: "What are your opening hours?", a: `We're open ${hoursText}.` },
     {
+      q: "How do I get to The Royal Chilli?",
+      a: `We're at ${siteContent.contact.address}, ${siteContent.contact.nearby}. There's free parking on-site if you're driving.`,
+    },
+    {
       q: "Do you offer delivery and takeaway?",
       a: "Yes — dine in with us, call us to order for collection, or order delivery through Just Eat, Deliveroo or Uber Eats.",
     },

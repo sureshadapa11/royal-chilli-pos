@@ -24,11 +24,20 @@ export function formatDayHours(h: DayHours): string {
   return `${formatTime12h(h.open)} – ${formatTime12h(h.close)}`;
 }
 
-// Collapses to "Every day · 9:00 AM – 1:00 AM" when every day matches (the
-// common case), otherwise lists each day individually.
+// "Every day · 9:00 AM – 1:00 AM" when every day matches (the common case);
+// otherwise runs of days with the same hours are grouped, e.g.
+// "Monday – Friday · 9:00 AM – 12:00 AM" and "Saturday – Sunday · 8:00 AM – 12:00 AM".
 export function summarizeOpeningHours(hours: DayHours[]): { day: string; time: string }[] {
   if (hours.length === 7 && hours.every((h) => h.open === hours[0].open && h.close === hours[0].close)) {
     return [{ day: "Every day", time: formatDayHours(hours[0]) }];
   }
-  return hours.map((h) => ({ day: h.day, time: formatDayHours(h) }));
+  const out: { day: string; time: string; first: string; last: string }[] = [];
+  for (const h of hours) {
+    const time = formatDayHours(h);
+    const prev = out[out.length - 1];
+    // Only days next to each other in the week join a run.
+    if (prev && prev.time === time && DAY_ORDER.indexOf(h.day) === DAY_ORDER.indexOf(prev.last) + 1) prev.last = h.day;
+    else out.push({ day: h.day, time, first: h.day, last: h.day });
+  }
+  return out.map((r) => ({ day: r.first === r.last ? r.first : `${r.first} – ${r.last}`, time: r.time }));
 }
