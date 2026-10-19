@@ -19,6 +19,14 @@ import TodayHours from "@/components/site/TodayHours";
 const DEFAULT_TITLE = "The Royal Chilli — Authentic Indian Cuisine in Hounslow, London";
 const DEFAULT_DESCRIPTION = "Authentic North and South Indian cuisine in the heart of Hounslow, London. Order online for collection or delivery, book a table, or scan the QR code at your table.";
 
+// "/gallery/Nalli_Gosht_Biryani_Special.webp" → "Nalli Gosht Biryani Special
+// at The Royal Chilli, Hounslow" — the photo's description for search
+// engines and screen readers.
+function photoAlt(src: string): string {
+  const name = decodeURIComponent(src.split("/").pop() ?? "").replace(/\.[a-z0-9]+$/i, "").replace(/[_-]+/g, " ").trim();
+  return name ? `${name} at The Royal Chilli, Hounslow` : "The Royal Chilli, Hounslow";
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const config = await getWebsiteConfig(await pageBusinessId()).catch(() => null);
   const title = config?.seo_title || DEFAULT_TITLE;
@@ -59,7 +67,13 @@ export default async function HomePage() {
         <div className="pointer-events-none absolute inset-0 bg-black/55" />
 
         <div className="relative z-10 mx-auto w-full max-w-3xl px-6 sm:px-10">
+          {/* The small line is part of the heading so search engines read
+              "Indian Restaurant in Hounslow" — what people type — alongside
+              the headline set in Staff Hub. */}
           <h1 className="font-[family-name:var(--font-playfair)] text-5xl font-semibold leading-tight text-white/90 sm:text-6xl lg:text-7xl">
+            <span className="mb-4 block font-[family-name:var(--font-jost)] text-xs font-medium uppercase not-italic tracking-[0.3em] text-white/75 sm:text-sm">
+              Indian Restaurant in Hounslow
+            </span>
             <span className="block">{hero.headline}</span>
             <ShimmerHeadline text={hero.headlineGold} className="italic" />
           </h1>
@@ -140,7 +154,7 @@ export default async function HomePage() {
           <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3">
             {popularDishes.images.map((src) => (
               <div key={src} className="relative aspect-[4/5] overflow-hidden rounded-xl bg-neutral-950">
-                <Image src={src} alt="" fill sizes="(min-width: 640px) 33vw, 50vw" className="object-contain transition hover:scale-105" />
+                <Image src={src} alt={photoAlt(src)} fill sizes="(min-width: 640px) 33vw, 50vw" className="object-contain transition hover:scale-105" />
               </div>
             ))}
           </Reveal>
@@ -204,7 +218,7 @@ export default async function HomePage() {
         <Reveal delay={100} className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
           {galleryImages.map((src) => (
             <div key={src} className="relative aspect-square overflow-hidden rounded-xl">
-              <Image src={src} alt="" fill sizes="(min-width: 640px) 25vw, 50vw" className="object-cover transition hover:scale-105" />
+              <Image src={src} alt={photoAlt(src)} fill sizes="(min-width: 640px) 25vw, 50vw" className="object-cover transition hover:scale-105" />
             </div>
           ))}
         </Reveal>

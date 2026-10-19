@@ -30,8 +30,9 @@ export function buildRestaurantSchema(siteUrl: string, hours: DayHours[], sameAs
   return {
     "@context": "https://schema.org",
     "@type": "Restaurant",
+    "@id": `${siteUrl}/#restaurant`,
     name: "The Royal Chilli",
-    image: `${siteUrl}/gallery/Royal_Mixed_Platter.webp`,
+    image: [`${siteUrl}/splash.jpg`, `${siteUrl}/gallery/Royal_Mixed_Platter.webp`],
     url: siteUrl,
     telephone: toIntlPhone(contact.phone),
     address: {
@@ -48,8 +49,13 @@ export function buildRestaurantSchema(siteUrl: string, hours: DayHours[], sameAs
       longitude: -0.3580133,
     },
     servesCuisine: ["Indian", "South Indian", "North Indian", "Hyderabadi"],
+    // Mains £6.95–£14.95 (October 2026).
+    priceRange: "££",
+    currenciesAccepted: "GBP",
     acceptsReservations: true,
     menu: `${siteUrl}/menu`,
+    hasMenu: `${siteUrl}/menu`,
+    hasMap: contact.googleMapsUrl,
     openingHoursSpecification,
     sameAs,
   };

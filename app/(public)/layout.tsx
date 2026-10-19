@@ -34,7 +34,11 @@ export async function generateMetadata(): Promise<Metadata> {
   // Shared links show The Royal Chilli's restaurant photo (a .jpg — WhatsApp
   // often skips .webp previews); another business shows its logo card.
   const image = config?.og_image_url || (b.id === DEFAULT_BUSINESS_ID ? "/splash.jpg" : ogImageUrl((await headers()).get("host")));
+  // The same site also answers on *.vercel.app; keep that copy out of search
+  // results so Google only lists the real domain.
+  const host = (await headers()).get("host") ?? "";
   return {
+    ...(/\.vercel\.app$/i.test(host.split(":")[0]) ? { robots: { index: false, follow: false } } : {}),
     title: config?.seo_title || b.name,
     description: config?.seo_description || `${b.name} — order online, book a table.`,
     openGraph: { siteName: b.name, ...(image ? { images: [{ url: image }] } : {}) },

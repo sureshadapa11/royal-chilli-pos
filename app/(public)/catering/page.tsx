@@ -4,7 +4,7 @@ import Reveal from "@/components/site/Reveal";
 
 export const metadata: Metadata = {
   title: "Catering & Events — The Royal Chilli",
-  description: "Catering, private events, community and corporate occasions with The Royal Chilli, Hounslow.",
+  description: "Indian catering in Hounslow for family celebrations, corporate and community events and private functions, with menus made for your occasion.",
 };
 
 export default function CateringPage() {

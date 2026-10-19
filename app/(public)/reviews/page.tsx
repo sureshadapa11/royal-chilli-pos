@@ -4,7 +4,7 @@ import Reveal from "@/components/site/Reveal";
 
 export const metadata: Metadata = {
   title: "Reviews — The Royal Chilli",
-  description: "See what our guests say about The Royal Chilli, Hounslow.",
+  description: "Read what guests say about The Royal Chilli, the Indian restaurant on Kingsley Road, Hounslow: our Hyderabadi biryani, dosas, grills and the service.",
 };
 
 export default function ReviewsPage() {

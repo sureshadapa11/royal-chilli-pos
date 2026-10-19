@@ -9,7 +9,7 @@ import { DEFAULT_BUSINESS_ID, pageBusinessId } from "@/lib/business";
 
 export const metadata: Metadata = {
   title: "Gallery — The Royal Chilli",
-  description: "A taste of what's on the menu at The Royal Chilli, Hounslow — real dishes, real photos.",
+  description: "Photos of real dishes at The Royal Chilli, Hounslow: Hyderabadi dum biryani, masala dosa, tandoori sizzlers, lamb chops, Chicken 65 and more.",
 };
 
 function captionFromFilename(file: string) {
