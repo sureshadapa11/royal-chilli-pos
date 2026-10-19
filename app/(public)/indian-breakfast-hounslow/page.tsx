@@ -3,53 +3,78 @@ import LocalPage, { type LocalSection } from "@/components/site/LocalPage";
 
 // "indian breakfast hounslow" / "south indian breakfast hounslow" — searched
 // often nearby (Google suggestions, October 2026). Breakfast isn't on the
-// till's menu, so the dishes are copied from the breakfast poster
-// (public/menu-posters/breakfast.jpeg). The poster's starred prices (Kottu
-// Parotta, Poori + Keema) are marked unconfirmed there, so they're left out;
-// breakfast hours too, until confirmed.
+// till's menu, so the dishes are copied from the breakfast menu poster
+// (public/menu-posters/breakfast.jpeg, the October 2026 menu the owner put on
+// Google). Breakfast hours aren't on it, so they're left out until confirmed.
 export const metadata: Metadata = {
   title: "South Indian Breakfast in Hounslow | The Royal Chilli",
-  description: "South Indian breakfast in Hounslow: idly, vada, dosas, poori, pongal and a £6.99 full breakfast combo at The Royal Chilli, near Hounslow East station.",
+  description: "South Indian breakfast in Hounslow: dosas from £4.95, idli, vada, pongal, poori and parotta at The Royal Chilli, near Hounslow East station.",
 };
 
 const SECTIONS: LocalSection[] = [
   {
-    heading: "Breakfast",
+    heading: "Dosa of Your Choice",
     dishes: [
-      { name: "Vada (2)", price: 3.99 },
-      { name: "Idly (3)", price: 3.99 },
-      { name: "Plain Dosa", price: 3.99 },
-      { name: "Onion Dosa", price: 4.99 },
-      { name: "Ghee Cheese Dosa", price: 4.99 },
-      { name: "Kaju Dosa", price: 4.99 },
-      { name: "Masala Dosa", price: 4.99 },
-      { name: "Poori Masala (2)", price: 4.99 },
-      { name: "Pongal", price: 4.99 },
-      { name: "Khichdi", price: 4.99 },
-      { name: "Chapathi (2)", price: 4.99 },
-      { name: "Paratha (2)", price: 5.99 },
-      { name: "Mysore Masala Dosa", price: 6.99 },
-      { name: "Mysore Bonda (6)", price: 5.99 },
+      { name: "Plain Dosa", price: 4.95, note: "Classic crispy dosa served with sambar and chutneys. Add masala for £1." },
+      { name: "Ghee Roast Dosa", price: 5.95, note: "Golden, crispy dosa finished with ghee. Add masala for £1." },
+      { name: "Royal Chilli Special Rameshwaram Masala Dosa", price: 6.95 },
+      { name: "Podi Dosa", price: 5.95, note: "Dosa coated with spicy podi and ghee. Add masala for £1." },
+      { name: "Karam Dosa", price: 5.95, note: "Dosa spread with house-style chilli karam. Add masala for £1." },
+      { name: "Pesarattu", price: 7.95, note: "Andhra-style green moong dal dosa served with chutneys and sambar. Add onion or upma for £1." },
+      { name: "Onion Dosa", price: 5.95, note: "Crispy dosa topped with chopped onions and herbs." },
+      { name: "Paneer Dosa", price: 6.95, note: "Filled with spiced paneer, onions and peppers. Add butter masala for £1." },
+      { name: "Cheese Dosa", price: 5.95, note: "Filled with melted cheese." },
+      { name: "Egg Dosa", price: 5.95, note: "Layered with seasoned egg." },
+      { name: "Chicken Dosa", price: 7.49, note: "Filled with house-spiced chicken masala. Choose mutton for £1 extra." },
+      { name: "Chocolate Dosa", price: 5.95, note: "Filled with melted chocolate." },
+      { name: "Pizza Uttapam", price: 7.95, note: "Topped with pizza sauce, cheese, onions, peppers and herbs." },
+      { name: "Plain Uttapam", price: 7.95 },
+      { name: "Kal Dosa", price: 5.95 },
+      { name: "Rava Dosa", price: 5.95 },
+      { name: "Onion Rava Dosa", price: 6.49 },
     ],
   },
   {
-    heading: "Breakfast Combos",
+    heading: "Idli & Vada",
     dishes: [
-      { name: "Full Breakfast Combo", price: 6.99, note: "Idly (2), vada, poori, mini masala dosa and a sweet." },
-      { name: "Vada + Chicken Curry", price: 5.99 },
-      { name: "Poori + Chicken Curry", price: 5.99 },
-      { name: "Idly + Chicken Curry", price: 5.99 },
-      { name: "Idly + Lamb Curry", price: 6.49 },
-      { name: "Dosa + Paneer", price: 6.99 },
-      { name: "Dosa + Chicken", price: 7.45 },
-      { name: "Dosa + Lamb", price: 7.99 },
+      { name: "Idli (3 pieces)", price: 3.45 },
+      { name: "Vada", price: 3.45 },
+      { name: "Idli Vada (2 idli, 1 vada)", price: 3.45 },
+      { name: "Sambar Vada", price: 3.99 },
+      { name: "Dahi Vada", price: 3.99 },
+      { name: "Mini Idli", price: 5.25 },
+      { name: "Ghee Podi Idli (2 pieces)", price: 4.99 },
+      { name: "Podi Masala Idli (10 pieces)", price: 5.49 },
+      { name: "Fried Idli", price: 4.99 },
+      { name: "Chilli Idli", price: 5.25 },
     ],
   },
   {
-    heading: "Drinks",
+    heading: "Pongal",
     dishes: [
-      { name: "Tea", price: 1.0 },
-      { name: "Coffee", price: 1.0 },
+      { name: "Pongal", price: 4.95 },
+      { name: "Pongal Vada", price: 5.49 },
+    ],
+  },
+  {
+    heading: "Poori & Bhature",
+    dishes: [
+      { name: "Poori (2 pieces)", price: 4.99 },
+      { name: "Sambar Poori (3 pieces)", price: 4.99 },
+      { name: "Chole Bhature", price: 4.99 },
+    ],
+  },
+  {
+    heading: "Parotta",
+    dishes: [
+      { name: "Malabar Parotta", price: 1.99 },
+      { name: "Parotta with Chicken Curry", price: 5.25 },
+      { name: "Parotta with Lamb Curry", price: 5.99 },
+      { name: "Chilli Parotta", price: 5.25 },
+      { name: "Veg Kothu Parotta", price: 4.99 },
+      { name: "Egg Kothu Parotta", price: 5.99 },
+      { name: "Chicken Kothu Parotta", price: 5.99 },
+      { name: "Mutton Kothu Parotta", price: 6.95 },
     ],
   },
 ];
@@ -60,8 +85,8 @@ export default function BreakfastPage() {
       kicker="Breakfast · Hounslow"
       title={<>South Indian <span className="italic text-primary">Breakfast</span> in Hounslow</>}
       intro={[
-        "Start the day with a proper South Indian breakfast: soft idly, crispy vada, dosas straight off the tawa, poori masala and pongal, served every morning.",
-        "Hungry? The Full Breakfast Combo brings idly, vada, poori, a mini masala dosa and a sweet together for £6.99.",
+        "Start the day with a proper South Indian breakfast: soft idli, crispy vada, dosas straight off the tawa, pongal, poori and Malabar parotta.",
+        "Choose from 17 dosas and uttapams, from a classic Plain Dosa at £4.95 to our Royal Chilli Special Rameshwaram Masala Dosa.",
       ]}
       points={["Halal", "Breakfast every morning", "3 min from Hounslow East"]}
       sections={SECTIONS}
