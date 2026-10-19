@@ -3,6 +3,10 @@ import Image from "next/image";
 import type { Metadata } from "next";
 import { siteContent } from "@/lib/site-content";
 import Reveal from "@/components/site/Reveal";
+import { getActiveMenu } from "@/lib/menu";
+import { pageBusinessId } from "@/lib/business";
+import { formatCurrency } from "@/lib/utils";
+import { SITE_URL } from "@/lib/site-url";
 
 export const metadata: Metadata = {
   title: "Menus — The Royal Chilli",
@@ -21,7 +25,34 @@ type MenuBlock = {
   pdf?: string;
 };
 
-export default function MenuPage() {
+// "DOSA MENU" → "Dosa Menu"; names already in mixed case are left alone.
+const tidy = (name: string) =>
+  name === name.toUpperCase() ? name.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : name;
+
+export default async function MenuPage() {
+  // The full menu as text (the posters above are pictures, which search
+  // engines can't read): the dine-in menu, at its dine-in / collection prices.
+  const categories = (await getActiveMenu(await pageBusinessId(), "pos").catch(() => []))
+    .filter((c) => c.items.length > 0);
+  const menuSchema = categories.length > 0 && {
+    "@context": "https://schema.org",
+    "@type": "Menu",
+    name: "The Royal Chilli menu",
+    url: `${SITE_URL}/menu`,
+    inLanguage: "en-GB",
+    hasMenuSection: categories.map((c) => ({
+      "@type": "MenuSection",
+      name: tidy(c.name),
+      hasMenuItem: c.items.map((i) => ({
+        "@type": "MenuItem",
+        name: i.name,
+        ...(i.description ? { description: i.description } : {}),
+        ...(i.is_veg ? { suitableForDiet: "https://schema.org/VegetarianDiet" } : {}),
+        offers: { "@type": "Offer", price: Number(i.price).toFixed(2), priceCurrency: "GBP" },
+      })),
+    })),
+  };
+
   const { foodPhilosophy, signatureExperiences, differentiators } = siteContent;
   const specialities = differentiators.find((d) => d.title === "Signature Specialities");
   const MENUS: MenuBlock[] = [
@@ -48,6 +79,10 @@ export default function MenuPage() {
 
   return (
     <div>
+      {menuSchema && (
+        // eslint-disable-next-line react/no-danger -- JSON built server-side from the menu, not user HTML
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(menuSchema).replace(/</g, "\\u003c") }} />
+      )}
       <Reveal className="mx-auto max-w-4xl px-4 py-16 text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-primary">Our Menus</p>
         <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
@@ -125,6 +160,37 @@ export default function MenuPage() {
           ))}
         </div>
       </div>
+
+      {categories.length > 0 && (
+        <section aria-labelledby="full-menu" className="bg-card px-4 py-16">
+          <div className="mx-auto max-w-3xl">
+            <p className="text-center text-xs uppercase tracking-[0.3em] text-primary">Dine in · Collection</p>
+            <h2 id="full-menu" className="mt-3 text-center font-[family-name:var(--font-playfair)] text-3xl">Full Menu</h2>
+            <p className="mt-3 text-center text-sm text-muted-foreground">
+              <span className="font-semibold text-green-700">(V)</span> vegetarian. Please tell us about any allergies when you order.
+            </p>
+            {categories.map((c) => (
+              <div key={c.id} className="mt-10">
+                <h3 className="border-b border-primary/30 pb-2 font-[family-name:var(--font-playfair)] text-xl">{tidy(c.name)}</h3>
+                <ul className="mt-3 divide-y divide-border/60">
+                  {c.items.map((i) => (
+                    <li key={i.id} className="flex items-baseline justify-between gap-4 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-[15px]">
+                          {i.name}
+                          {!!i.is_veg && <span className="ml-1.5 text-xs font-semibold text-green-700">(V)</span>}
+                        </p>
+                        {i.description && <p className="mt-0.5 text-sm text-muted-foreground">{i.description}</p>}
+                      </div>
+                      <span className="shrink-0 tabular-nums text-[15px]">{formatCurrency(Number(i.price))}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

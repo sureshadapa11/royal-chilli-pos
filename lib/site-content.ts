@@ -112,7 +112,7 @@ export const siteContent = {
     // directly: reviews and directions are both one tap from there.
     googleMapsUrl: "https://www.google.com/maps?cid=3983787686224519813",
     hours: [
-      { day: "Every day", time: "9:00 AM – 1:00 AM" },
+      { day: "Every day", time: "9:00 AM – 12:00 AM" },
     ],
     social: {
       instagram: "https://www.instagram.com/the_royal_chilli?igsh=MW12MTVzY2p0ZmUycw==",
