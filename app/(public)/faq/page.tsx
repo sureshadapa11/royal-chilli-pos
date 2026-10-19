@@ -8,21 +8,24 @@ import { DEFAULT_REWARD_MIN_SPEND, getLoyaltySetting, moneyShort } from "@/lib/l
 
 export const metadata: Metadata = {
   title: "FAQ — The Royal Chilli",
-  description: "Answers to common questions about The Royal Chilli, Hounslow — Halal, parking, opening hours, delivery, catering and bookings.",
+  description: "Answers to common questions about The Royal Chilli, Hounslow: halal food, vegan options, parking, opening hours, delivery, catering and bookings.",
 };
 
 // Native <details>/<summary> — accessible and keyboard-operable with zero JS.
 // Only questions with a confirmed, real answer are included here; group
-// bookings, corkage and dietary/vegan claims are left out until there's an
-// actual policy to state rather than a guessed one.
+// bookings and corkage are left out until there's an actual policy to state
+// rather than a guessed one. Halal, parking and vegan confirmed by the owner
+// 2026-10-19. Delivery: no online ordering yet (the module is off) — dine in,
+// phone for collection, or the delivery apps.
 function buildFaqs(hoursText: string, rewardMin: number) {
   return [
     { q: "Is The Royal Chilli Halal?", a: "Yes — The Royal Chilli is fully Halal." },
     { q: "Is there parking available?", a: "Yes, we have our own free car park on-site for customers." },
+    { q: "Do you have vegan options?", a: "Yes — we have vegan dishes as well as a wide vegetarian menu. Just ask our team when you order and they'll point them out." },
     { q: "What are your opening hours?", a: `We're open ${hoursText}.` },
     {
       q: "Do you offer delivery and takeaway?",
-      a: "Yes — dine-in, takeaway and delivery are all available. You can order online for collection or delivery, or dine in with us.",
+      a: "Yes — dine in with us, call us to order for collection, or order delivery through Just Eat, Deliveroo or Uber Eats.",
     },
     {
       q: "Do you cater for private events or functions?",
@@ -42,9 +45,17 @@ export default async function FaqPage() {
     ? `${summary[0].day.toLowerCase()}, ${summary[0].time}`
     : summary.map((h) => `${h.day} ${h.time}`).join(", ");
   const faqs = buildFaqs(hoursText, await getLoyaltySetting(await pageBusinessId(), "loyalty_reward_min_spend", DEFAULT_REWARD_MIN_SPEND));
+  // The same questions for search engines and AI assistants (schema.org FAQPage).
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqs.map((f) => ({ "@type": "Question", name: f.q, acceptedAnswer: { "@type": "Answer", text: f.a } })),
+  };
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-16">
+      {/* eslint-disable-next-line react/no-danger -- JSON built server-side from the questions above, not user HTML */}
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema).replace(/</g, "\\u003c") }} />
       <Reveal className="text-center">
         <p className="text-xs uppercase tracking-[0.3em] text-primary">FAQ</p>
         <h1 className="mt-3 font-[family-name:var(--font-playfair)] text-4xl">
