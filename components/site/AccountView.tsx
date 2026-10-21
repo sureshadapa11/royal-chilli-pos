@@ -7,6 +7,7 @@ import { isValidUkMobile } from "@/lib/utils";
 import LogoutButton from "@/components/site/LogoutButton";
 import { siteContent } from "@/lib/site-content";
 import { confirmDelete } from "@/components/ui/confirm";
+import { freshStart } from "@/lib/auth-sync";
 
 type Address = { id: number; label: string; line: string; postcode: string | null; is_default: boolean };
 
@@ -54,6 +55,30 @@ export default function AccountView({
       router.refresh();
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  // Delete my account: type DELETE to confirm (lib/customer-delete.ts)
+  const [delOpen, setDelOpen] = useState(false);
+  const [delText, setDelText] = useState("");
+  const [delErr, setDelErr] = useState("");
+  const [delBusy, setDelBusy] = useState(false);
+
+  async function deleteAccount() {
+    setDelErr("");
+    setDelBusy(true);
+    try {
+      const res = await fetch("/api/account/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ confirm: delText }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setDelErr(data.error || "Something went wrong"); setDelBusy(false); return; }
+      freshStart("/account/login?deleted=1", "customer");
+    } catch {
+      setDelErr("Something went wrong");
+      setDelBusy(false);
     }
   }
 
@@ -273,6 +298,47 @@ export default function AccountView({
           {subscribed ? "You're subscribed to offers and news." : "You've unsubscribed. You'll still get order and booking updates."}
         </div>
       </div>
+
+      <div className="mt-8 text-center">
+        <button onClick={() => { setDelOpen(true); setDelText(""); setDelErr(""); }} className="text-xs font-medium text-red-600 underline">
+          Delete my account
+        </button>
+      </div>
+
+      {delOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={() => !delBusy && setDelOpen(false)}>
+          <div className="w-full max-w-lg rounded-t-2xl bg-surface p-5 pb-8" onClick={(e) => e.stopPropagation()}>
+            <div className="mx-auto mb-3.5 h-1 w-9 rounded-full bg-border" />
+            <h3 className="text-xl font-semibold text-red-600">Delete your account?</h3>
+            <p className="mt-1 text-sm text-muted-foreground">This can&apos;t be undone. If you delete your account:</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
+              <li>Your name, email, mobile, addresses and birthday are erased.</li>
+              <li>Your loyalty points and any unused vouchers are lost.</li>
+              <li>Any upcoming table bookings are cancelled.</li>
+              <li>Your past orders are kept for our accounts, without your details.</li>
+            </ul>
+            <label className="mt-4 block text-sm">Type <span className="font-bold">DELETE</span> to confirm</label>
+            <input
+              value={delText}
+              onChange={(e) => setDelText(e.target.value)}
+              autoCapitalize="characters"
+              autoComplete="off"
+              className="mt-1.5 w-full rounded-lg border border-border bg-background px-2.5 py-2.5 text-sm outline-none focus:border-red-500"
+            />
+            {delErr && <p className="mt-2 text-sm text-red-500">{delErr}</p>}
+            <div className="mt-4 space-y-3">
+              <button
+                onClick={deleteAccount}
+                disabled={delBusy || delText.trim().toUpperCase() !== "DELETE"}
+                className="w-full rounded-xl bg-red-600 py-3 text-sm font-bold text-white disabled:opacity-40"
+              >
+                {delBusy ? "Deleting…" : "Delete my account"}
+              </button>
+              <button onClick={() => setDelOpen(false)} disabled={delBusy} className="w-full rounded-xl bg-muted py-3 text-sm font-semibold">Keep my account</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {addOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50" onClick={() => setAddOpen(false)}>

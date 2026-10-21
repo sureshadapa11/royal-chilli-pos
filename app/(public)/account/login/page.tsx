@@ -73,6 +73,9 @@ function AuthForm() {
           </span>
           <h1 className="mt-4 font-[family-name:var(--font-playfair)] text-3xl">My Account</h1>
           <p className="mt-1 text-sm text-primary-foreground/70">Order, earn points and book a table — all in one place.</p>
+          {params.get("deleted") === "1" && (
+            <p className="mt-3 rounded-lg bg-white/10 px-3 py-2 text-sm text-primary-foreground">Your account has been deleted. Thank you for dining with us.</p>
+          )}
           {mode === "signup" && referralCode && (
             <p className="mt-2 rounded-lg bg-amber-300/15 px-3 py-2 text-sm font-semibold text-amber-100">🎉 A friend invited you to our Rewards Club</p>
           )}
