@@ -142,6 +142,9 @@ export default function SiteFooter({ hours, social }: { hours: { day: string; ti
           <Link href="/hyderabadi-biryani-hounslow" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             Hyderabadi Biryani
           </Link>
+          <Link href="/dosa-hounslow" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
+            Dosa
+          </Link>
           <Link href="/indian-breakfast-hounslow" className="underline decoration-[#3a0f0c]/40 underline-offset-4 hover:decoration-[#3a0f0c]">
             Breakfast
           </Link>

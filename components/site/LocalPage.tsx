@@ -1,22 +1,25 @@
+import Image from "next/image";
 import Link from "next/link";
 import Reveal from "@/components/site/Reveal";
 import { siteContent } from "@/lib/site-content";
 import { formatCurrency } from "@/lib/utils";
 
-// One of the website's "<dish / need> in Hounslow" pages (biryani, breakfast,
+// One of the website's "<dish / need> in Hounslow" pages (biryani, dosa, breakfast,
 // halal) — what people nearby search for. Same look as the Menu page. Only
 // real dishes and prices go in `sections`; nothing invented.
 
 export type LocalDish = { name: string; price: number; note?: string | null; veg?: boolean };
 export type LocalSection = { heading: string; dishes: LocalDish[]; footnote?: string };
 
-export default function LocalPage({ kicker, title, intro, sections, points }: {
+export default function LocalPage({ kicker, title, intro, sections, points, photos = [] }: {
   kicker: string;
   title: React.ReactNode;
   intro: string[];
   sections: LocalSection[];
   /** Short facts shown as chips under the intro (Halal, parking, …). */
   points: string[];
+  /** Optional dish photos from public/gallery, shown in a row under the intro. */
+  photos?: { src: string; alt: string }[];
 }) {
   const { contact } = siteContent;
   return (
@@ -33,6 +36,16 @@ export default function LocalPage({ kicker, title, intro, sections, points }: {
           ))}
         </div>
       </Reveal>
+
+      {photos.length > 0 && (
+        <div className="mx-auto grid max-w-3xl grid-cols-3 gap-3 px-4 pb-10">
+          {photos.map((p) => (
+            <div key={p.src} className="relative aspect-square overflow-hidden">
+              <Image src={p.src} alt={p.alt} fill sizes="(max-width: 768px) 33vw, 250px" className="object-cover" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {sections.filter((s) => s.dishes.length > 0).map((s) => (
         <section key={s.heading} className="bg-card px-4 py-12">

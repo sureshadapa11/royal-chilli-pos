@@ -10,7 +10,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const staticRoutes = [
     "", "/menu", "/order", "/reservations", "/gallery", "/careers", "/reviews", "/about", "/catering", "/faq",
     // What people nearby search for (October 2026).
-    "/hyderabadi-biryani-hounslow", "/indian-breakfast-hounslow", "/halal-restaurant-hounslow",
+    "/hyderabadi-biryani-hounslow", "/indian-breakfast-hounslow", "/halal-restaurant-hounslow", "/dosa-hounslow",
   ];
 
   return staticRoutes.map((route) => ({
