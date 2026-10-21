@@ -31,9 +31,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const b = await getBusiness(await pageBusinessId()).catch(() => null);
   if (!b) return {};
   const config = await getWebsiteConfig(b.id).catch(() => null);
-  // Shared links show The Royal Chilli's restaurant photo (a .jpg — WhatsApp
+  // Shared links show The Royal Chilli's branded card (a .jpg — WhatsApp
   // often skips .webp previews); another business shows its logo card.
-  const image = config?.og_image_url || (b.id === DEFAULT_BUSINESS_ID ? "/splash.jpg" : ogImageUrl((await headers()).get("host")));
+  const image = config?.og_image_url || (b.id === DEFAULT_BUSINESS_ID ? "/og/home.jpg" : ogImageUrl((await headers()).get("host")));
   // The same site also answers on *.vercel.app; keep that copy out of search
   // results so Google only lists the real domain.
   const host = (await headers()).get("host") ?? "";

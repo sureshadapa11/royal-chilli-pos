@@ -41,6 +41,13 @@ describe("POST /api/track", () => {
     expect(inserted[2].visitor).not.toBe(inserted[0].visitor);
   });
 
+  it("a tracked link (?src=bag) is recorded as its source; junk src is ignored", async () => {
+    await send({ path: "/", ref: "https://l.instagram.com/", src: "Bag" });
+    await send({ path: "/", ref: "https://www.google.com/", src: "<script>" });
+    expect(inserted[0].referrer).toBe("link: bag");
+    expect(inserted[1].referrer).toBe("google.com");
+  });
+
   it("ignores bots, staff and till pages, our own site as referrer, and junk", async () => {
     await send({ path: "/" }, "Googlebot/2.1 (+http://www.google.com/bot.html)");
     await send({ path: "/staff/website" });

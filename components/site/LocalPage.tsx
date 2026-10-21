@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import Reveal from "@/components/site/Reveal";
@@ -7,6 +8,16 @@ import { formatCurrency } from "@/lib/utils";
 // One of the website's "<dish / need> in Hounslow" pages (biryani, dosa, breakfast,
 // halal) — what people nearby search for. Same look as the Menu page. Only
 // real dishes and prices go in `sections`; nothing invented.
+
+// Title, description and the page's own share picture (public/og/, 1200×630
+// .jpg — WhatsApp often skips .webp previews).
+export function localPageMetadata(title: string, description: string, image: string): Metadata {
+  return {
+    title,
+    description,
+    openGraph: { title, description, siteName: "The Royal Chilli", images: [{ url: image, width: 1200, height: 630, alt: "The Royal Chilli, Hounslow" }] },
+  };
+}
 
 export type LocalDish = { name: string; price: number; note?: string | null; veg?: boolean };
 export type LocalSection = { heading: string; dishes: LocalDish[]; footnote?: string };

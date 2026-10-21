@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import LocalPage from "@/components/site/LocalPage";
+import LocalPage, { localPageMetadata } from "@/components/site/LocalPage";
 import { getActiveMenu } from "@/lib/menu";
 import { pageBusinessId } from "@/lib/business";
 
 // "hyderabadi biryani hounslow" is the dish search people make most near the
 // restaurant (Google suggestions, October 2026). Dishes and prices come from
 // the live menu's Biryanis section.
-export const metadata: Metadata = {
-  title: "Hyderabadi Biryani in Hounslow | The Royal Chilli",
-  description: "Hyderabadi dum biryani in Hounslow: lamb, chicken, Nalli Gosht, prawn and vegetarian biryani at The Royal Chilli, 3 minutes from Hounslow East station.",
-};
+export const metadata: Metadata = localPageMetadata(
+  "Hyderabadi Biryani in Hounslow | The Royal Chilli",
+  "Hyderabadi dum biryani in Hounslow: lamb, chicken, Nalli Gosht, prawn and vegetarian biryani at The Royal Chilli, 3 minutes from Hounslow East station.",
+  "/og/biryani.jpg",
+);
 
 export default async function BiryaniPage() {
   const menu = await getActiveMenu(await pageBusinessId(), "pos").catch(() => []);

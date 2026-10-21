@@ -31,6 +31,9 @@ export async function POST(req: NextRequest) {
     const r = typeof body?.ref === "string" && body.ref ? new URL(body.ref).hostname.replace(/^www\./, "") : null;
     if (r && host && !host.replace(/^www\./, "").endsWith(r) && !r.endsWith(host.replace(/^www\./, ""))) referrer = r.slice(0, 100);
   } catch { /* not a URL */ }
+  // A tracked link (?src=bag) beats the referring site: "link: bag".
+  const src = typeof body?.src === "string" ? body.src.toLowerCase().trim() : "";
+  if (/^[a-z0-9-]{1,30}$/.test(src)) referrer = `link: ${src}`;
 
   const day = londonDateStr();
   const ip = (req.headers.get("x-forwarded-for") || "").split(",")[0].trim() || req.headers.get("x-real-ip") || "";

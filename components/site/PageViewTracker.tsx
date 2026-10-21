@@ -10,7 +10,10 @@ export default function PageViewTracker() {
   const pathname = usePathname();
   useEffect(() => {
     if (!pathname) return;
-    const body = JSON.stringify({ path: pathname, ref: document.referrer || "" });
+    // A tracked link (theroyalchilli.com/?src=bag) says which flyer, QR code
+    // or post brought them.
+    const src = new URLSearchParams(window.location.search).get("src") || "";
+    const body = JSON.stringify({ path: pathname, ref: document.referrer || "", src });
     try {
       if (navigator.sendBeacon?.("/api/track", new Blob([body], { type: "application/json" }))) return;
     } catch { /* fall back to fetch */ }
