@@ -111,6 +111,7 @@ export default async function PrivacyPolicyPage() {
       heading: "Your rights",
       body: [
         "Under UK GDPR, you have the right to access the personal data we hold about you, ask us to correct it, ask us to delete it, restrict or object to how we use it, and receive a copy in a portable format. You can also withdraw marketing consent at any time, either from your account settings or by contacting us.",
+        "You can delete your account yourself at any time: go to My Account → Profile → Delete my account. Your name, contact details, addresses and birthday are erased, your loyalty points and unused vouchers are removed, and upcoming bookings are cancelled. Past orders are kept without your details, for our accounts.",
         "To exercise any of these rights, contact us using the details below. If you're not satisfied with how we've handled your data, you have the right to complain to the Information Commissioner's Office (ico.org.uk).",
       ],
     },

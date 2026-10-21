@@ -7,6 +7,7 @@ import { SignJWT, jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { NextRequest } from "next/server";
 import type { CustomerSession } from "./types";
+import supabase from "./supabase";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || "royal-chilli-pos-fallback-secret-key-2024"
@@ -27,11 +28,24 @@ export async function createCustomerSession(customer: CustomerSession): Promise<
     .sign(JWT_SECRET);
 }
 
+async function isDeleted(customerId: number): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.from("customers").select("deleted_at").eq("id", customerId).maybeSingle();
+    return !error && !!data?.deleted_at;
+  } catch {
+    return false;
+  }
+}
+
 async function fromToken(token: string | undefined): Promise<CustomerSession | null> {
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ["HS256"] });
     if (payload.type !== "customer") return null;
+    // A deleted account's cookie may still be open on another device.
+    // Fails open if the check itself errors, so a database hiccup doesn't
+    // sign every customer out.
+    if (await isDeleted(payload.id as number)) return null;
     return { id: payload.id as number, name: payload.name as string, email: payload.email as string };
   } catch {
     return null;
