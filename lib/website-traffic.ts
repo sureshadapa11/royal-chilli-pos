@@ -75,7 +75,7 @@ export async function trafficSummary(businessId: number, days = 30): Promise<Tra
     pageViews: rows.length,
     orderingVisits: ordering.size,
     topPages: [...pages.entries()].map(([path, views]) => ({ path, views })).sort((a, b) => b.views - a.views).slice(0, 8),
-    topReferrers: [...referrers.entries()].map(([site, v]) => ({ site, visits: v.size })).sort((a, b) => b.visits - a.visits).slice(0, 5),
+    topReferrers: [...referrers.entries()].map(([site, v]) => ({ site, visits: v.size })).sort((a, b) => b.visits - a.visits).slice(0, 10),
     daily,
   };
 }

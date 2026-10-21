@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import LocalPage, { type LocalDish } from "@/components/site/LocalPage";
+import LocalPage, { localPageMetadata, type LocalDish } from "@/components/site/LocalPage";
 import { getActiveMenu, type MenuItem } from "@/lib/menu";
 import { pageBusinessId } from "@/lib/business";
 
@@ -8,10 +8,11 @@ import { pageBusinessId } from "@/lib/business";
 // Profile search terms, October 2026). Dishes and prices come from the live
 // menu's DOSA MENU and the idli & vada in Breakfast. Owner: don't state
 // breakfast times anywhere.
-export const metadata: Metadata = {
-  title: "Dosa & South Indian Restaurant in Hounslow | The Royal Chilli",
-  description: "Crispy dosas in Hounslow from £4.95: masala, ghee roast, Rameshwaram, podi, paneer and chicken dosa, plus idli and vada at The Royal Chilli, 3 min from Hounslow East.",
-};
+export const metadata: Metadata = localPageMetadata(
+  "Dosa & South Indian Restaurant in Hounslow | The Royal Chilli",
+  "Crispy dosas in Hounslow from £4.95: masala, ghee roast, Rameshwaram, podi, paneer and chicken dosa, plus idli and vada at The Royal Chilli, 3 min from Hounslow East.",
+  "/og/dosa.jpg",
+);
 
 const toDish = (i: MenuItem): LocalDish => ({ name: i.name, price: Number(i.price), note: i.description, veg: !!i.is_veg });
 

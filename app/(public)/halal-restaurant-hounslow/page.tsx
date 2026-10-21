@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import LocalPage from "@/components/site/LocalPage";
+import LocalPage, { localPageMetadata } from "@/components/site/LocalPage";
 import { getActiveMenu } from "@/lib/menu";
 import { pageBusinessId } from "@/lib/business";
 
 // "halal restaurant hounslow" / "halal food hounslow" — searched often nearby
 // (Google suggestions, October 2026). Halal confirmed by the owner 2026-10-19.
 // Dishes and prices from the live menu: grills and non-vegetarian starters.
-export const metadata: Metadata = {
-  title: "Halal Indian Restaurant in Hounslow | The Royal Chilli",
-  description: "Halal Indian restaurant in Hounslow: Hyderabadi biryani, tandoori grills, lamb chops and curries at The Royal Chilli, 3 minutes from Hounslow East station.",
-};
+export const metadata: Metadata = localPageMetadata(
+  "Halal Indian Restaurant in Hounslow | The Royal Chilli",
+  "Halal Indian restaurant in Hounslow: Hyderabadi biryani, tandoori grills, lamb chops and curries at The Royal Chilli, 3 minutes from Hounslow East station.",
+  "/og/restaurant.jpg",
+);
 
 export default async function HalalPage() {
   const menu = await getActiveMenu(await pageBusinessId(), "pos").catch(() => []);

@@ -33,7 +33,7 @@ export function buildRestaurantSchema(siteUrl: string, hours: DayHours[], sameAs
     "@id": `${siteUrl}/#restaurant`,
     name: "The Royal Chilli",
     description: `Halal Indian restaurant in Hounslow serving Hyderabadi, South Indian and North Indian food: dum biryani, dosas, tandoori grills and breakfast. ${contact.nearby}, with free on-site parking.`,
-    image: [`${siteUrl}/splash.jpg`, `${siteUrl}/gallery/Royal_Mixed_Platter.webp`],
+    image: [`${siteUrl}/og/home.jpg`, `${siteUrl}/splash.jpg`, `${siteUrl}/gallery/Royal_Mixed_Platter.webp`],
     url: siteUrl,
     telephone: toIntlPhone(contact.phone),
     address: {
@@ -59,5 +59,18 @@ export function buildRestaurantSchema(siteUrl: string, hours: DayHours[], sameAs
     hasMap: contact.googleMapsUrl,
     openingHoursSpecification,
     sameAs,
+    // "Order online" and "Book a table" straight to our own pages.
+    potentialAction: [
+      {
+        "@type": "OrderAction",
+        target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/order`, actionPlatform: ["http://schema.org/DesktopWebPlatform", "http://schema.org/MobileWebPlatform"] },
+        deliveryMethod: ["http://purl.org/goodrelations/v1#DeliveryModePickUp", "http://purl.org/goodrelations/v1#DeliveryModeOwnFleet"],
+      },
+      {
+        "@type": "ReserveAction",
+        target: { "@type": "EntryPoint", urlTemplate: `${siteUrl}/reservations`, actionPlatform: ["http://schema.org/DesktopWebPlatform", "http://schema.org/MobileWebPlatform"] },
+        result: { "@type": "FoodEstablishmentReservation", name: "Book a table" },
+      },
+    ],
   };
 }

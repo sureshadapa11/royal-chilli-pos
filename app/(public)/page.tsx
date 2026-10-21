@@ -40,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description,
       images: [config?.og_image_url
         ? { url: config.og_image_url, alt: "The Royal Chilli" }
-        : { url: "/splash.jpg", width: 1200, height: 459, alt: "The Royal Chilli" }],
+        : { url: "/og/home.jpg", width: 1200, height: 630, alt: "The Royal Chilli" }],
     },
   };
 }

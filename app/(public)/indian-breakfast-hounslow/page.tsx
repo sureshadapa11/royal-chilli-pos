@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import LocalPage, { type LocalSection } from "@/components/site/LocalPage";
+import LocalPage, { localPageMetadata, type LocalSection } from "@/components/site/LocalPage";
 
 // "indian breakfast hounslow" / "south indian breakfast hounslow" — searched
 // often nearby (Google suggestions, October 2026). Breakfast isn't on the
 // till's menu, so the dishes are copied from the breakfast menu poster
 // (public/menu-posters/breakfast.jpeg, the October 2026 menu the owner put on
 // Google). Owner: don't state breakfast times anywhere (October 2026).
-export const metadata: Metadata = {
-  title: "South Indian Breakfast in Hounslow | The Royal Chilli",
-  description: "South Indian breakfast in Hounslow: dosas from £4.95, idli, vada, pongal, poori and parotta at The Royal Chilli, near Hounslow East station.",
-};
+export const metadata: Metadata = localPageMetadata(
+  "South Indian Breakfast in Hounslow | The Royal Chilli",
+  "South Indian breakfast in Hounslow: dosas from £4.95, idli, vada, pongal, poori and parotta at The Royal Chilli, near Hounslow East station.",
+  "/og/breakfast.jpg",
+);
 
 const SECTIONS: LocalSection[] = [
   {
