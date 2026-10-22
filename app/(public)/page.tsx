@@ -62,18 +62,18 @@ export default async function HomePage() {
       {/* Hero — full-bleed rotating food photo (tall ones on phones), kept
           bright: the dark fade sits only behind the text. Phones: headline at
           the top, buttons at the bottom, food clear in between. Wider
-          screens: everything on the left. */}
+          screens: everything centred over an even fade. Text centred on both. */}
       <section className="relative flex min-h-[100svh] items-center overflow-hidden bg-neutral-950">
         <div className="absolute inset-0">
           <HeroBackground images={heroImages} mobileImages={heroMobileImages} />
         </div>
-        <div className="pointer-events-none absolute inset-0 max-sm:bg-[linear-gradient(to_bottom,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.6)_40%,rgba(0,0,0,0.1)_58%,rgba(0,0,0,0.35)_74%,rgba(0,0,0,0.9)_100%)] sm:bg-gradient-to-r sm:from-black/80 sm:via-black/45 sm:to-transparent" />
+        <div className="pointer-events-none absolute inset-0 max-sm:bg-[linear-gradient(to_bottom,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.6)_40%,rgba(0,0,0,0.1)_58%,rgba(0,0,0,0.35)_74%,rgba(0,0,0,0.9)_100%)] sm:bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.7)_0%,rgba(0,0,0,0.45)_55%,rgba(0,0,0,0.3)_100%)]" />
 
-        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col px-6 max-sm:min-h-[100svh] max-sm:justify-between max-sm:pb-10 max-sm:pt-24 sm:px-10">
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col items-center px-6 text-center max-sm:min-h-[100svh] max-sm:justify-between max-sm:pb-10 max-sm:pt-24 sm:px-10">
           {/* The small line is part of the heading so search engines read
               "Indian Restaurant in Hounslow" — what people type — alongside
               the headline set in Staff Hub. */}
-          <h1 className="max-w-2xl font-[family-name:var(--font-playfair)] text-4xl font-semibold leading-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] max-sm:text-[2.15rem] sm:text-6xl lg:text-7xl">
+          <h1 className="mx-auto max-w-3xl font-[family-name:var(--font-playfair)] text-4xl font-semibold leading-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] max-sm:text-[2.15rem] sm:text-6xl lg:text-7xl">
             <span className="mb-3 block font-[family-name:var(--font-jost)] text-xs font-medium uppercase not-italic tracking-[0.3em] text-white/80 sm:text-sm">
               Indian Restaurant in Hounslow
             </span>
@@ -82,8 +82,8 @@ export default async function HomePage() {
           </h1>
 
           {/* Phones show the info line above the buttons (column-reverse). */}
-          <div className="flex flex-col max-sm:flex-col-reverse sm:mt-7">
-            <div className="flex items-center gap-3 sm:flex-wrap">
+          <div className="flex w-full flex-col items-center max-sm:flex-col-reverse sm:mt-7">
+            <div className="flex items-center justify-center gap-3 max-sm:w-full sm:flex-wrap">
               <Link
                 href="/reservations"
                 className="flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground shadow-lg transition hover:opacity-90 max-sm:flex-1 max-sm:px-3"
@@ -99,7 +99,7 @@ export default async function HomePage() {
             </div>
 
             {/* What people nearby search for: halal, parking, today's hours. */}
-            <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs uppercase tracking-[0.12em] text-white/85 max-sm:mb-4 max-sm:mt-0">
+            <p className="mt-5 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-xs uppercase tracking-[0.12em] text-white/85 max-sm:mb-4 max-sm:mt-0">
               <span>Halal</span><span aria-hidden className="text-white/40">·</span>
               <span>Free parking</span><span aria-hidden className="text-white/40">·</span>
               <span className="flex items-center gap-1.5"><Clock size={13} /> Open today <TodayHours /></span>
