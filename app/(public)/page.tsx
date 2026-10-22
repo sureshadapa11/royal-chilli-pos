@@ -1,10 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowRight, Bike, BookOpen, ChevronDown, Clock, MapPin } from "lucide-react";
+import { ArrowRight, Bike, Clock } from "lucide-react";
 import { siteContent } from "@/lib/site-content";
 import { getAboutExcerpt } from "@/lib/our-story";
-import { getHeroContent, getHeroImages } from "@/lib/hero-content";
+import { getHeroContent, getHeroImages, getHeroMobileImages } from "@/lib/hero-content";
 import { getFeaturedDishes } from "@/lib/featured-dishes";
 import { pageBusinessId } from "@/lib/business";
 import { getWebsiteConfig } from "@/lib/website-config-server";
@@ -49,88 +49,59 @@ export default async function HomePage() {
   const { differentiators, testimonials, reservation, galleryImages, popularDishes } = siteContent;
   // All at once, not one after another — each is its own database trip.
   const businessId = await pageBusinessId();
-  const [about, hero, heroImages, featuredDishes] = await Promise.all([
+  const [about, hero, heroImages, heroMobileImages, featuredDishes] = await Promise.all([
     getAboutExcerpt(businessId),
     getHeroContent(businessId),
     getHeroImages(businessId),
+    getHeroMobileImages(businessId),
     getFeaturedDishes(businessId),
   ]);
 
   return (
     <div>
-      {/* Hero — full-bleed rotating photo, dark-washed for legibility, with
-          the marketing headline as the primary content. */}
-      <section className="relative flex min-h-[100svh] items-center justify-center overflow-hidden bg-neutral-950">
+      {/* Hero — full-bleed rotating food photo (tall ones on phones), kept
+          bright: the dark fade sits only behind the text (bottom on phones,
+          left on wider screens). Headline, two buttons, one info line. */}
+      <section className="relative flex min-h-[100svh] items-end overflow-hidden bg-neutral-950 sm:items-center">
         <div className="absolute inset-0">
-          <HeroBackground images={heroImages} />
+          <HeroBackground images={heroImages} mobileImages={heroMobileImages} />
         </div>
-        <div className="pointer-events-none absolute inset-0 bg-black/55" />
+        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 from-10% via-black/70 via-50% to-black/5 sm:bg-gradient-to-r sm:from-black/80 sm:via-black/45 sm:to-transparent" />
 
-        <div className="relative z-10 mx-auto w-full max-w-3xl px-6 sm:px-10">
+        <div className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-14 sm:px-10 sm:pb-0">
           {/* The small line is part of the heading so search engines read
               "Indian Restaurant in Hounslow" — what people type — alongside
               the headline set in Staff Hub. */}
-          <h1 className="font-[family-name:var(--font-playfair)] text-5xl font-semibold leading-tight text-white/90 sm:text-6xl lg:text-7xl">
-            <span className="mb-4 block font-[family-name:var(--font-jost)] text-xs font-medium uppercase not-italic tracking-[0.3em] text-white/75 sm:text-sm">
+          <h1 className="max-w-2xl font-[family-name:var(--font-playfair)] text-4xl font-semibold leading-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.45)] max-sm:text-[2.15rem] sm:text-6xl lg:text-7xl">
+            <span className="mb-3 block font-[family-name:var(--font-jost)] text-xs font-medium uppercase not-italic tracking-[0.3em] text-white/80 sm:text-sm">
               Indian Restaurant in Hounslow
             </span>
             <span className="block">{hero.headline}</span>
             <ShimmerHeadline text={hero.headlineGold} className="italic" />
           </h1>
-          <p className="mt-6 max-w-xl text-sm text-white/80 sm:text-base">{hero.description}</p>
-          {/* What people nearby search for: halal, parking, the station. */}
-          <ul className="mt-4 flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.15em] text-white/85">
-            {["Halal", "Free parking", "3 min from Hounslow East"].map((p) => (
-              <li key={p} className="rounded-full border border-white/30 px-3 py-1">{p}</li>
-            ))}
-          </ul>
 
-          <div className="mt-8 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="mt-7 flex flex-wrap items-center gap-3">
             <Link
               href="/reservations"
               className="flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground shadow-lg transition hover:opacity-90"
             >
               Book a Table <ArrowRight size={16} />
             </Link>
-            <div className="flex w-full gap-3 sm:w-auto">
-              <Link
-                href="/order"
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/50 px-5 py-3.5 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20 sm:flex-none"
-              >
-                <Bike size={16} /> Order Online
-              </Link>
-              <Link
-                href="/menu"
-                className="flex flex-1 items-center justify-center gap-2 rounded-full border border-white/50 px-5 py-3.5 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20 sm:flex-none"
-              >
-                <BookOpen size={16} /> View Menu
-              </Link>
-            </div>
-          </div>
-
-          <div className="mt-6 flex flex-wrap items-center gap-3 text-sm text-white/80">
-            <a
-              href={siteContent.contact.googleMapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 hover:text-white hover:underline"
+            <Link
+              href="/order"
+              className="flex items-center gap-2 rounded-full border border-white/60 px-6 py-3.5 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
             >
-              <MapPin size={14} /> Located in Hounslow
-            </a>
-            <span className="text-white/30">|</span>
-            <span className="flex items-center gap-1.5">
-              <Clock size={14} /> Open today: <TodayHours />
-            </span>
+              <Bike size={16} /> Order Online
+            </Link>
           </div>
-        </div>
 
-        <a
-          href="#about"
-          className="absolute bottom-8 left-1/2 z-10 flex -translate-x-1/2 flex-col items-center gap-2 text-[11px] uppercase tracking-[0.2em] text-white/75 transition hover:text-white"
-        >
-          Explore Royal Chilli
-          <ChevronDown size={16} className="animate-bounce" />
-        </a>
+          {/* What people nearby search for: halal, parking, today's hours. */}
+          <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs uppercase tracking-[0.12em] text-white/85">
+            <span>Halal</span><span aria-hidden className="text-white/40">·</span>
+            <span>Free parking</span><span aria-hidden className="text-white/40">·</span>
+            <span className="flex items-center gap-1.5"><Clock size={13} /> Open today <TodayHours /></span>
+          </p>
+        </div>
       </section>
 
       {/* Most Popular Dishes */}
