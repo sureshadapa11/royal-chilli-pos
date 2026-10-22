@@ -60,15 +60,16 @@ export default async function HomePage() {
   return (
     <div>
       {/* Hero — full-bleed rotating food photo (tall ones on phones), kept
-          bright: the dark fade sits only behind the text (bottom on phones,
-          left on wider screens). Headline, two buttons, one info line. */}
-      <section className="relative flex min-h-[100svh] items-end overflow-hidden bg-neutral-950 sm:items-center">
+          bright: the dark fade sits only behind the text. Phones: headline at
+          the top, buttons at the bottom, food clear in between. Wider
+          screens: everything on the left. */}
+      <section className="relative flex min-h-[100svh] items-center overflow-hidden bg-neutral-950">
         <div className="absolute inset-0">
           <HeroBackground images={heroImages} mobileImages={heroMobileImages} />
         </div>
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/95 from-10% via-black/70 via-50% to-black/5 sm:bg-gradient-to-r sm:from-black/80 sm:via-black/45 sm:to-transparent" />
+        <div className="pointer-events-none absolute inset-0 max-sm:bg-[linear-gradient(to_bottom,rgba(0,0,0,0.85)_0%,rgba(0,0,0,0.6)_40%,rgba(0,0,0,0.1)_58%,rgba(0,0,0,0.35)_74%,rgba(0,0,0,0.9)_100%)] sm:bg-gradient-to-r sm:from-black/80 sm:via-black/45 sm:to-transparent" />
 
-        <div className="relative z-10 mx-auto w-full max-w-6xl px-6 pb-14 sm:px-10 sm:pb-0">
+        <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-col px-6 max-sm:min-h-[100svh] max-sm:justify-between max-sm:pb-10 max-sm:pt-24 sm:px-10">
           {/* The small line is part of the heading so search engines read
               "Indian Restaurant in Hounslow" — what people type — alongside
               the headline set in Staff Hub. */}
@@ -80,27 +81,30 @@ export default async function HomePage() {
             <ShimmerHeadline text={hero.headlineGold} className="italic" />
           </h1>
 
-          <div className="mt-7 flex flex-wrap items-center gap-3">
-            <Link
-              href="/reservations"
-              className="flex items-center gap-2 rounded-full bg-primary px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground shadow-lg transition hover:opacity-90"
-            >
-              Book a Table <ArrowRight size={16} />
-            </Link>
-            <Link
-              href="/order"
-              className="flex items-center gap-2 rounded-full border border-white/60 px-6 py-3.5 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20"
-            >
-              <Bike size={16} /> Order Online
-            </Link>
-          </div>
+          {/* Phones show the info line above the buttons (column-reverse). */}
+          <div className="flex flex-col max-sm:flex-col-reverse sm:mt-7">
+            <div className="flex items-center gap-3 sm:flex-wrap">
+              <Link
+                href="/reservations"
+                className="flex items-center justify-center gap-2 rounded-full bg-primary px-6 py-3.5 text-xs font-semibold uppercase tracking-[0.15em] text-primary-foreground shadow-lg transition hover:opacity-90 max-sm:flex-1 max-sm:px-3"
+              >
+                Book a Table <ArrowRight size={16} />
+              </Link>
+              <Link
+                href="/order"
+                className="flex items-center justify-center gap-2 rounded-full border border-white/60 px-6 py-3.5 text-xs uppercase tracking-[0.15em] text-white backdrop-blur-sm transition hover:bg-white/20 max-sm:flex-1 max-sm:px-3"
+              >
+                <Bike size={16} /> Order Online
+              </Link>
+            </div>
 
-          {/* What people nearby search for: halal, parking, today's hours. */}
-          <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs uppercase tracking-[0.12em] text-white/85">
-            <span>Halal</span><span aria-hidden className="text-white/40">·</span>
-            <span>Free parking</span><span aria-hidden className="text-white/40">·</span>
-            <span className="flex items-center gap-1.5"><Clock size={13} /> Open today <TodayHours /></span>
-          </p>
+            {/* What people nearby search for: halal, parking, today's hours. */}
+            <p className="mt-5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs uppercase tracking-[0.12em] text-white/85 max-sm:mb-4 max-sm:mt-0">
+              <span>Halal</span><span aria-hidden className="text-white/40">·</span>
+              <span>Free parking</span><span aria-hidden className="text-white/40">·</span>
+              <span className="flex items-center gap-1.5"><Clock size={13} /> Open today <TodayHours /></span>
+            </p>
+          </div>
         </div>
       </section>
 
