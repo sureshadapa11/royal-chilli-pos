@@ -11,3 +11,9 @@ export async function getHeroImages(businessId: number): Promise<string[]> {
   const value = await getBusinessSetting(businessId, "hero_images");
   return (value as string[] | undefined) ?? [];
 }
+
+// Tall photos for phones (portrait screens); empty = phones get the wide ones.
+export async function getHeroMobileImages(businessId: number): Promise<string[]> {
+  const value = await getBusinessSetting(businessId, "hero_images_mobile");
+  return Array.isArray(value) ? (value as string[]) : [];
+}
